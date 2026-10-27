@@ -213,11 +213,11 @@ Skills: superpowers:test-driven-development. BA OS `elicitation` and `change-con
 - Starting from an idea or an AI-written document (spec section 5, minimal path): the founder creates a change of kind `feature` and pastes the document as its `description`; `analyseChange` treats it as the source and uses `doc` triggers quoting it. Add test `analyseChange quotes the pasted document in doc triggers`.
 - File reading budget: `understandApp` sends the file list plus at most 40 files chosen by `narrowFiles` with query "routes pages api auth user payment order booking schema model", truncated at 60k characters total.
 
-- [ ] **Step 1: Write failing tests:** `understandApp returns questions, criteria and an as_built artifact`; `baGate held with unanswered questions, cleared once answers exist`; `analyseImpact drops affected ids that do not exist`; `failure path criteria are flagged isFailurePath`; `prompt sent to the model contains the ba pack text` (fake model captures the request).
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement. The caller (workflow) writes the result to the record; roles return data only.
-- [ ] **Step 4:** Run. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): business analyst role`.
+- [x] **Step 1: Write failing tests:** `understandApp returns questions, criteria and an as_built artifact`; `baGate held with unanswered questions, cleared once answers exist`; `analyseImpact drops affected ids that do not exist`; `failure path criteria are flagged isFailurePath`; `prompt sent to the model contains the ba pack text` (fake model captures the request).
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement. The caller (workflow) writes the result to the record; roles return data only.
+- [x] **Step 4:** Run. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): business analyst role`.
 
 ### Task 9: Security and compliance role
 
