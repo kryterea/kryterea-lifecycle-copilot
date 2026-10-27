@@ -8,6 +8,7 @@ import {
   listSourceFiles,
   narrowFiles,
   readLines,
+  remoteHead,
   syncRepo,
   verifyCodeTrigger,
 } from "../src/index.js";
@@ -142,6 +143,12 @@ describe("repo reader", () => {
     });
     expect(checkRepoUrl("https://GitHub.com/o/r", false)).toEqual({ url: "https://github.com/o/r", github: true });
     expect(checkRepoUrl("https://gitlab.com/o/r.git", false).github).toBe(false);
+  });
+
+  it("remoteHead reads the remote HEAD commit without cloning and rejects unsafe URLs", async () => {
+    expect(await remoteHead(origin, undefined, LOCAL)).toBe(c3);
+    await expect(remoteHead(origin)).rejects.toThrow(/repoUrl rejected/);
+    await expect(remoteHead("--upload-pack=touch pwned", undefined, LOCAL)).rejects.toThrow(/repoUrl rejected/);
   });
 
   it("rejects unsafe repo URLs before running git", async () => {

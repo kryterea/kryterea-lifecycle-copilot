@@ -168,7 +168,7 @@ function releaseHeld(record: CopilotRecord, c: Change): RoleId[] {
 }
 
 /** Accepted: the latest `acceptance` or `acceptance_void` artifact is an `acceptance` (POST /accept writes it). */
-const accepted = (record: CopilotRecord, changeId: string) =>
+export const accepted = (record: CopilotRecord, changeId: string) =>
   record
     .listArtifacts(changeId)
     .filter((a) => a.kind === "acceptance" || a.kind === "acceptance_void")

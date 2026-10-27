@@ -125,6 +125,16 @@ export async function syncRepo(
   return { dir: fwd(dir), commit };
 }
 
+/** The commit the remote HEAD points at, without cloning. Same URL checks and git safety as syncRepo. */
+export async function remoteHead(repoUrl: string, token?: string, opts: { allowLocal?: boolean } = {}): Promise<string> {
+  const allowLocal = opts.allowLocal === true;
+  const { url, github } = checkRepoUrl(repoUrl, allowLocal);
+  const out = await git(["ls-remote", "--", url, "HEAD"], { token, auth: github, allowLocal, timeoutMs: GIT_NET_MS });
+  const sha = out.split(/\s/)[0] ?? "";
+  if (!COMMIT_ID.test(sha)) throw new Error("git ls-remote found no HEAD");
+  return sha;
+}
+
 /** Relative, forward-slash paths of text-like source files, sorted. */
 export async function listSourceFiles(dir: string): Promise<string[]> {
   const out: string[] = [];
