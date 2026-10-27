@@ -15,7 +15,7 @@ Built during the event (update as tasks finish):
 - [x] Repo reader and file narrowing
 - [x] Five professional packs and the verified NDPA 2023 legal pack
 - [x] Business analyst, architect/SRE, QA, security and compliance, and product owner roles
-- [ ] Change workflow with targeted re-checks
+- [x] Change workflow with targeted re-checks
 - [ ] HTTP API and push poller
 - [ ] MCP server for coding agents
 - [ ] Web work panel

@@ -305,7 +305,7 @@ Skills: superpowers:test-driven-development. BA OS `process-modelling` skill and
 - `advance` writes results: findings via `addFinding` (link `raised_on` to the change), criteria (link `satisfies` to the change), `affectedCriterionIds` as `affects` links, artifacts, questions, gates.
 - `recheck` syncs the repo, finds changed and deleted files since the last run's commit, re-verifies criteria whose last evidence touched a changed or deleted file plus criteria linked `affects` from open changes, re-runs compliance and architect only on changed files, and moves every change at `build` on to `verification` (then runs verification for it). A `BudgetExceededError` stops the loop, marks the run `stopped_budget`, and returns `stoppedForBudget: true`.
 
-- [ ] **Step 1: Write failing tests** (fake model, temp repo):
+- [x] **Step 1: Write failing tests** (fake model, temp repo):
   - `understand change runs ba at intake and skips build`.
   - `analysis does not move on while BA questions are unanswered`.
   - `design review records a held compliance gate but still moves on`.
@@ -314,10 +314,10 @@ Skills: superpowers:test-driven-development. BA OS `process-modelling` skill and
   - `recheck re-verifies a criterion whose evidence file was deleted` (Review Focus 5).
   - `recheck re-verifies criteria linked affects from a new change and no others`.
   - `budget exhaustion mid-run stores stopped_budget and returns stoppedForBudget` (Review Focus 3).
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Run. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): change workflow, gates and targeted recheck`.
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Run. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): change workflow, gates and targeted recheck`.
 
 ### Task 14: HTTP server and push poller
 
