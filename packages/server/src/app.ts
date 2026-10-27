@@ -299,11 +299,16 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
       | undefined;
     // The latest run of each role, so the panel can show who has checked this change and who is working now.
     const runs = Object.values(Object.fromEntries(r.runs.map((x) => [x.role, x])));
+    // Legal findings carry the law or standard they cite, so the panel can tell a law from an industry standard.
+    const findings = r.findings.map((f) => {
+      const duty = f.citationId ? deps.packs.legal.find((d) => d.id === f.citationId) : undefined;
+      return duty ? { ...f, law: duty.law, section: duty.section } : f;
+    });
     return c.json({
       change: r.change,
       stage: r.change.stage,
       gates: r.gates,
-      findings: r.findings,
+      findings,
       criteria: r.criteria,
       questions: questions?.questions ?? [],
       accepted: accepted(record, change.id),

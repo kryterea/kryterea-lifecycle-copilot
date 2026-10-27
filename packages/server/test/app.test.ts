@@ -317,6 +317,31 @@ describe("HTTP API", () => {
     ]);
     expect(runs[0].commit).toBe("b".repeat(40));
   });
+
+  it("change endpoint adds the law and section a legal finding cites", async () => {
+    const duty = { duty: "d", triggers: [], sourceUrl: "https://example.org", verifiedOn: "2026-10-27", title: "t" };
+    deps.packs = {
+      ...packs,
+      legal: [
+        { ...duty, id: "pci-no-cvv-storage", law: "PCI DSS", section: "Requirement 3.3.1.2" },
+        { ...duty, id: "ndpa-lawful-basis", law: "NDPA 2023", section: "Section 25(1)" },
+      ],
+    };
+    const { c } = seedChange();
+    const runId = deps.record.startRun({ changeId: c.id, role: "compliance", commit: "a".repeat(40) });
+    const base = { projectId: c.projectId, changeId: c.id, runId, role: "compliance" as const, stage: "design_review" as const };
+    const legal = { ...base, kind: "legal" as const, plain: "Check this.", costIfIgnored: "c", fixPrompt: "f", trigger: { type: "doc" as const, quote: "q" } };
+    deps.record.addFinding({ ...legal, title: "Card code kept", citationId: "pci-no-cvv-storage" });
+    deps.record.addFinding({ ...legal, title: "No lawful basis", citationId: "ndpa-lawful-basis" });
+    deps.record.addFinding({ ...legal, kind: "operations", title: "No backups" });
+    const { call } = setup();
+    const findings = (await call("GET", `/api/changes/${c.id}`)).json.findings;
+    expect(findings.map((f: { title: string; law?: string; section?: string }) => [f.title, f.law, f.section])).toEqual([
+      ["Card code kept", "PCI DSS", "Requirement 3.3.1.2"],
+      ["No lawful basis", "NDPA 2023", "Section 25(1)"],
+      ["No backups", undefined, undefined],
+    ]);
+  });
 });
 
 describe("local-only request guard", () => {
