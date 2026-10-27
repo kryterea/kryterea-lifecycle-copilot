@@ -355,6 +355,53 @@ describe("workflow", () => {
     expect(record.gates(c.id).po).toBeUndefined();
   });
 
+  it("an unreachable baseline makes compliance and architect review all files before the baseline moves", async () => {
+    const { record, models, deps, change, project, origin } = setup();
+    await advance(deps, change("understand").id);
+    record.setCheckedCommit(project.id, "0123456789abcdef0123456789abcdef01234567");
+    models.calls.length = 0;
+    await recheck(deps, project.id, "push");
+    for (const name of ["compliance.reviewCompliance", "architect.reviewOperations"]) {
+      const call = models.calls.find((x) => x.name === name);
+      expect(call?.user).toContain("Files (3):");
+      expect(call?.user).toContain("=== src/app.js ===");
+    }
+    expect(record.checkedCommit(project.id)).toBe(git(origin.dir, "rev-parse", "HEAD"));
+  });
+
+  it("an acceptance given before the change stepped back to release does not count afterwards", async () => {
+    const { record, models, deps, change, project, origin } = setup();
+    const c = change("understand");
+    expect((await advance(deps, c.id)).stage).toBe("acceptance");
+    record.addArtifact({ changeId: c.id, role: "po", stage: "acceptance", kind: "acceptance", body: { actor: "owner" } });
+    models.qa["CRIT-CANCEL"] = {
+      state: "gap",
+      evidence: [{ file: "src/booking.js", line: 2 }],
+      note: "The slot is not freed.",
+      title: "A cancelled booking keeps the slot",
+      plain: "The slot stays taken.",
+      costIfIgnored: "Lost bookings.",
+      fixPrompt: "Free the slot on cancel.",
+    };
+    origin.put("src/booking.js", "export function cancel(id) {\n  return keep(id);\n}\n");
+    origin.commit("break cancel");
+    await recheck(deps, project.id, "push");
+    expect(record.getChange(c.id).stage).toBe("release");
+    const voids = record.listArtifacts(c.id).filter((a) => a.kind === "acceptance_void");
+    expect(voids).toHaveLength(1);
+    expect(voids[0]).toMatchObject({ role: "po" });
+    expect((voids[0]!.body as { reason: string }).reason).toBeTruthy();
+
+    delete models.qa["CRIT-CANCEL"];
+    await recheck(deps, project.id, "manual");
+    expect(record.getChange(c.id).stage).toBe("acceptance");
+    expect(await advance(deps, c.id)).toEqual({ stage: "acceptance", held: [], stoppedForBudget: false });
+    expect(models.names()).not.toContain("po.acceptanceSummary");
+
+    record.addArtifact({ changeId: c.id, role: "po", stage: "acceptance", kind: "acceptance", body: { actor: "owner" } });
+    expect((await advance(deps, c.id)).stage).toBe("operate");
+  });
+
   it("a budget stop inside recheck stores stopped_budget and leaves the checked commit alone", async () => {
     const { record, models, deps, change, project, origin, runs } = setup();
     const c = change("understand");

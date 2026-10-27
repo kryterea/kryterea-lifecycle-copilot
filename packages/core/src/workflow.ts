@@ -167,6 +167,13 @@ function releaseHeld(record: CopilotRecord, c: Change): RoleId[] {
   return gates.filter(([role, g]) => !gate(record, c.id, role, g)).map(([role]) => role);
 }
 
+/** Accepted: the latest `acceptance` or `acceptance_void` artifact is an `acceptance` (POST /accept writes it). */
+const accepted = (record: CopilotRecord, changeId: string) =>
+  record
+    .listArtifacts(changeId)
+    .filter((a) => a.kind === "acceptance" || a.kind === "acceptance_void")
+    .at(-1)?.kind === "acceptance";
+
 /** What advance does at each stage. */
 const DISPATCH: Record<StageId, (s: Session, c: Change) => Promise<Outcome>> = {
   intake: async (s, c) => {
@@ -221,15 +228,19 @@ const DISPATCH: Record<StageId, (s: Session, c: Change) => Promise<Outcome>> = {
   },
 
   // Release gates are recomputed first: a recheck may have found a gap since release. If one holds, the change
-  // goes back to release. Accepted means an `acceptance` artifact exists (POST /accept writes it).
+  // goes back to release and any acceptance already given is voided, so the owner accepts again later.
   acceptance: async (s, c) => {
     const { record } = s.deps;
     const held = releaseHeld(record, c);
     if (held.length) {
       record.setStage(c.id, "release");
+      if (accepted(record, c.id)) {
+        const reason = `Held again by ${held.join(", ")} after acceptance. Accept again once cleared.`;
+        record.addArtifact({ changeId: c.id, role: "po", stage: "acceptance", kind: "acceptance_void", body: { reason } });
+      }
       return stay(held);
     }
-    if (!record.listArtifacts(c.id).some((a) => a.kind === "acceptance")) return stay();
+    if (!accepted(record, c.id)) return stay();
     if (!gate(record, c.id, "po", poGate(record.gates(c.id), true))) return stay(["po"]);
     await runRole(s, c, "po", async (ctx) => {
       const summary = await acceptanceSummary(record.acceptanceRecord(c.id), ctx.model, s.deps.packs.role.po);
@@ -272,7 +283,7 @@ export async function advance(
 /**
  * The operate duty. Diffs from the commit the last completed recheck covered (before the first one: the
  * earliest done QA run, so a later advance-time QA run cannot hide a diff), then: compliance and architect on
- * the changed files (charged to the newest change), QA on criteria whose evidence touched a changed or deleted
+ * the changed files, or all files when the diff is unknown (charged to the newest change), QA on criteria whose evidence touched a changed or deleted
  * file, whose latest check is not evidence_found, or that an open change affects (with no baseline: every
  * criterion of open changes). Changes at build move to verification; changes at build, release or acceptance
  * are advanced. A push with no new commit does nothing.
@@ -316,10 +327,12 @@ export async function recheck(
   });
 
   try {
-    if (diff?.changed.length) {
+    // Unknown diff (no baseline, or it is unreachable): review all files, so moving the baseline never skips code.
+    if (!diff || diff.changed.length) {
       const asBuilt = asBuiltFor(record, newest, true);
-      await runRole(s, newest, "compliance", async (ctx) => save(ctx, "compliance", "operate", await reviewCompliance(ctx, asBuilt, diff.changed)));
-      await runRole(s, newest, "architect", async (ctx) => save(ctx, "architect", "operate", await reviewOperations(ctx, asBuilt, diff.changed)));
+      const only = diff?.changed;
+      await runRole(s, newest, "compliance", async (ctx) => save(ctx, "compliance", "operate", await reviewCompliance(ctx, asBuilt, only)));
+      await runRole(s, newest, "architect", async (ctx) => save(ctx, "architect", "operate", await reviewOperations(ctx, asBuilt, only)));
     }
     if (toVerify.length) await verify(s, newest, "operate", toVerify);
     for (const c of changes) {
