@@ -711,11 +711,11 @@ blockquote {
 }
 
 blockquote::before {
-  content: "C";
+  content: "\201C";
 }
 
 blockquote::after {
-  content: "D";
+  content: "\201D";
 }
 
 .decide {

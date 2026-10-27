@@ -31,7 +31,7 @@ export interface ChangeView {
 export interface Spend {
   spentUsd: number;
   budgetUsd: number;
-  model: string;
+  model: string | null;
   fake: boolean;
 }
 

@@ -14,6 +14,8 @@ const BANNED: Array<[string, RegExp]> = [
   ["judging words", /\b(score|rubric|grade|rating|pass|fail)\b/i],
   ["em dash", new RegExp(String.fromCodePoint(0x2014))],
   ["en dash", new RegExp(String.fromCodePoint(0x2013))],
+  // A shell escape once left U+0081 in a CSS content string; tab, LF and CR are the only controls allowed.
+  ["control character", /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/],
 ];
 
 describe("panel copy guard", () => {
