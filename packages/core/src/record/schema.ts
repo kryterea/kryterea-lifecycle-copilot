@@ -128,4 +128,9 @@ CREATE TABLE IF NOT EXISTS checks (
   at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS checks_criterion ON checks(criterion_id);
+
+CREATE TABLE IF NOT EXISTS checked_commits (
+  project_id TEXT PRIMARY KEY REFERENCES projects(id),
+  commit_sha TEXT NOT NULL
+);
 `;

@@ -224,7 +224,7 @@ describe("workflow", () => {
   });
 
   it("recheck moves a feature change from build to verification", async () => {
-    const { record, models, deps, change, crit, project, runs } = setup();
+    const { record, models, deps, change, crit, project, runs, origin } = setup();
     const u = change("understand");
     await advance(deps, u.id);
     const f = change("feature", "Take a deposit");
@@ -234,6 +234,8 @@ describe("workflow", () => {
     const book = crit("CRIT-BOOK");
     expect(record.linksTo({ type: "criterion", id: book.id })).toContainEqual({ from: { type: "change", id: f.id }, rel: "affects" });
 
+    origin.put("src/deposit.js", "export const deposit = 500;\n");
+    origin.commit("take a deposit");
     models.calls.length = 0;
     const res = await recheck(deps, project.id, "push");
     expect(res.stoppedForBudget).toBe(false);
@@ -279,6 +281,90 @@ describe("workflow", () => {
     expect(models.criteriaVerified()).toEqual(["CRIT-CANCEL"]);
     expect(record.latestCheck(crit("CRIT-CANCEL").id)?.state).toBe("no_evidence");
     expect(record.latestCheck(crit("CRIT-BOOK").id)?.state).toBe("evidence_found");
+  });
+
+  it("recheck re-verifies a deleted evidence file even after another change's QA run at the newer commit", async () => {
+    const { record, models, deps, change, project, origin, crit } = setup();
+    await advance(deps, change("understand").id);
+    const cancel = crit("CRIT-CANCEL");
+    git(origin.dir, "rm", "-q", "src/booking.js");
+    origin.commit("drop booking");
+    // A second change is verified at the new commit before the poller rechecks.
+    await advance(deps, change("understand", "Understand again").id);
+    expect(record.lastRunCommit(project.id, "qa")).toBe(git(origin.dir, "rev-parse", "HEAD"));
+
+    const res = await recheck(deps, project.id, "push");
+    expect(record.latestCheck(cancel.id)?.state).toBe("no_evidence");
+    expect(res.runIds).toContain(record.latestCheck(cancel.id)?.runId);
+    expect(record.checkedCommit(project.id)).toBe(git(origin.dir, "rev-parse", "HEAD"));
+  });
+
+  it("a push recheck with no new commit does nothing; manual and mcp still re-verify what lacks evidence", async () => {
+    const { record, models, deps, change, project, runs } = setup();
+    models.qa["CRIT-CANCEL"] = {
+      state: "gap",
+      evidence: [{ file: "src/booking.js", line: 2 }],
+      note: "The slot is not freed.",
+      title: "A cancelled booking keeps the slot",
+      plain: "The slot stays taken.",
+      costIfIgnored: "Lost bookings.",
+      fixPrompt: "Free the slot on cancel.",
+    };
+    const c = change("understand");
+    await advance(deps, c.id);
+    const before = runs(c.id).length;
+    models.calls.length = 0;
+
+    expect(await recheck(deps, project.id, "push")).toEqual({ runIds: [], stoppedForBudget: false });
+    expect(models.calls).toHaveLength(0);
+    expect(runs(c.id)).toHaveLength(before);
+
+    for (const reason of ["manual", "mcp"] as const) {
+      models.calls.length = 0;
+      const res = await recheck(deps, project.id, reason);
+      expect(models.criteriaVerified()).toEqual(["CRIT-CANCEL"]);
+      expect(res.runIds).toHaveLength(1);
+    }
+    expect(record.getChange(c.id).stage).toBe("release");
+  });
+
+  it("acceptance recomputes the release gates and steps back to release when one is held", async () => {
+    const { record, models, deps, change, project, origin } = setup();
+    const c = change("understand");
+    expect((await advance(deps, c.id)).stage).toBe("acceptance");
+    models.qa["CRIT-CANCEL"] = {
+      state: "gap",
+      evidence: [{ file: "src/booking.js", line: 2 }],
+      note: "The slot is not freed.",
+      title: "A cancelled booking keeps the slot",
+      plain: "The slot stays taken.",
+      costIfIgnored: "Lost bookings.",
+      fixPrompt: "Free the slot on cancel.",
+    };
+    origin.put("src/booking.js", "export function cancel(id) {\n  return keep(id);\n}\n");
+    origin.commit("break cancel");
+    await recheck(deps, project.id, "push");
+    expect(record.getChange(c.id).stage).toBe("release");
+
+    // Even if the change were still waiting at acceptance, accepting it does not reach operate.
+    record.setStage(c.id, "acceptance");
+    record.addArtifact({ changeId: c.id, role: "po", stage: "acceptance", kind: "acceptance", body: { actor: "owner" } });
+    models.calls.length = 0;
+    expect(await advance(deps, c.id)).toEqual({ stage: "release", held: ["qa"], stoppedForBudget: false });
+    expect(models.calls).toHaveLength(0);
+    expect(record.gates(c.id).po).toBeUndefined();
+  });
+
+  it("a budget stop inside recheck stores stopped_budget and leaves the checked commit alone", async () => {
+    const { record, models, deps, change, project, origin, runs } = setup();
+    const c = change("understand");
+    await advance(deps, c.id);
+    origin.put("src/privacy.js", "export const consent = true;\n");
+    origin.commit("ask consent");
+    models.state.failOn = models.calls.length + 1; // the recheck compliance call
+    expect(await recheck(deps, project.id, "push")).toMatchObject({ stoppedForBudget: true });
+    expect(runs(c.id).at(-1)).toMatchObject({ role: "compliance", status: "stopped_budget" });
+    expect(record.checkedCommit(project.id)).toBeNull();
   });
 
   it("recheck re-verifies criteria linked affects from a new change and no others", async () => {

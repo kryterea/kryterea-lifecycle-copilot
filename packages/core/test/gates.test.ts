@@ -75,6 +75,29 @@ describe("runs, gates, links, acceptance", () => {
     expect(record.lastRunCommit(project.id, "po")).toBeNull();
   });
 
+  it("firstRunCommit returns the oldest finished run's commit, of one role when given", () => {
+    const { record, project, change } = setup();
+    expect(record.firstRunCommit(project.id, "qa")).toBeNull();
+    const s = record.startRun({ changeId: change.id, role: "qa", commit: "q0" });
+    record.finishRun(s, "stopped_budget");
+    const b = record.startRun({ changeId: change.id, role: "ba", commit: "b1" });
+    record.finishRun(b, "done");
+    for (const commit of ["q1", "q2"]) record.finishRun(record.startRun({ changeId: change.id, role: "qa", commit }), "done");
+    expect(record.firstRunCommit(project.id)).toBe("b1");
+    expect(record.firstRunCommit(project.id, "qa")).toBe("q1");
+  });
+
+  it("checked commit is stored per project and overwritten", () => {
+    const { record, project } = setup();
+    const other = record.createProject({ name: "Other", repoUrl: "x" });
+    expect(record.checkedCommit(project.id)).toBeNull();
+    record.setCheckedCommit(project.id, "a1");
+    record.setCheckedCommit(project.id, "b2");
+    record.setCheckedCommit(other.id, "z9");
+    expect(record.checkedCommit(project.id)).toBe("b2");
+    expect(record.checkedCommit(other.id)).toBe("z9");
+  });
+
   it("latest gate state wins", () => {
     const { record, change } = setup();
     expect(record.gates(change.id)).toEqual({});

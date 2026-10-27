@@ -412,13 +412,37 @@ export class CopilotRecord {
    * did not cover the diff.
    */
   lastRunCommit(projectId: string, role?: RoleId): string | null {
+    return this.runCommit(projectId, role, "DESC");
+  }
+
+  /** Commit of the oldest finished run in the project, of one role when given. */
+  firstRunCommit(projectId: string, role?: RoleId): string | null {
+    return this.runCommit(projectId, role, "ASC");
+  }
+
+  private runCommit(projectId: string, role: RoleId | undefined, order: "ASC" | "DESC"): string | null {
     const r = this.one(
       `SELECT r.commit_sha FROM runs r JOIN changes c ON c.id = r.change_id
-       WHERE c.project_id = ? AND r.status = 'done' AND (? IS NULL OR r.role = ?) ORDER BY r.rowid DESC LIMIT 1`,
+       WHERE c.project_id = ? AND r.status = 'done' AND (? IS NULL OR r.role = ?) ORDER BY r.rowid ${order} LIMIT 1`,
       projectId,
       role ?? null,
       role ?? null,
     );
+    return r ? (r.commit_sha as string) : null;
+  }
+
+  /** The commit a completed recheck covered up to. Only recheck writes it. */
+  setCheckedCommit(projectId: string, commit: string): void {
+    this.run(
+      `INSERT INTO checked_commits (project_id, commit_sha) VALUES (?, ?)
+       ON CONFLICT (project_id) DO UPDATE SET commit_sha = excluded.commit_sha`,
+      projectId,
+      commit,
+    );
+  }
+
+  checkedCommit(projectId: string): string | null {
+    const r = this.one("SELECT commit_sha FROM checked_commits WHERE project_id = ?", projectId);
     return r ? (r.commit_sha as string) : null;
   }
 

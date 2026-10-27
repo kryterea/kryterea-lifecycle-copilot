@@ -86,9 +86,9 @@ const criteriaOf = (record: CopilotRecord, change: Change): Criterion[] =>
 const latestChecks = (record: CopilotRecord, criteria: Criterion[]): Check[] =>
   criteria.map((k) => record.latestCheck(k.id)).filter((c): c is Check => c !== null);
 
-/** understand: the as_built it produced. feature or fix: the newest as_built in the project. None: {}. */
-function asBuiltFor(record: CopilotRecord, change: Change): unknown {
-  const pool = change.kind === "understand" ? [change] : record.listChanges(change.projectId);
+/** understand: the as_built it produced. feature, fix or projectWide: the newest as_built in the project. None: {}. */
+function asBuiltFor(record: CopilotRecord, change: Change, projectWide = change.kind !== "understand"): unknown {
+  const pool = projectWide ? record.listChanges(change.projectId) : [change];
   const all = pool.flatMap((c) => record.listArtifacts(c.id)).filter((a) => a.kind === "as_built");
   all.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
   return all.at(-1)?.body ?? {};
@@ -103,22 +103,21 @@ async function runRole(s: Session, change: Change, role: RoleId, work: (ctx: Rol
   const repo = await s.repo();
   const runId = record.startRun({ changeId: change.id, role, commit: repo.commit });
   s.runIds.push(runId);
-  const ctx: RoleContext = {
-    record,
-    model: s.deps.modelFor(ledgerFor(record, runId)),
-    packs: s.deps.packs,
-    project: s.project,
-    change,
-    repo,
-    runId,
-    existingFindings: record
-      .listFindings({ projectId: s.project.id })
-      .filter((f) => f.role === role)
-      .map((f) => ({ id: f.id, title: f.title, kind: f.kind })),
-    answers: latestBody<{ answers?: string[] }>(record, change.id, "answers")?.answers ?? [],
-  };
   try {
-    await work(ctx);
+    await work({
+      record,
+      model: s.deps.modelFor(ledgerFor(record, runId)),
+      packs: s.deps.packs,
+      project: s.project,
+      change,
+      repo,
+      runId,
+      existingFindings: record
+        .listFindings({ projectId: s.project.id })
+        .filter((f) => f.role === role)
+        .map((f) => ({ id: f.id, title: f.title, kind: f.kind })),
+      answers: latestBody<{ answers?: string[] }>(record, change.id, "answers")?.answers ?? [],
+    });
   } catch (e) {
     record.finishRun(runId, e instanceof BudgetExceededError ? "stopped_budget" : "failed");
     throw e;
@@ -153,6 +152,19 @@ async function verify(s: Session, change: Change, stage: StageId, criteria: Crit
     }
     if (r.stopped) throw new BudgetExceededError("Copilot budget used during verification");
   });
+}
+
+/**
+ * The release gates, recomputed and recorded with no model call: open findings raised on this change and the
+ * latest checks of its criteria. Returns the roles that hold.
+ */
+function releaseHeld(record: CopilotRecord, c: Change): RoleId[] {
+  const gates: Array<[RoleId, { state: GateState; reason: string }]> = [
+    ["compliance", complianceGate(openOn(record, c.id, "legal"))],
+    ["architect", architectGate(openOn(record, c.id, "operations"))],
+    ["qa", qaGate(latestChecks(record, criteriaOf(record, c)))],
+  ];
+  return gates.filter(([role, g]) => !gate(record, c.id, role, g)).map(([role]) => role);
 }
 
 /** What advance does at each stage. */
@@ -203,21 +215,20 @@ const DISPATCH: Record<StageId, (s: Session, c: Change) => Promise<Outcome>> = {
     return NEXT;
   },
 
-  // No model call: gates from the open findings raised on this change and the latest checks.
   release: async (s, c) => {
-    const { record } = s.deps;
-    const gates: Array<[RoleId, { state: GateState; reason: string }]> = [
-      ["compliance", complianceGate(openOn(record, c.id, "legal"))],
-      ["architect", architectGate(openOn(record, c.id, "operations"))],
-      ["qa", qaGate(latestChecks(record, criteriaOf(record, c)))],
-    ];
-    const held = gates.filter(([role, g]) => !gate(record, c.id, role, g)).map(([role]) => role);
+    const held = releaseHeld(s.deps.record, c);
     return held.length ? stay(held) : NEXT;
   },
 
-  // Accepted means an `acceptance` artifact exists (POST /accept writes it).
+  // Release gates are recomputed first: a recheck may have found a gap since release. If one holds, the change
+  // goes back to release. Accepted means an `acceptance` artifact exists (POST /accept writes it).
   acceptance: async (s, c) => {
     const { record } = s.deps;
+    const held = releaseHeld(record, c);
+    if (held.length) {
+      record.setStage(c.id, "release");
+      return stay(held);
+    }
     if (!record.listArtifacts(c.id).some((a) => a.kind === "acceptance")) return stay();
     if (!gate(record, c.id, "po", poGate(record.gates(c.id), true))) return stay(["po"]);
     await runRole(s, c, "po", async (ctx) => {
@@ -241,7 +252,8 @@ async function advanceIn(s: Session, changeId: string): Promise<{ stage: StageId
       if (e instanceof BudgetExceededError) return { stage: change.stage, held: [], stoppedForBudget: true };
       throw e;
     }
-    if (!out.next) return { stage: change.stage, held: out.held, stoppedForBudget: false };
+    // Re-read: acceptance can step a change back to release.
+    if (!out.next) return { stage: record.getChange(changeId).stage, held: out.held, stoppedForBudget: false };
     record.setStage(change.id, STAGES[STAGES.indexOf(change.stage) + 1]!);
   }
 }
@@ -258,30 +270,35 @@ export async function advance(
 }
 
 /**
- * The operate duty. Diffs from the last done QA run's commit, then: compliance and architect on the changed
- * files (charged to the newest change), QA on criteria whose evidence touched a changed or deleted file, whose
- * latest check is not evidence_found, or that an open change affects (with no baseline: every criterion of open
- * changes). Changes at build move to verification; changes at build or release are advanced.
+ * The operate duty. Diffs from the commit the last completed recheck covered (before the first one: the
+ * earliest done QA run, so a later advance-time QA run cannot hide a diff), then: compliance and architect on
+ * the changed files (charged to the newest change), QA on criteria whose evidence touched a changed or deleted
+ * file, whose latest check is not evidence_found, or that an open change affects (with no baseline: every
+ * criterion of open changes). Changes at build move to verification; changes at build, release or acceptance
+ * are advanced. A push with no new commit does nothing.
  */
 export async function recheck(
   deps: WorkflowDeps,
   projectId: string,
   reason: "push" | "mcp" | "manual",
 ): Promise<{ runIds: string[]; stoppedForBudget: boolean }> {
-  void reason; // callers pass why; the record does not store it yet
   const { record } = deps;
   const s = session(deps, projectId);
   const changes = record.listChanges(projectId);
   const newest = changes.at(-1);
   if (!newest) return { runIds: [], stoppedForBudget: false };
   const repo = await s.repo();
-  const base = record.lastRunCommit(projectId, "qa");
+  const base = record.checkedCommit(projectId) ?? record.firstRunCommit(projectId, "qa");
+  if (reason === "push" && base === repo.commit) return { runIds: [], stoppedForBudget: false };
   // null: no usable baseline (none yet, or its commit is gone after a force push).
   const diff = !base
     ? null
     : base === repo.commit
       ? { changed: [], deleted: [] }
-      : await changedFiles(repo.dir, base, repo.commit).catch(() => null);
+      : await changedFiles(repo.dir, base, repo.commit).catch((e: unknown) => {
+          console.warn(`recheck: diff from ${base} failed, re-verifying open changes: ${String(e)}`);
+          return null;
+        });
 
   const open = new Set(changes.filter((c) => c.stage !== "operate").map((c) => c.id));
   const atBuild = changes.filter((c) => c.stage === "build");
@@ -300,16 +317,14 @@ export async function recheck(
 
   try {
     if (diff?.changed.length) {
-      const asBuilt = asBuiltFor(record, { ...newest, kind: "feature" });
+      const asBuilt = asBuiltFor(record, newest, true);
       await runRole(s, newest, "compliance", async (ctx) => save(ctx, "compliance", "operate", await reviewCompliance(ctx, asBuilt, diff.changed)));
       await runRole(s, newest, "architect", async (ctx) => save(ctx, "architect", "operate", await reviewOperations(ctx, asBuilt, diff.changed)));
     }
-    // QA runs last, so its commit (the next baseline) moves only once every role has covered the diff.
-    // It runs even with nothing to verify when the commit moved, to record that QA has looked at this diff.
-    if (toVerify.length || base !== repo.commit) await verify(s, newest, "operate", toVerify);
+    if (toVerify.length) await verify(s, newest, "operate", toVerify);
     for (const c of changes) {
       if (c.stage === "build") record.setStage(c.id, "verification");
-      if (c.stage === "build" || c.stage === "release") {
+      if (c.stage === "build" || c.stage === "release" || c.stage === "acceptance") {
         if ((await advanceIn(s, c.id)).stoppedForBudget) return { runIds: s.runIds, stoppedForBudget: true };
       }
     }
@@ -317,5 +332,7 @@ export async function recheck(
     if (e instanceof BudgetExceededError) return { runIds: s.runIds, stoppedForBudget: true };
     throw e;
   }
+  // Only a recheck that covered the whole diff moves the baseline.
+  record.setCheckedCommit(projectId, repo.commit);
   return { runIds: s.runIds, stoppedForBudget: false };
 }
