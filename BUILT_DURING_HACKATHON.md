@@ -18,7 +18,7 @@ Built during the event (update as tasks finish):
 - [x] Change workflow with targeted re-checks
 - [x] HTTP API and push poller
 - [x] MCP server for coding agents
-- [ ] Web work panel
+- [x] Web work panel
 - [ ] Demo app (separate repo `demo-salon-bookings`), built by a coding agent running on Muse Spark from the prompts in its `PROMPTS.md`
 
 ## What is not ours, or not new

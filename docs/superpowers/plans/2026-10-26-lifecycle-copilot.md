@@ -362,12 +362,12 @@ Skills: frontend-design:frontend-design (primary), impeccable or ui-ux-pro-max f
 - Spend meter in the header: "$X of $70 copilot budget used"; at the limit, "Paused: copilot budget used".
 - Every role result and finding shows a small "Reasoned by Muse Spark" label, and a running role shows a working state ("Analysing with Muse Spark") while its run id is polled, so judges see Meta models doing the work and the panel never looks frozen.
 
-- [ ] **Step 1: Write failing test** `copy.test.ts`: scan every file under `packages/web/src` and fail on any of `score`, `rubric`, `grade`, `rating`, `pass`, `fail` as whole words in string literals, and on the em dash character.
-- [ ] **Step 2:** Run. Expected: PASS on empty app; it guards later steps.
-- [ ] **Step 3:** Build the three screens against the API.
-- [ ] **Step 4:** Run the server with a seeded record (`pnpm dev`), open the panel, walk a change from intake to acceptance with `COPILOT_FAKE_MODEL=1` (fake mode from Task 14). Take screenshots. Check 375 px width.
-- [ ] **Step 5:** Run `pnpm test`. Expected: all pass.
-- [ ] **Step 6:** Commit `feat(web): work panel`.
+- [x] **Step 1: Write failing test** `copy.test.ts`: scan every file under `packages/web/src` and fail on any of `score`, `rubric`, `grade`, `rating`, `pass`, `fail` as whole words in string literals, and on the em dash character.
+- [x] **Step 2:** Run. Expected: PASS on empty app; it guards later steps.
+- [x] **Step 3:** Build the three screens against the API.
+- [x] **Step 4:** Run the server with a seeded record (`pnpm dev`), open the panel, walk a change from intake to acceptance with `COPILOT_FAKE_MODEL=1` (fake mode from Task 14). Take screenshots. Check 375 px width.
+- [x] **Step 5:** Run `pnpm test`. Expected: all pass.
+- [x] **Step 6:** Commit `feat(web): work panel`.
 
 ### Task 17: Stretch: QA uses the running app
 
