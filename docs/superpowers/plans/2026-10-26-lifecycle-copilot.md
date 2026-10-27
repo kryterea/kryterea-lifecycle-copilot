@@ -70,15 +70,15 @@ The demo app lives in its own public repo (Task 18), never in this one.
 
 Nothing else starts until this passes. Skills: superpowers:verification-before-completion.
 
-- [ ] **Step 1:** Founder puts the Meta API key in a local `.env` (never committed). Confirm base URL and model id on dev.meta.ai; record them in `docs/hackathon/day1-verification.md`.
-- [ ] **Step 2:** Call chat completions with curl using a trivial prompt. Expected: HTTP 200 with a `usage` object. Record input and output token counts and the price per million shown in the console.
-- [ ] **Step 3:** Call again with `response_format` set to a JSON schema `{ok: boolean}`. Expected: valid JSON matching the schema. If unsupported, record it; Task 2 then falls back to "JSON only" instructions plus validation.
-- [ ] **Step 4:** Send one image (a screenshot) in the message. Record whether image input works. If not, Task 17 is dropped.
-- [ ] **Step 5:** Coding agent. First check Muse Code (Meta's own coding agent, named at kickoff): can it run on Windows, does it bill to the hackathon credits, does it support MCP servers? If all three, ask it to create `hello.txt` and prefer it on camera, since "use of Meta AI tooling" is a judging criterion. Otherwise install Cline in VS Code, set provider "OpenAI Compatible" with the Meta base URL, key and model, and ask it to create `hello.txt`. If Cline fails, try OpenCode with the same endpoint. Record which works. If none works, stop and tell the founder (fallback in spec section 4).
-- [ ] **Step 6:** In a scratch folder outside the repo, `npm i @modelcontextprotocol/sdk` and write the SDK's stdio "echo" example server. Add it to the working agent's MCP settings and call it. Expected: echo result in the agent chat. Record.
-- [ ] **Step 7:** Run the BA OS `risk-challenger` agent on the spec and this plan (pre-mortem). Add any risk it finds that changes a task to `docs/hackathon/day1-verification.md` and tell the founder.
+- [x] **Step 1:** Founder puts the Meta API key in a local `.env` (never committed). Confirm base URL and model id on dev.meta.ai; record them in `docs/hackathon/day1-verification.md`.
+- [x] **Step 2:** Call chat completions with curl using a trivial prompt. Expected: HTTP 200 with a `usage` object. Record input and output token counts and the price per million shown in the console.
+- [x] **Step 3:** Call again with `response_format` set to a JSON schema `{ok: boolean}`. Expected: valid JSON matching the schema. If unsupported, record it; Task 2 then falls back to "JSON only" instructions plus validation.
+- [x] **Step 4:** Send one image (a screenshot) in the message. Record whether image input works. If not, Task 17 is dropped.
+- [x] **Step 5:** Coding agent. First check Muse Code (Meta's own coding agent, named at kickoff): can it run on Windows, does it bill to the hackathon credits, does it support MCP servers? If all three, ask it to create `hello.txt` and prefer it on camera, since "use of Meta AI tooling" is a judging criterion. Otherwise install Cline in VS Code, set provider "OpenAI Compatible" with the Meta base URL, key and model, and ask it to create `hello.txt`. If Cline fails, try OpenCode with the same endpoint. Record which works. If none works, stop and tell the founder (fallback in spec section 4).
+- [x] **Step 6:** In a scratch folder outside the repo, `npm i @modelcontextprotocol/sdk` and write the SDK's stdio "echo" example server. Add it to the working agent's MCP settings and call it. Expected: echo result in the agent chat. Record.
+- [x] **Step 7:** Run the BA OS `risk-challenger` agent on the spec and this plan (pre-mortem). Add any risk it finds that changes a task to `docs/hackathon/day1-verification.md` and tell the founder.
 - [ ] **Step 8:** Ask the founder to open the Submit Project form and share its field list. Start `docs/hackathon/submission.md` with those fields so the build aims at what the form asks (kickoff advice: review the form early). Hard gate by 10-28: the founder settles Startup-track eligibility (the kickoff called it the track for incorporated startups), in the Discord questions forum if unsure. The track decides the video's pitch, so it is settled before Task 18 Step 5.
-- [ ] **Step 9:** Commit `docs/hackathon/day1-verification.md` (after Task 1 creates the repo, if not yet created).
+- [x] **Step 9:** Commit `docs/hackathon/day1-verification.md` (after Task 1 creates the repo, if not yet created).
 
 ### Task 1: Repository scaffold and first commit
 
@@ -86,12 +86,12 @@ Skills: superpowers:using-git-worktrees is not needed (fresh repo); use superpow
 
 **Files:** Create: root config files listed in File Structure, `packages/*/package.json`, `packages/*/tsconfig.json`, `.github/workflows/ci.yml`, `LICENSE` (an OSI-approved open-source licence chosen by the founder; the kickoff requires the work to be open source, not only public).
 
-- [ ] **Step 1:** `git init` in `kryterea-lifecycle-copilot`. Write `.gitignore` first, covering `HANDOFF.md`, `docs/meta-intro-transcript.txt` (Meta's session content, not ours to publish), `node_modules`, `dist`, `.env`, `*.db`, `data/`, `.cache/`. Run `git status` and confirm neither `HANDOFF.md` nor the transcript is listed. Keep the existing `docs/`, `CLAUDE.md`, `BUILT_DURING_HACKATHON.md`.
-- [ ] **Step 2:** Root `package.json` with `"engines": {"node": ">=22.13"}`, `"packageManager": "pnpm@11.20.0"`, scripts `test` (`vitest run`), `typecheck` (`tsc -b`), `dev` (server + web).
-- [ ] **Step 3:** `.env.example` with every env var from Global Constraints, values blank except prices and budget.
-- [ ] **Step 4:** CI workflow on ubuntu-latest: install, `pnpm typecheck`, `pnpm test`.
-- [ ] **Step 5:** One placeholder test in `packages/core/test/smoke.test.ts` asserting `1 + 1 === 2`. Run `pnpm test`. Expected: 1 passed.
-- [ ] **Step 6:** Commit `chore: scaffold repo (hackathon build starts 2026-10-26)`.
+- [x] **Step 1:** `git init` in `kryterea-lifecycle-copilot`. Write `.gitignore` first, covering `HANDOFF.md`, `docs/meta-intro-transcript.txt` (Meta's session content, not ours to publish), `node_modules`, `dist`, `.env`, `*.db`, `data/`, `.cache/`. Run `git status` and confirm neither `HANDOFF.md` nor the transcript is listed. Keep the existing `docs/`, `CLAUDE.md`, `BUILT_DURING_HACKATHON.md`.
+- [x] **Step 2:** Root `package.json` with `"engines": {"node": ">=22.13"}`, `"packageManager": "pnpm@11.20.0"`, scripts `test` (`vitest run`), `typecheck` (`tsc -b`), `dev` (server + web).
+- [x] **Step 3:** `.env.example` with every env var from Global Constraints, values blank except prices and budget.
+- [x] **Step 4:** CI workflow on ubuntu-latest: install, `pnpm typecheck`, `pnpm test`.
+- [x] **Step 5:** One placeholder test in `packages/core/test/smoke.test.ts` asserting `1 + 1 === 2`. Run `pnpm test`. Expected: 1 passed.
+- [x] **Step 6:** Commit `chore: scaffold repo (hackathon build starts 2026-10-26)`.
 - [ ] **Step 7:** Ask the founder to approve creating the public GitHub repo (owner from HANDOFF.md). Only on a clear yes: `gh repo create <owner>/kryterea-lifecycle-copilot --public --source . --push`. Confirm CI is green.
 
 ### Task 2: Meta model adapter and spend guard
