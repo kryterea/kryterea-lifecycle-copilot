@@ -36,7 +36,12 @@ function App() {
       <header className="top">
         <div className="top-inner">
           <a className="brand" href="#/" aria-label="Kryterea Lifecycle Copilot, projects">
-            <span className="brand-mark" aria-hidden="true" />
+            {/* The Kryterea symbol, from Kryterea's brand set (disclosed in BUILT_DURING_HACKATHON.md). */}
+            <svg className="brand-mark" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+              <rect width="40" height="40" rx="10" fill="var(--brand)" />
+              <path d="M11 21.5 L17.5 28 L30 13" fill="none" stroke="var(--on-brand)" strokeWidth="3.2" strokeLinecap="square" />
+              <line x1="9" y1="31.5" x2="31" y2="31.5" stroke="var(--on-brand)" strokeWidth="2" opacity="0.55" />
+            </svg>
             <b>Kryterea</b>
             <span>Lifecycle Copilot</span>
           </a>

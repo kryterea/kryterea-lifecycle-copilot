@@ -15,7 +15,20 @@ import type {
 export type Run = AcceptanceRecord["runs"][number];
 export type Criterion = AcceptanceRecord["criteria"][number];
 /** A finding as the change endpoint returns it: legal ones carry the law or standard they cite. */
-export type FindingView = Finding & { status: FindingStatus; law?: LegalDuty["law"]; section?: string };
+export type FindingView = Finding & {
+  status: FindingStatus;
+  law?: LegalDuty["law"];
+  section?: string;
+  /** The coding agent's fix report, while it waits on a re-check to confirm it. */
+  fixReported?: { summary: string; at: string } | null;
+};
+
+/** Another change this one points at: the change it follows, or a fix change opened from it. */
+export interface LinkedChange {
+  id: string;
+  title: string;
+  stage: StageId;
+}
 
 export interface ChangeView {
   change: Change;
@@ -26,6 +39,9 @@ export interface ChangeView {
   questions: string[];
   accepted: boolean;
   runs: Run[];
+  withdrawn: { reason: string; actor: string } | null;
+  follows: LinkedChange | null;
+  fixChanges: Array<LinkedChange & { withdrawn: boolean; findingIds: string[] }>;
 }
 
 export interface Spend {
@@ -66,7 +82,7 @@ const id = encodeURIComponent;
 export const api = {
   projects: () => call<{ projects: Project[] }>("GET", "/api/projects").then((r) => r.projects),
   createProject: (b: { name: string; repoUrl: string; appUrl?: string }) => call<Project>("POST", "/api/projects", b),
-  project: (p: string) => call<{ project: Project; changes: Change[] }>("GET", `/api/projects/${id(p)}`),
+  project: (p: string) => call<{ project: Project; changes: Array<Change & { withdrawn: boolean }> }>("GET", `/api/projects/${id(p)}`),
   createChange: (p: string, b: { title: string; description: string; kind: ChangeKind }) =>
     call<Change>("POST", `/api/projects/${id(p)}/changes`, b),
   recheck: (p: string) => call<{ jobId: string }>("POST", `/api/projects/${id(p)}/recheck`, { reason: "manual" }).then((r) => r.jobId),
@@ -75,6 +91,9 @@ export const api = {
   advance: (c: string) => call<{ jobId: string }>("POST", `/api/changes/${id(c)}/advance`).then((r) => r.jobId),
   answer: (c: string, answers: string[]) => call<unknown>("POST", `/api/changes/${id(c)}/answers`, { answers }),
   accept: (c: string, actor: string) => call<{ jobId: string }>("POST", `/api/changes/${id(c)}/accept`, { actor }).then((r) => r.jobId),
+  withdraw: (c: string, b: { reason: string; actor: string }) => call<unknown>("POST", `/api/changes/${id(c)}/withdraw`, b),
+  reanalyse: (c: string) => call<{ jobId: string }>("POST", `/api/changes/${id(c)}/reanalyse`).then((r) => r.jobId),
+  fixChange: (c: string) => call<Change>("POST", `/api/changes/${id(c)}/fix-change`),
   setStatus: (f: string, b: { status: FindingStatus; reason: string; actor: string }) =>
     call<unknown>("POST", `/api/findings/${id(f)}/status`, b),
   job: (j: string) => call<JobState>("GET", `/api/jobs/${id(j)}`),

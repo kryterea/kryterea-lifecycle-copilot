@@ -241,11 +241,9 @@ code,
 
 /* The mark echoes a live Trail stop: a cobalt ring around a filled dot. */
 .brand-mark {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 2px solid var(--brand);
-  background: radial-gradient(circle, var(--brand) 0 3px, transparent 3.5px);
+  width: 20px;
+  height: 20px;
+  flex: none;
 }
 
 main {
@@ -1013,6 +1011,29 @@ textarea:focus {
 .accept input {
   flex: 1 1 200px;
   max-width: 280px;
+}
+.accept-head {
+  flex-basis: 100%;
+  display: grid;
+  gap: 2px;
+}
+
+.rail-link {
+  display: block;
+  margin: -4px 0 12px;
+  color: var(--secondary);
+  font-size: var(--t-meta);
+}
+.rail-link:hover {
+  color: var(--brand);
+}
+.rail-meta {
+  flex-wrap: wrap;
+}
+.withdraw {
+  display: grid;
+  gap: 8px;
+  flex-basis: 100%;
 }
 
 /* Findings */

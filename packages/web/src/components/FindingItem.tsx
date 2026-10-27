@@ -1,9 +1,9 @@
 import { useState } from "react";
 import type { FindingKind, FindingStatus, Trigger } from "@lifecycle/core";
 import { api, message, safeHref, useActor, type FindingView } from "../api";
-import { CheckIcon, ChevronIcon, ClockIcon, CopyIcon, ShieldIcon } from "./Icon";
+import { CheckIcon, ChevronIcon, ClockIcon, CopyIcon, RefreshIcon, ShieldIcon } from "./Icon";
 import { Reasoned } from "./SpendMeter";
-import { StatusStamp } from "./Stamp";
+import { Stamp, StatusStamp } from "./Stamp";
 
 export const KIND: Record<FindingKind, string> = {
   legal: "Legal",
@@ -40,6 +40,9 @@ const DECISIONS: Array<[FindingStatus, string, typeof CheckIcon]> = [
   ["accepted_risk", "Accept risk", ShieldIcon],
   ["deferred", "Defer", ClockIcon],
 ];
+
+/** A settled or deferred finding can be opened again; it then holds its gate like a new one. */
+const REOPEN: [FindingStatus, string, typeof CheckIcon] = ["open", "Reopen", RefreshIcon];
 
 export function FindingItem({ finding, onChanged }: { finding: FindingView; onChanged: () => void }) {
   const [reason, setReason] = useState("");
@@ -84,6 +87,11 @@ export function FindingItem({ finding, onChanged }: { finding: FindingView; onCh
     <details className={settled ? "finding is-settled" : "finding"}>
       <summary>
         <StatusStamp status={finding.status} kind={finding.kind} />
+        {finding.fixReported && (
+          <Stamp tone="idle" title="Your coding agent reported a fix. It stays open until a re-check confirms it.">
+            Fix reported
+          </Stamp>
+        )}
         <span className="finding-title">{finding.title}</span>
         <span className="finding-meta">
           {KIND[finding.kind]}
@@ -93,6 +101,7 @@ export function FindingItem({ finding, onChanged }: { finding: FindingView; onCh
       </summary>
 
       <div className="finding-body">
+        {finding.fixReported && <p className="hint">Fix reported: {finding.fixReported.summary} Waiting on a re-check to confirm it.</p>}
         <p className={more ? "lead" : "lead is-clamped"}>{lead}</p>
         {long && (
           <button type="button" className="btn ghost sm more" onClick={() => setMore(!more)} aria-expanded={more}>
@@ -129,7 +138,7 @@ export function FindingItem({ finding, onChanged }: { finding: FindingView; onCh
           <input aria-label="Reason" placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} />
           <input aria-label="Your name" placeholder="Your name" value={actor} onChange={(e) => setActor(e.target.value)} maxLength={100} autoComplete="name" />
           <div className="decide-actions" role="group" aria-label="Decision">
-            {DECISIONS.map(([status, label, Icon]) => (
+            {(finding.status === "open" ? DECISIONS : [...DECISIONS, REOPEN]).map(([status, label, Icon]) => (
               <button key={status} type="button" className="btn secondary sm" disabled={!ready || finding.status === status} onClick={() => decide(status)}>
                 <Icon size={15} />
                 {label}

@@ -39,6 +39,7 @@ export function Record({ id }: { id: string }) {
   const lawOf = new Map(view.findings.map((f) => [f.id, f]));
   const hasLegal = rec.findings.some((f) => f.kind === "legal");
   const totalUsd = rec.runs.reduce((n, r) => n + r.costUsd, 0);
+  const checkedBy = ROLE_ORDER.filter((r) => rec.runs.some((x) => x.role === r && x.status === "done")).map((r) => ROLES[r].name);
 
   return (
     <article className="page record">
@@ -57,6 +58,23 @@ export function Record({ id }: { id: string }) {
         <p className="muted">
           {STAGE_NAMES[change.stage]} · opened {when(change.createdAt)}
         </p>
+        {checkedBy.length > 0 && <p className="muted">Checked by {checkedBy.join(", ")}.</p>}
+        {view.withdrawn && (
+          <p className="paused">
+            Withdrawn by {view.withdrawn.actor}: {view.withdrawn.reason}
+          </p>
+        )}
+        {view.follows && (
+          <p>
+            Follows <a href={`#/changes/${view.follows.id}/record`}>{view.follows.title}</a>
+          </p>
+        )}
+        {view.fixChanges.map((x) => (
+          <p key={x.id}>
+            {x.withdrawn ? "Fix change withdrawn: " : "Findings after delivery carried by "}
+            <a href={`#/changes/${x.id}/record`}>{x.title}</a>
+          </p>
+        ))}
       </header>
 
       <section>

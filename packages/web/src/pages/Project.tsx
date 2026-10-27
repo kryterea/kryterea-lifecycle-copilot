@@ -27,7 +27,7 @@ function Out({ label, url }: { label: string; url: string }) {
 }
 
 export function Project({ id }: { id: string }) {
-  const [data, setData] = useState<{ project: ProjectT; changes: Change[] } | null>(null);
+  const [data, setData] = useState<{ project: ProjectT; changes: Array<Change & { withdrawn: boolean }> } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", description: "", kind: "feature" as ChangeKind });
   const [saving, setSaving] = useState(false);
@@ -137,7 +137,7 @@ export function Project({ id }: { id: string }) {
                   <strong>{c.title}</strong>
                   <span className="row-sub">
                     <MiniTrail stage={c.stage} />
-                    <span>{STAGE_NAMES[c.stage]}</span>
+                    <span>{c.withdrawn ? "Withdrawn" : STAGE_NAMES[c.stage]}</span>
                     <span className="muted">{KIND_NAME[c.kind]}</span>
                   </span>
                 </span>

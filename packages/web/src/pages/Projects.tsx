@@ -40,7 +40,7 @@ export function Projects() {
       <header className="page-head">
         <div>
           <h1>Projects</h1>
-          <p className="pane-line">One app each. Read only.</p>
+          <p className="pane-line">Claude and Codex build. Kryterea is the professional they build with.</p>
         </div>
         {!empty && (
           <button type="button" className={open ? "btn ghost" : "btn primary"} onClick={() => setAdding(!adding)} aria-expanded={open}>
