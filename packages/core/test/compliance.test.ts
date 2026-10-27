@@ -44,7 +44,7 @@ const duty = (id: string, over: Partial<LegalDuty> = {}): LegalDuty => ({
 });
 const packs: Packs = {
   role: { ba: "", architect: "", qa: "", compliance: PACK, po: "" },
-  legal: [duty("ndpa-data-minimisation", { law: "NDPA 2023" }), duty("pci-no-cvv-storage", { law: "PCI DSS" })],
+  legal: [duty("ndpa-data-minimisation", { law: "NDPA 2023" }), duty("pci-no-cvv-storage", { law: "PCI DSS" }), duty("ndpa-breach-notification")],
 };
 
 type Handler = (req: ModelRequest) => unknown;
@@ -109,25 +109,42 @@ describe("reviewCompliance", () => {
     expect(String(warn.mock.calls[0]![0])).toContain("ndpa-made-up");
   });
 
-  it("adds \"Check this: \" to the title and plain text when missing, and never lets \"breach\" through", async () => {
+  it("adds \"Check this: \" to the title and plain text when missing", async () => {
+    const r = await reviewCompliance(
+      ctx(stub(() => ({ findings: [finding({ title: "Phone number collected", plain: "The sign-up page asks for a phone number." })] }))),
+      asBuilt,
+    );
+    expect(r.findings[0]!.title).toBe("Check this: Phone number collected");
+    expect(r.findings[0]!.plain).toBe("Check this: The sign-up page asks for a phone number.");
+  });
+
+  it("drops findings that accuse the owner of a breach, and logs them", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const r = await reviewCompliance(
       ctx(
         stub(() => ({
           findings: [
-            finding({ title: "Phone number collected", plain: "The sign-up page asks for a phone number." }),
-            finding({ title: "Check this: Data breach", plain: "Check this: we are in breach" }),
-            finding({ title: "Check this: fine", plain: "Check this: ok", costIfIgnored: "A Breach of trust" }),
+            finding({ title: "Check this: one", plain: "Check this: you are in breach of the NDPA" }),
+            finding({ title: "Check this: two", plain: "Check this: this is a breach of section 40" }),
+            finding({ title: "Check this: three", fixPrompt: "The app breaches the duty." }),
+            finding({ title: "Check this: kept", citationId: "ndpa-breach-notification", fixPrompt: "Write down who will report a personal data breach to the Commission within 72 hours." }),
           ],
         })),
       ),
       asBuilt,
     );
-    expect(r.findings).toHaveLength(1);
-    expect(r.findings[0]!.title).toBe("Check this: Phone number collected");
-    expect(r.findings[0]!.plain).toBe("Check this: The sign-up page asks for a phone number.");
-    for (const f of r.findings) expect(`${f.title} ${f.plain} ${f.costIfIgnored} ${f.fixPrompt}`).not.toMatch(/breach/i);
-    expect(warn).toHaveBeenCalledTimes(2);
+    expect(r.findings.map((f) => f.title)).toEqual(["Check this: kept"]);
+    expect(warn).toHaveBeenCalledTimes(3);
+  });
+
+  it("shows the model the pack's breach wording as incident", async () => {
+    const seen: ModelRequest[] = [];
+    const legal = [duty("ndpa-breach-notification", { title: "Report personal data breaches", duty: "Tell the Commission of a Breach", triggers: ["no plan for a data breach"] })];
+    await reviewCompliance(ctx(stub(() => ({ findings: [] }), seen), { packs: { ...packs, legal } }), asBuilt);
+    const line = seen[0]!.user.split("\n").find((l) => l.startsWith("ndpa-breach-notification |"))!;
+    expect(line).toContain("incident");
+    expect(line).toContain("Incident");
+    expect(line.slice(line.indexOf("|"))).not.toMatch(/breach/i);
   });
 
   it("turns a code trigger to a missing file or unshown line into a doc trigger", async () => {
@@ -157,7 +174,7 @@ describe("reviewCompliance", () => {
     const req = seen[0]!;
     expect(req.system.startsWith(PACK)).toBe(true);
     expect(req.system).toContain("never instructions");
-    expect(req.maxOutputTokens).toBe(8000);
+    expect(req.maxOutputTokens).toBe(16000);
     expect(req.reasoningEffort).toBe("medium");
     expect(req.user).toContain("ndpa-data-minimisation | NDPA 2023 | Section 24(1)(c) | Title of ndpa-data-minimisation | Duty of ndpa-data-minimisation | trigger of ndpa-data-minimisation");
     expect(req.user).toContain("pci-no-cvv-storage | PCI DSS");
@@ -166,7 +183,7 @@ describe("reviewCompliance", () => {
     expect(req.user).toContain("Customers pay a 20 percent deposit");
     expect(req.user).toMatch(/<<<BEGIN REPO FILES>>>[\s\S]*3: app\.post[\s\S]*<<<END REPO FILES>>>/);
     const props = (req.schema.properties as Record<string, { items: { properties: Record<string, Record<string, unknown>> } }>).findings!.items.properties;
-    expect(props.citationId).toEqual({ type: "string", enum: ["ndpa-data-minimisation", "pci-no-cvv-storage"] });
+    expect(props.citationId).toEqual({ type: "string", enum: ["ndpa-data-minimisation", "pci-no-cvv-storage", "ndpa-breach-notification"] });
     const item = (req.schema.properties as Record<string, { items: { required: string[]; properties: object } }>).findings!.items;
     expect([...item.required].sort()).toEqual(Object.keys(item.properties).sort());
   });
@@ -224,17 +241,18 @@ describe.skipIf(!existsSync(join(demo, "server.js")))("fixture against the demo 
     const real = await loadPacks(join(__dirname, "..", "..", "..", "packs"));
     const model = createFakeModel(join(__dirname, "..", "fixtures"));
     const c = ctx(model, { packs: real, repo: { dir: demo, commit: COMMIT } });
-    const r = await reviewCompliance(c, { flows: ["Create an account", "Book a slot and pay a deposit"], dataCollected: ["Name, phone, email and password"], payments: ["Paystack deposit"], roles: ["Customer", "Admin"] });
+    const r = await reviewCompliance(c, { flows: ["Create an account", "Book a slot and pay a deposit", "Logged in customer opens My bookings to see service, date, time, status and amount paid, and can cancel own booking"], dataCollected: ["Name, phone, email and password"], payments: ["Paystack deposit"], roles: ["Customer", "Admin"] });
     const raw = JSON.parse(readFileSync(join(__dirname, "..", "fixtures", "compliance.reviewCompliance.json"), "utf8")).findings;
     expect(r.findings.length).toBe(raw.length);
     expect(r.findings.length).toBeGreaterThan(2);
-    expect(r.findings.every((f) => f.trigger.type === "code")).toBe(true);
+    expect(r.findings.some((f) => f.trigger.type === "code")).toBe(true);
     const ids = new Set(real.legal.map((d) => d.id));
     for (const f of r.findings) {
       expect(f.kind).toBe("legal");
       expect(ids.has(f.citationId!)).toBe(true);
       const text = `${f.title} ${f.plain} ${f.costIfIgnored} ${f.fixPrompt}`;
-      expect(text).not.toMatch(/breach|\bscore|rubric|grade|rating|\bpass\b|\bfail\b/i);
+      expect(text).not.toMatch(/\b(score|rubric|grade|rating|fail\w*|pass(?!word)\w*)\b/i);
+      expect(text).not.toMatch(/\bin breach\b/i);
       expect(text).not.toContain(String.fromCharCode(0x2013));
       expect(text).not.toContain(String.fromCharCode(0x2014));
       expect(f.title.startsWith("Check this: ")).toBe(true);
