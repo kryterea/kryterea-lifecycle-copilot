@@ -240,17 +240,47 @@ describe("verifyCriteria requests", () => {
     expect(peak).toBe(3);
   });
 
-  it("stops starting new calls once one is refused, and passes the error up", async () => {
+  it("a budget stop returns the checks already made, in order, and starts no call after it", async () => {
     let calls = 0;
-    const criteria = Array.from({ length: 9 }, (_, i) => crit(`c${i}`, `Criterion ${i} about booking`));
-    const model = stub(async () => {
-      calls++;
-      if (calls === 2) throw new BudgetExceededError("budget used");
-      await new Promise((r) => setTimeout(r, 5));
+    const criteria = Array.from({ length: 5 }, (_, i) => crit(`c${i}`, `Criterion ${i} about booking`));
+    const done: string[] = [];
+    const model = stub(async (req) => {
+      const n = ++calls;
+      if (n === 3) throw new BudgetExceededError("budget used");
+      await new Promise((r) => setTimeout(r, 15));
+      done.push(criteria.find((c) => req.user.includes(c.text))!.id);
       return answer();
     });
-    await expect(verifyCriteria(ctx(model), criteria)).rejects.toBeInstanceOf(BudgetExceededError);
-    expect(calls).toBeLessThan(9);
+    const r = await verifyCriteria(ctx(model), criteria);
+    expect(r.stopped).toBe("budget");
+    expect(calls).toBe(3);
+    expect(r.checks).toHaveLength(2);
+    expect(r.checks.map((c) => c.criterionId)).toEqual(criteria.map((c) => c.id).filter((id) => done.includes(id)));
+    expect(r.checks.every((c) => c.state === "evidence_found")).toBe(true);
+    // in-flight calls settled before the function returned
+    expect(done).toHaveLength(2);
+  });
+
+  it("any other error is rethrown after in-flight calls settle, and no new call starts", async () => {
+    let calls = 0;
+    let settled = 0;
+    const criteria = Array.from({ length: 9 }, (_, i) => crit(`c${i}`, `Criterion ${i} about booking`));
+    const model = stub(async () => {
+      const n = ++calls;
+      if (n === 2) throw new Error("boom");
+      await new Promise((r) => setTimeout(r, 15));
+      settled++;
+      return answer();
+    });
+    await expect(verifyCriteria(ctx(model), criteria)).rejects.toThrow("boom");
+    expect(calls).toBe(3);
+    expect(settled).toBe(2);
+  });
+
+  it("an unexpected state from the model is treated as no_evidence, never a gap", async () => {
+    const { checks, findings } = await verifyCriteria(ctx(stub(() => gap({ state: "maybe", evidence: [{ file: "src/payment.ts", line: 1 }] }))), [BOOKING]);
+    expect(checks[0]!.state).toBe("no_evidence");
+    expect(findings).toEqual([]);
   });
 
   it("no criteria means no calls", async () => {
@@ -290,13 +320,26 @@ describe("qaGate", () => {
 // The fixture is a saved model output. It must keep its shape and cite a real line of the demo app.
 const demo = join(__dirname, "..", "..", "..", "..", "demo-salon-bookings");
 describe.skipIf(!existsSync(join(demo, "server.js")))("fixture against the demo app", () => {
-  it("gives a verified check with clean copy for any criterion", async () => {
+  it("gives a verified gap and one failure_path finding with clean copy", async () => {
     const real = await loadPacks(join(__dirname, "..", "..", "..", "packs"));
     const fixtures = join(__dirname, "..", "fixtures");
     const c: RoleContext = { ...ctx(createFakeModel(fixtures)), packs: real, repo: { dir: demo, commit: COMMIT } };
-    const { checks, findings } = await verifyCriteria(c, [crit("k1", "A signed-in customer can book a time slot"), FAILURE]);
-    expect(checks.map((x) => x.state)).toEqual(["evidence_found", "evidence_found"]);
-    expect(findings).toEqual([]);
+    const criterion = crit("k9", "A Paystack payment reference can confirm only one booking.", true);
+    const { checks, findings } = await verifyCriteria(c, [criterion]);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]!.state).toBe("gap");
+    expect(checks[0]!.evidence).toEqual([
+      { type: "code", file: "server.js", line: 48, commit: COMMIT },
+      { type: "code", file: "server.js", line: 204, commit: COMMIT },
+    ]);
+    expect(findings).toHaveLength(1);
+    const f = findings[0]!;
+    expect(f.kind).toBe("failure_path");
+    expect(f.criterionId).toBe("k9");
+    expect(f.trigger).toEqual({ type: "code", file: "server.js", line: 48, commit: COMMIT });
+    expect(f.fixPrompt).toContain("server.js");
+    expect(f.fixPrompt).toContain("48");
+    expect(f.fixPrompt).toContain(criterion.text);
     const raw = JSON.parse(readFileSync(join(fixtures, "qa.verifyCriteria.json"), "utf8"));
     const text = JSON.stringify(raw);
     expect(text).not.toMatch(/\b(score|rubric|grade|rating|fail\w*|pass(?!word)\w*)\b/i);

@@ -1,9 +1,18 @@
 {
-  "state": "evidence_found",
-  "evidence": [{ "file": "server.js", "line": 157 }],
-  "note": "A signed-in customer can send a booking. The app checks the service, the date and the time slot before it saves anything.",
-  "title": null,
-  "plain": null,
-  "costIfIgnored": null,
-  "fixPrompt": null
+  "costIfIgnored": "The salon could give services for payments never received, losing deposit income and causing disputes.",
+  "evidence": [
+    {
+      "file": "server.js",
+      "line": 48
+    },
+    {
+      "file": "server.js",
+      "line": 204
+    }
+  ],
+  "fixPrompt": "In server.js in the POST /api/bookings/:id/verify handler, check if the submitted reference is already stored on another booking and if so reject it, and add a unique constraint on bookings.paystack_ref so one reference can confirm only one booking.",
+  "note": "The code does not block reuse of a payment reference for another booking. I checked the verify handler and the bookings table definition.",
+  "plain": "A customer could pay once and reuse that same payment to confirm a second booking, so the second booking looks paid when no new payment was made.",
+  "state": "gap",
+  "title": "Same payment reference can confirm multiple bookings"
 }
