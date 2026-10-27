@@ -117,3 +117,35 @@ export type Finding = FindingInput & {
   fingerprint: string;
   createdAt: string;
 };
+
+export type GateState = "held" | "cleared";
+
+export type EvidenceState = "evidence_found" | "gap" | "no_evidence";
+
+export type RunStatus = "running" | "done" | "stopped_budget" | "failed";
+
+export type LinkRel = "affects" | "satisfies" | "raised_on";
+
+export interface LinkEnd {
+  type: string;
+  id: string;
+}
+
+export interface Check {
+  criterionId: string;
+  runId: string;
+  state: EvidenceState;
+  evidence: Trigger[];
+  note: string;
+}
+
+export type GateMap = Partial<Record<RoleId, { state: GateState; reason: string; at: string }>>;
+
+export interface AcceptanceRecord {
+  change: Change;
+  criteria: Array<Criterion & { latest: EvidenceState | null }>;
+  findings: Array<Finding & { status: FindingStatus }>;
+  gates: GateMap;
+  decisions: Array<{ findingId: string; status: FindingStatus; reason: string; actor: string; at: string }>;
+  runs: Array<{ id: string; role: RoleId; commit: string; status: RunStatus; costUsd: number }>;
+}

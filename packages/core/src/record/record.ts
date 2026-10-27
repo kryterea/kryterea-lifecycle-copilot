@@ -4,12 +4,21 @@ import type {
   Artifact,
   Change,
   ChangeKind,
+  AcceptanceRecord,
+  Check,
   Criterion,
+  EvidenceState,
   Finding,
   FindingInput,
   FindingStatus,
+  GateMap,
+  GateState,
+  LinkEnd,
+  LinkRel,
   Project,
   RoleId,
+  RunStatus,
+  SpendLedger,
   StageId,
   Trigger,
 } from "../types.js";
@@ -221,13 +230,9 @@ export class CopilotRecord {
     return this.all("SELECT * FROM criteria WHERE project_id = ? ORDER BY rowid", projectId).map(toCriterion);
   }
 
-  private addLink(
-    from: { type: string; id: string },
-    rel: string,
-    to: { type: string; id: string },
-  ): void {
+  link(from: LinkEnd, rel: LinkRel, to: LinkEnd): void {
     this.run(
-      "INSERT OR IGNORE INTO links (from_type, from_id, rel, to_type, to_id) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO links (from_type, from_id, rel, to_type, to_id) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
       from.type,
       from.id,
       rel,
@@ -295,7 +300,7 @@ export class CopilotRecord {
         JSON.stringify(i.trigger),
         at,
       );
-      this.addLink({ type: "finding", id: finding.id }, "raised_on", { type: "change", id: i.changeId });
+      this.link({ type: "finding", id: finding.id }, "raised_on", { type: "change", id: i.changeId });
       this.db.exec("COMMIT");
     } catch (e) {
       this.db.exec("ROLLBACK");
@@ -363,4 +368,141 @@ export class CopilotRecord {
       at: r.at as string,
     }));
   }
+
+  startRun(i: { changeId: string; role: RoleId; commit: string }): string {
+    const id = randomUUID();
+    this.run(
+      "INSERT INTO runs (id, change_id, role, commit_sha, status, started_at) VALUES (?, ?, ?, ?, 'running', ?)",
+      id,
+      i.changeId,
+      i.role,
+      i.commit,
+      now(),
+    );
+    return id;
+  }
+
+  /** Only sets status. Costs come from addRunCost alone. */
+  finishRun(runId: string, status: RunStatus): void {
+    if (this.run("UPDATE runs SET status = ?, finished_at = ? WHERE id = ?", status, now(), runId) === 0) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+  }
+
+  /** Writes at once, so a running run counts toward spentUsd. */
+  addRunCost(runId: string, costUsd: number, inputTokens: number, outputTokens: number): void {
+    const changed = this.run(
+      `UPDATE runs SET cost_usd = cost_usd + ?, input_tokens = input_tokens + ?,
+         output_tokens = output_tokens + ? WHERE id = ?`,
+      costUsd,
+      inputTokens,
+      outputTokens,
+      runId,
+    );
+    if (changed === 0) throw new Error(`Run not found: ${runId}`);
+  }
+
+  /** Total cost of all runs, running or finished. */
+  spentUsd(): number {
+    return Number(this.one("SELECT COALESCE(SUM(cost_usd), 0) AS total FROM runs")?.total ?? 0);
+  }
+
+  /** Commit of the newest finished run in the project. A stopped or failed run did not cover the diff. */
+  lastRunCommit(projectId: string): string | null {
+    const r = this.one(
+      `SELECT r.commit_sha FROM runs r JOIN changes c ON c.id = r.change_id
+       WHERE c.project_id = ? AND r.status = 'done' ORDER BY r.rowid DESC LIMIT 1`,
+      projectId,
+    );
+    return r ? (r.commit_sha as string) : null;
+  }
+
+  recordGate(changeId: string, role: RoleId, state: GateState, reason: string): void {
+    this.run(
+      "INSERT INTO gate_events (change_id, role, state, reason, at) VALUES (?, ?, ?, ?, ?)",
+      changeId,
+      role,
+      state,
+      reason,
+      now(),
+    );
+  }
+
+  /** Latest state per role. */
+  gates(changeId: string): GateMap {
+    const out: GateMap = {};
+    for (const r of this.all("SELECT * FROM gate_events WHERE change_id = ? ORDER BY seq", changeId)) {
+      out[r.role as RoleId] = { state: r.state as GateState, reason: r.reason as string, at: r.at as string };
+    }
+    return out;
+  }
+
+  recordCheck(c: Check): void {
+    this.run(
+      "INSERT INTO checks (criterion_id, run_id, state, evidence, note, at) VALUES (?, ?, ?, ?, ?, ?)",
+      c.criterionId,
+      c.runId,
+      c.state,
+      JSON.stringify(c.evidence),
+      c.note,
+      now(),
+    );
+  }
+
+  latestCheck(criterionId: string): Check | null {
+    const r = this.one("SELECT * FROM checks WHERE criterion_id = ? ORDER BY seq DESC LIMIT 1", criterionId);
+    if (!r) return null;
+    return {
+      criterionId: r.criterion_id as string,
+      runId: r.run_id as string,
+      state: r.state as EvidenceState,
+      evidence: JSON.parse(r.evidence as string) as Trigger[],
+      note: r.note as string,
+    };
+  }
+
+  linksTo(to: LinkEnd): Array<{ from: LinkEnd; rel: LinkRel }> {
+    return this.all("SELECT * FROM links WHERE to_type = ? AND to_id = ? ORDER BY rowid", to.type, to.id).map((r) => ({
+      from: { type: r.from_type as string, id: r.from_id as string },
+      rel: r.rel as LinkRel,
+    }));
+  }
+
+  /** Criteria are the change's own plus any it affects. Decisions are status changes made by people. */
+  acceptanceRecord(changeId: string): AcceptanceRecord {
+    const change = this.getChange(changeId);
+    const criteria = this.all(
+      `SELECT * FROM criteria WHERE change_id = ? OR id IN (
+         SELECT to_id FROM links WHERE from_type = 'change' AND from_id = ? AND rel = 'affects' AND to_type = 'criterion')
+       ORDER BY rowid`,
+      changeId,
+      changeId,
+    ).map((r) => {
+      const c = toCriterion(r);
+      return { ...c, latest: this.latestCheck(c.id)?.state ?? null };
+    });
+    const findings = this.listFindings({ changeId });
+    const decisions = findings.flatMap((f) =>
+      this.findingHistory(f.id)
+        .filter((h) => h.actor !== SYSTEM_ACTOR)
+        .map((h) => ({ findingId: f.id, ...h })),
+    );
+    decisions.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+    const runs = this.all("SELECT * FROM runs WHERE change_id = ? ORDER BY rowid", changeId).map((r) => ({
+      id: r.id as string,
+      role: r.role as RoleId,
+      commit: r.commit_sha as string,
+      status: r.status as RunStatus,
+      costUsd: r.cost_usd as number,
+    }));
+    return { change, criteria, findings, gates: this.gates(changeId), decisions, runs };
+  }
+}
+
+/** Ties the model adapter's spend guard to a run. spentUsd covers every run, so the budget is global. */
+export function ledgerFor(record: CopilotRecord, runId: string): SpendLedger {
+  return {
+    spentUsd: () => record.spentUsd(),
+    add: (costUsd, inputTokens, outputTokens) => record.addRunCost(runId, costUsd, inputTokens, outputTokens),
+  };
 }

@@ -93,4 +93,39 @@ CREATE TABLE IF NOT EXISTS links (
   PRIMARY KEY (from_type, from_id, rel, to_type, to_id)
 );
 CREATE INDEX IF NOT EXISTS links_to ON links(to_type, to_id);
+
+CREATE TABLE IF NOT EXISTS runs (
+  id TEXT PRIMARY KEY,
+  change_id TEXT NOT NULL REFERENCES changes(id),
+  role TEXT NOT NULL,
+  commit_sha TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('running','done','stopped_budget','failed')),
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cost_usd REAL NOT NULL DEFAULT 0,
+  started_at TEXT NOT NULL,
+  finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS runs_change ON runs(change_id);
+
+CREATE TABLE IF NOT EXISTS gate_events (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  change_id TEXT NOT NULL REFERENCES changes(id),
+  role TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('held','cleared')),
+  reason TEXT NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS gate_events_change ON gate_events(change_id);
+
+CREATE TABLE IF NOT EXISTS checks (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  criterion_id TEXT NOT NULL REFERENCES criteria(id),
+  run_id TEXT NOT NULL REFERENCES runs(id),
+  state TEXT NOT NULL CHECK (state IN ('evidence_found','gap','no_evidence')),
+  evidence TEXT NOT NULL,
+  note TEXT NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS checks_criterion ON checks(criterion_id);
 `;
