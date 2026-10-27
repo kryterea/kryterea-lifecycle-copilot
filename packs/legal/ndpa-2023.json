@@ -1,0 +1,216 @@
+[
+  {
+    "id": "ndpa-lawful-basis",
+    "law": "NDPA 2023",
+    "section": "Section 25(1) and 25(2)(a)",
+    "title": "Have a lawful basis for each use of personal data",
+    "duty": "Personal data may only be processed where the person has given, and not withdrawn, consent for the specific purpose, or where the processing is necessary for a listed reason such as performing a contract with the person, meeting a legal obligation, or a legitimate interest that does not override the person's rights.",
+    "triggers": [
+      "collects name, email, phone and password at sign-up",
+      "stores booking details (service, date, time) against a customer account",
+      "sends reminders or promotional messages to customers",
+      "shares customer details with a payment provider to take a deposit"
+    ],
+    "sourceUrl": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "ndpa-valid-consent",
+    "law": "NDPA 2023",
+    "section": "Section 26(1), (3), (4), (6) and (7)(a)",
+    "title": "Make consent provable, clear and opt-in",
+    "duty": "Where the business relies on consent, it must be able to prove the person consented; silence or inactivity is not consent, and the person must be told of the right to withdraw before consenting. The request must be in clear, simple language, and consent must be an affirmative act, not a pre-selected confirmation.",
+    "triggers": [
+      "sign-up or booking form has a pre-ticked box for marketing messages",
+      "treats creating an account or booking as agreement to marketing",
+      "does not record when and how a customer agreed",
+      "consent wording does not mention that it can be withdrawn"
+    ],
+    "sourceUrl": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "ndpa-withdraw-consent",
+    "law": "NDPA 2023",
+    "section": "Section 35(1) and (2)",
+    "title": "Let people withdraw consent as easily as they gave it",
+    "duty": "A person may withdraw consent to processing of their personal data at any time. The business must make withdrawing as easy as giving consent.",
+    "triggers": [
+      "marketing opt-in is one click but opting out needs an email or phone call",
+      "no unsubscribe link in promotional messages sent on the basis of consent",
+      "account settings have no way to turn off optional data uses"
+    ],
+    "sourceUrl": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "ndpa-purpose-limitation",
+    "law": "NDPA 2023",
+    "section": "Section 24(1)(b)",
+    "title": "Use data only for the purposes stated",
+    "duty": "Personal data must be collected for specified, explicit and legitimate purposes, and must not be further processed in a way incompatible with those purposes.",
+    "triggers": [
+      "uses booking contact details for marketing not mentioned at sign-up",
+      "shares or sells the customer list to another business for that business's own use",
+      "reuses phone numbers collected for appointment reminders for unrelated campaigns"
+    ],
+    "sourceUrl": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "ndpa-data-minimisation",
+    "law": "NDPA 2023",
+    "section": "Section 24(1)(c)",
+    "title": "Collect only what the booking needs",
+    "duty": "Personal data must be adequate, relevant and limited to the minimum necessary for the purposes for which it was collected.",
+    "triggers": [
+      "sign-up form asks for fields the booking does not use, such as date of birth, address or gender",
+      "makes optional fields mandatory",
+      "admin page shows more customer detail than staff need to serve the booking"
+    ],
+    "sourceUrl": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "ndpa-storage-limitation",
+    "law": "NDPA 2023",
+    "section": "Section 24(1)(d)",
+    "title": "Do not keep data longer than needed",
+    "duty": "Personal data must be kept for no longer than is necessary to achieve the lawful basis for which it was collected.",
+    "triggers": [
+      "keeps past bookings and customer accounts forever with no retention rule",
+      "no job or process deletes or anonymises old accounts and bookings",
+      "keeps records of customers who closed their account"
+    ],
+    "sourceUrl": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "ndpa-privacy-notice",
+    "law": "NDPA 2023",
+    "section": "Section 27(1) and (3)",
+    "title": "Tell customers what you do with their data before collecting it",
+    "duty": "Before collecting personal data directly from a person, the business must tell them who it is and how to contact it, the lawful basis and purposes, who receives the data, their rights, the retention period, their right to complain to the Commission, and any automated decision-making. This information must be in a privacy policy written in a clear, concise and easily accessible way.",
+    "triggers": [
+      "sign-up or booking form has no link to a privacy policy",
+      "privacy policy does not name the payment provider or other recipients",
+      "privacy policy does not state how long data is kept",
+      "privacy policy does not mention the right to complain to the Nigeria Data Protection Commission"
+    ],
+    "sourceUrl": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "ndpa-right-of-access",
+    "law": "NDPA 2023",
+    "section": "Section 34(1)(a) and (b)",
+    "title": "Let customers see and get a copy of their data",
+    "duty": "A person can ask the business, without constraint or unreasonable delay, to confirm whether it holds their personal data and, if so, to be told among other things the purposes, categories, recipients and, where possible, the retention period or the criteria used to set it. They can also get a copy of their data in a commonly used electronic format; where that would impose unreasonable costs, the business may ask the person to bear some or all of the cost.",
+    "triggers": [
+      "no way for a customer to view the data held about them",
+      "no way to request or download a copy of account and booking data",
+      "no contact route for data requests"
+    ],
+    "sourceUrl": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "ndpa-correction-erasure",
+    "law": "NDPA 2023",
+    "section": "Section 34(1)(c), (d) and 34(2)",
+    "title": "Let customers correct or delete their data",
+    "duty": "A person can have inaccurate, out of date, incomplete or misleading data corrected, and can have their personal data erased without undue delay. The business must erase data without undue delay when it is no longer necessary or there is no other lawful basis to keep it.",
+    "triggers": [
+      "customer cannot edit their name, email or phone after sign-up",
+      "no delete account option or deletion request route",
+      "deleting an account leaves the customer's personal data in the bookings table"
+    ],
+    "sourceUrl": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "ndpa-security-of-processing",
+    "law": "NDPA 2023",
+    "section": "Section 39(1) and (2)",
+    "title": "Keep personal data secure",
+    "duty": "The business must put in place appropriate technical and organisational measures to keep personal data secure and confidential, including protection against loss, misuse, unauthorised disclosure or access. Measures may include encryption, pseudonymisation, regular risk assessments, and regular testing of how well the measures work.",
+    "triggers": [
+      "stores passwords in plain text or with a weak hash",
+      "admin bookings page can be opened without logging in or without an admin role",
+      "site or API serves pages over plain HTTP",
+      "database credentials or API keys committed in the code"
+    ],
+    "sourceUrl": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "ndpa-breach-notification",
+    "law": "NDPA 2023",
+    "section": "Section 40(2), (3) and (8)",
+    "title": "Report risky personal data breaches to the Commission within 72 hours",
+    "duty": "Within 72 hours of becoming aware of a personal data breach likely to result in a risk to people's rights and freedoms, the business must notify the Commission and, where feasible, describe the breach and the categories and approximate numbers of people and records affected. If the risk to people is high, it must also tell the affected people immediately in plain and clear language, with advice on how to protect themselves; where telling them directly would involve disproportionate effort or is not feasible, it may instead make a public communication in widely used media. It must keep a record of all personal data breaches, covering the facts, their effects and the remedial action taken.",
+    "triggers": [
+      "app stores customer accounts, phone numbers and booking history",
+      "no logging or alerting that would show unauthorised access to customer data",
+      "no written plan or contact for reporting a personal data breach",
+      "no record kept of security incidents"
+    ],
+    "sourceUrl": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "ndpa-processor-agreement",
+    "law": "NDPA 2023",
+    "section": "Section 29(1) and (2)",
+    "title": "Have written terms with service providers that handle the data",
+    "duty": "When the business uses another party to process personal data on its behalf, it must make sure that party follows the Act, helps it honour people's rights, keeps the data secure, and gives information needed to show compliance. This includes a written agreement.",
+    "triggers": [
+      "stores customer data with a hosting or database provider",
+      "sends booking emails or SMS through a third-party messaging service",
+      "no record of the data processing terms accepted with each provider"
+    ],
+    "sourceUrl": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "pci-no-cvv-storage",
+    "law": "PCI DSS",
+    "section": "Requirement 3.3.1.2 (standard)",
+    "title": "Never store card security codes after payment",
+    "duty": "Card verification codes (such as CVV2 or CVC2) are sensitive authentication data and must not be stored after the payment is authorised, even if encrypted. Codes should be collected only when needed for authorisation, and systems and processes must be set up so they are not kept.",
+    "triggers": [
+      "the app's own server receives the card security code instead of leaving it to Paystack's checkout",
+      "card security codes appear in request logs, error logs or the database",
+      "app saves the card security code to reuse for future deposits"
+    ],
+    "sourceUrl": "https://www.pcisecuritystandards.org/faqs/1319/",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "pci-hosted-payment-page",
+    "law": "PCI DSS",
+    "section": "SAQ A r1 eligibility criterion for scripts (PCI DSS v4.0.1), with Requirements 6.4.3 and 11.6.1 as example techniques",
+    "title": "Protect any page that embeds the provider's payment form from script attacks",
+    "duty": "To be eligible for SAQ A, a merchant whose page embeds the payment provider's payment form (for example in an iframe) must have confirmed its page is not open to script attacks, either by using techniques such as those in Requirements 6.4.3 and 11.6.1 or by getting confirmation from its PCI DSS compliant provider that its solution, used as instructed, protects the page. This criterion does not apply where customers are redirected to the provider's own payment page.",
+    "triggers": [
+      "embeds the Paystack payment form inside the booking page",
+      "a booking page that embeds the Paystack form also loads third-party scripts such as analytics or chat widgets"
+    ],
+    "sourceUrl": "https://www.pcisecuritystandards.org/faqs/1588/",
+    "verifiedOn": "2026-10-27"
+  },
+  {
+    "id": "pci-encrypt-in-transit",
+    "law": "PCI DSS",
+    "section": "Requirement 4.2.1 and 4.2.2 (standard)",
+    "title": "Protect card data in transit and never send card numbers by message",
+    "duty": "Strong cryptography and security protocols must be used when cardholder data is sent over open, public networks. Unprotected card numbers must not be sent by email, instant messaging, SMS or chat.",
+    "triggers": [
+      "a page that collects or transmits card data is served over plain HTTP",
+      "app or staff send or forward customers' card numbers by WhatsApp, SMS, email or chat",
+      "card data passes through the app's own API without TLS"
+    ],
+    "sourceUrl": "https://www.pcisecuritystandards.org/faqs/1085/",
+    "verifiedOn": "2026-10-27"
+  }
+]

@@ -5,3 +5,4 @@ export { CopilotRecord } from "./record/record.js";
 export { SYSTEM_ACTOR, findingFingerprint, ledgerFor } from "./record/record.js";
 export { syncRepo, listSourceFiles, changedFiles, readLines, verifyCodeTrigger } from "./repo/repo.js";
 export { narrowFiles } from "./repo/narrow.js";
+export { loadPacks } from "./packs.js";

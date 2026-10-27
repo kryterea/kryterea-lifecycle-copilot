@@ -149,3 +149,19 @@ export interface AcceptanceRecord {
   decisions: Array<{ findingId: string; status: FindingStatus; reason: string; actor: string; at: string }>;
   runs: Array<{ id: string; role: RoleId; commit: string; status: RunStatus; costUsd: number }>;
 }
+
+export interface LegalDuty {
+  id: string;
+  law: "NDPA 2023" | "PCI DSS";
+  section: string;
+  title: string;
+  duty: string;
+  triggers: string[];
+  sourceUrl: string;
+  verifiedOn: string;
+}
+
+export interface Packs {
+  role: Record<RoleId, string>;
+  legal: LegalDuty[];
+}
