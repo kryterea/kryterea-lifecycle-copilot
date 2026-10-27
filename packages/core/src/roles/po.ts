@@ -40,5 +40,8 @@ export async function acceptanceSummary(rec: AcceptanceRecord, model: Model, pac
     reasoningEffort: "low",
   });
   // Length is enforced here, not by the token cap.
-  return String(data.summary ?? "").trim().split(/\s+/).slice(0, MAX_WORDS).join(" ");
+  const text = String(data.summary ?? "").trim();
+  const words = text.split(/\s+/);
+  // Keep the model's paragraphs unless trimming is needed.
+  return words.length <= MAX_WORDS ? text : words.slice(0, MAX_WORDS).join(" ");
 }
