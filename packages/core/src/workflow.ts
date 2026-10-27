@@ -1,7 +1,9 @@
-import { ledgerFor, type CopilotRecord } from "./record/record.js";
-import { changedFiles, syncRepo } from "./repo/repo.js";
+import { discoverDocuments } from "./docs/discover.js";
+import { findingFingerprint, ledgerFor, type CopilotRecord } from "./record/record.js";
+import { changedFiles, listSourceFiles, readLines, syncRepo } from "./repo/repo.js";
 import { architectGate, reviewOperations } from "./roles/architect.js";
 import { analyseChange, analyseImpact, baGate, understandApp } from "./roles/ba.js";
+import { reviewDocuments } from "./roles/ba-docs.js";
 import { complianceGate, reviewCompliance } from "./roles/compliance.js";
 import type { RoleContext, RoleResult } from "./roles/context.js";
 import { acceptanceSummary, poGate } from "./roles/po.js";
@@ -136,6 +138,8 @@ async function runRole(s: Session, change: Change, role: RoleId, work: (ctx: Rol
         .filter((f) => f.role === role)
         .map((f) => ({ id: f.id, title: f.title, kind: f.kind })),
       answers: latestBody<{ answers?: string[] }>(record, change.id, "answers")?.answers ?? [],
+      documents: record.listDocuments(s.project.id).map((d) => ({ name: d.name, body: d.latest.body })),
+      requirements: record.listRequirements(s.project.id, { status: "active" }),
     });
   } catch (e) {
     record.finishRun(runId, e instanceof BudgetExceededError ? "stopped_budget" : "failed");
@@ -150,12 +154,97 @@ function save(ctx: RoleContext, role: RoleId, stage: StageId, r: RoleResult): vo
   const from = { type: "change", id: change.id };
   for (const a of r.artifacts) record.addArtifact({ changeId: change.id, role, stage, kind: a.kind, body: a.body });
   if (r.questions.length) record.addArtifact({ changeId: change.id, role, stage, kind: "questions", body: { questions: r.questions } });
+  const requirements = r.criteria.length ? record.listRequirements(change.projectId, { status: "active" }) : [];
   for (const c of r.criteria) {
     const k = record.addCriterion({ projectId: change.projectId, changeId: change.id, text: c.text, isFailurePath: c.isFailurePath });
     record.link(from, "satisfies", { type: "criterion", id: k.id });
+    for (const req of requirements) if (c.requirementKeys?.includes(req.key)) record.linkRequirement(req.id, "criterion", k.id);
   }
   for (const id of r.affectedCriterionIds) record.link(from, "affects", { type: "criterion", id });
   for (const f of r.findings) record.addFinding({ projectId: change.projectId, changeId: change.id, runId: ctx.runId, role, stage, ...f });
+}
+
+/** Repo documents over this size are not read (pasted ones are refused at the API). */
+const MAX_DOC_BYTES = 200 * 1024;
+
+/** Versions of the project's documents the analyst has already read (from `documents_read` artifacts). */
+function readVersions(record: CopilotRecord, projectId: string): Set<string> {
+  const ids = record
+    .listChanges(projectId)
+    .flatMap((c) => record.listArtifacts(c.id))
+    .filter((a) => a.kind === "documents_read")
+    .flatMap((a) => ((a.body as { documents?: Array<{ versionId: string }> }).documents ?? []).map((d) => d.versionId));
+  return new Set(ids);
+}
+
+/** Open document findings by the analyst: a doc trigger that names a document. */
+const docGapsOn = (record: CopilotRecord, changeId: string) =>
+  record.listFindings({ changeId, status: "open" }).filter((f) => f.role === "ba" && f.trigger.type === "doc" && f.trigger.document !== undefined);
+
+/** The analyst's gate for documents: held while any document gap raised on the change is open. */
+function docGate(record: CopilotRecord, changeId: string): { state: GateState; reason: string } {
+  const n = docGapsOn(record, changeId).length;
+  if (n === 0) return { state: "cleared", reason: "No open document gaps." };
+  return { state: "held", reason: `${n} document gap${n === 1 ? "" : "s"} to fix or accept with a reason.` };
+}
+
+/**
+ * Brings the record's documents up to date: repo documents found by discoverDocuments at the synced commit, plus
+ * uploaded ones. Only versions the analyst has not read go to the model. Requirements are applied per document and
+ * gaps are raised on `change`. A document gap the re-read did not raise again is confirmed fixed by the analyst.
+ */
+async function syncDocs(s: Session, change: Change): Promise<{ changed: string[] }> {
+  const { record } = s.deps;
+  const repo = await s.repo();
+  const projectId = s.project.id;
+  const files = discoverDocuments(await listSourceFiles(repo.dir), record.docSettings(projectId));
+  for (const file of files) {
+    const body = readLines(repo.dir, file, 1, Number.MAX_SAFE_INTEGER);
+    if (body === null || Buffer.byteLength(body) > MAX_DOC_BYTES) continue;
+    record.saveDocumentVersion({ projectId, name: file, source: "repo", body, commit: repo.commit });
+  }
+  const repoDocs = new Set(files);
+  const read = readVersions(record, projectId);
+  const due = record.listDocuments(projectId).filter((d) => (d.source === "upload" || repoDocs.has(d.name)) && !read.has(d.latest.id));
+  if (!due.length) return { changed: [] };
+
+  await runRole(s, change, "ba", async (ctx) => {
+    const previous = due.flatMap((d) => record.listRequirements(projectId).filter((r) => r.documentId === d.id));
+    const out = await reviewDocuments(ctx, due.map((d) => ({ name: d.name, body: d.latest.body })), previous);
+    for (const d of due) {
+      record.applyRequirements(d.id, d.latest.id, out.requirements.filter((r) => r.document === d.name));
+    }
+    const before = new Set(record.listFindings({ projectId, status: "open" }).map((f) => f.id));
+    save(ctx, "ba", change.stage, { artifacts: [], criteria: [], findings: out.findings, questions: [], affectedCriterionIds: [] });
+    const raised = new Set(out.findings.map((f) => findingFingerprint(projectId, "ba", f.kind, f.title)));
+    for (const f of record.listFindings({ projectId, status: "open" })) {
+      if (!before.has(f.id) || f.role !== "ba" || f.trigger.type !== "doc" || raised.has(f.fingerprint)) continue;
+      const doc = due.find((d) => d.name === (f.trigger as { document?: string }).document);
+      if (doc) record.setFindingStatus(f.id, "fixed", `Not raised again on re-read at ${doc.latest.contentHash.slice(0, 7)}`, "ba");
+    }
+    record.addArtifact({
+      changeId: change.id,
+      role: "ba",
+      stage: change.stage,
+      kind: "documents_read",
+      body: {
+        documents: due.map((d) => ({
+          name: d.name,
+          versionId: d.latest.id,
+          hash: d.latest.contentHash,
+          commit: d.latest.commit,
+          requirements: out.requirements.filter((r) => r.document === d.name).length,
+          gaps: out.findings.filter((f) => f.trigger.type === "doc" && f.trigger.document === d.name).length,
+        })),
+      },
+    });
+  });
+  return { changed: due.map((d) => d.name) };
+}
+
+/** Reads the project's changed documents and raises their gaps on `change`. See syncDocs. */
+export async function syncDocuments(deps: WorkflowDeps, projectId: string, change: Change): Promise<{ changed: string[] }> {
+  return syncDocs(session(deps, projectId), change);
 }
 
 /** Criteria an existing finding was matched to (QA folded its own finding into it), so evidence found closes it. */
@@ -234,7 +323,10 @@ async function verify(s: Session, change: Change, stage: StageId, criteria: Crit
  * latest checks of its criteria. Returns the roles that hold.
  */
 function releaseHeld(record: CopilotRecord, c: Change): RoleId[] {
+  const ba = record.gates(c.id).ba;
+  const docs = docGate(record, c.id);
   const gates: Array<[RoleId, { state: GateState; reason: string }]> = [
+    ["ba", docs.state === "held" || ba?.state !== "cleared" ? docs : ba],
     ["compliance", complianceGate(legalUnresolved(record, c.id))],
     ["architect", architectGate(openOn(record, c.id, "operations"))],
     ["qa", qaGate(latestChecks(record, criteriaOf(record, c)))],
@@ -253,6 +345,7 @@ export const accepted = (record: CopilotRecord, changeId: string) =>
 const DISPATCH: Record<StageId, (s: Session, c: Change) => Promise<Outcome>> = {
   intake: async (s, c) => {
     const { record } = s.deps;
+    await syncDocs(s, c);
     await runRole(s, c, "ba", async (ctx) =>
       save(ctx, "ba", "intake", c.kind === "understand" ? await understandApp(ctx) : await analyseImpact(ctx, record.listCriteria(c.projectId))),
     );
@@ -265,8 +358,12 @@ const DISPATCH: Record<StageId, (s: Session, c: Change) => Promise<Outcome>> = {
     const questions = latestBody<{ questions?: string[] }>(record, c.id, "questions")?.questions ?? [];
     // Answers count only when saved after the latest questions.
     const answers = openQuestions(record, c.id).length ? [] : (latestBody<{ answers?: string[] }>(record, c.id, "answers")?.answers ?? []);
-    if (!gate(record, c.id, "ba", baGate(questions, answers))) return stay(["ba"]);
+    const asked = baGate(questions, answers);
+    if (!gate(record, c.id, "ba", asked)) return stay(["ba"]);
     await runRole(s, c, "ba", async (ctx) => save(ctx, "ba", "analysis", await analyseChange(ctx)));
+    // Document gaps hold the gate as other findings hold theirs: recorded here, holding at release.
+    const docs = docGate(record, c.id);
+    gate(record, c.id, "ba", docs.state === "held" ? docs : asked);
     return NEXT;
   },
 
@@ -446,6 +543,8 @@ export async function recheck(
   });
 
   try {
+    // Document findings land on the newest change still in progress, else on the newest delivered one.
+    await syncDocs(s, changes.filter((c) => c.stage !== "operate").at(-1) ?? newest);
     // Unknown diff (no baseline, or it is unreachable): review all files, so moving the baseline never skips code.
     if (!diff || diff.changed.length) {
       const asBuilt = asBuiltFor(record, newest, true);
