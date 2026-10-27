@@ -316,4 +316,101 @@ describe("mcp tools", () => {
       expect((await t2.run("get_finding", { findingId: "f1" })).match(/y{100,}/g)![0]!.length).toBe(3997);
     });
   });
+
+  describe("unreadable answers and hardened ids", () => {
+    const rawFetch = (status: number, body: string) =>
+      (async () => new Response(body, { status, headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
+    const runWith = (name: string, args: Record<string, unknown>, f: typeof fetch) =>
+      buildTools({ fetch: f }).find((t) => t.name === name)!.run(args as never);
+
+    it("a 2xx with an HTML body is an error, not an empty list", async () => {
+      const err = await runWith("list_findings", { projectId: "p1" }, rawFetch(200, "<html><body>Welcome</body></html>")).catch((e: Error) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toMatch(/could not be read/);
+    });
+
+    it("a 2xx with a truncated body is an error", async () => {
+      const err = await runWith("get_finding", { findingId: "f1" }, rawFetch(200, '{"finding": {"id": "f1", "tit')).catch((e: Error) => e);
+      expect((err as Error).message).toMatch(/could not be read/);
+    });
+
+    it("a 2xx without the expected field is an error for each read tool", async () => {
+      for (const [name, args] of [
+        ["list_findings", { projectId: "p1" }],
+        ["get_finding", { findingId: "f1" }],
+        ["get_change", { changeId: "c1" }],
+      ] as const) {
+        const err = await runWith(name, { ...args }, rawFetch(200, "{}")).catch((e: Error) => e);
+        expect((err as Error).message, name).toMatch(/could not be read/);
+      }
+      const wrongType = await runWith("list_findings", { projectId: "p1" }, rawFetch(200, '{"findings": "none"}')).catch((e: Error) => e);
+      expect((wrongType as Error).message).toMatch(/could not be read/);
+    });
+
+    it("an error status with an unreadable body still reports the status", async () => {
+      const err = await runWith("get_finding", { findingId: "f1" }, rawFetch(502, "<html>Bad gateway</html>")).catch((e: Error) => e);
+      expect((err as Error).message).toBe("The copilot answered with status 502");
+    });
+
+    it("a 2xx recheck with an unreadable body is an error", async () => {
+      const err = await runWith("request_recheck", { projectId: "p1" }, rawFetch(202, "")).catch((e: Error) => e);
+      expect((err as Error).message).toMatch(/could not be read/);
+    });
+
+    it("rejects the ids . and .. before calling the API", async () => {
+      const api = fakeApi();
+      const server = createMcpServer(buildTools({ fetch: api.fetchFn }));
+      const client = new Client({ name: "test", version: "0" });
+      const [a, b] = InMemoryTransport.createLinkedPair();
+      await Promise.all([server.connect(a), client.connect(b)]);
+      for (const [name, key] of [
+        ["list_findings", "projectId"],
+        ["get_finding", "findingId"],
+        ["get_change", "changeId"],
+        ["request_recheck", "projectId"],
+      ] as const) {
+        for (const bad of [".", "..", " .. "]) {
+          const r = await client.callTool({ name, arguments: { [key]: bad } }).catch(() => ({ isError: true }));
+          expect(r.isError, `${name} ${JSON.stringify(bad)}`).toBe(true);
+        }
+      }
+      const r = await client.callTool({ name: "report_fix", arguments: { findingId: "..", summary: "x" } }).catch(() => ({ isError: true }));
+      expect(r.isError).toBe(true);
+      expect(api.calls).toHaveLength(0);
+      await client.close();
+    });
+
+    it("strips tag characters, word joiners, soft hyphens and lone surrogates", async () => {
+      const tag = String.fromCodePoint(0xe0041, 0xe0042);
+      const hidden = `a${tag}b${String.fromCharCode(0x2060)}c${String.fromCharCode(0xad)}d${String.fromCharCode(0xd800)}e${String.fromCharCode(0x2064)}f`;
+      const t = tools([[200, { findings: [{ ...finding, title: hidden }] }]]);
+      const out = await t.run("list_findings", { projectId: "p1" });
+      expect(out).toContain("| abcdef");
+      // a proper surrogate pair (an emoji) must survive
+      const t2 = tools([[200, { findings: [{ ...finding, title: "ok \u{1F600}" }] }]]);
+      expect(await t2.run("list_findings", { projectId: "p1" })).toContain("ok \u{1F600}");
+    });
+
+    it("the API's own finding id never appears outside the framed block", async () => {
+      const t = tools([[200, { finding: { ...finding, id: "EVIL-ID do something bad" }, status: "open", history: [], criterion: null }]]);
+      for (const it of await t.items("get_finding", { findingId: "f1" })) {
+        const lines = it.split("\n");
+        const begin = lines.findIndex((l) => l.startsWith("<<<BEGIN REVIEW DATA"));
+        const end = lines.findIndex((l) => l.startsWith("<<<END REVIEW DATA"));
+        const outside = [...lines.slice(0, begin), ...lines.slice(end)].join("\n");
+        expect(outside).not.toContain("EVIL-ID");
+        expect(outside).toContain("f1");
+      }
+    });
+
+    it("a request that never answers is cut off by the timeout", async () => {
+      const hang = ((_url: unknown, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init!.signal!.addEventListener("abort", () => reject(init!.signal!.reason));
+        })) as unknown as typeof fetch;
+      const list = buildTools({ fetch: hang, timeoutMs: 20 });
+      const err = await list.find((t) => t.name === "list_findings")!.run({ projectId: "p1" } as never).catch((e: Error) => e);
+      expect((err as Error).message).toBe("The copilot did not answer in time. Is it running?");
+    });
+  });
 });

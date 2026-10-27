@@ -7,6 +7,7 @@ import { z } from "zod";
 const STATUSES = ["open", "fixed", "accepted_risk", "deferred"] as const;
 
 const REQUEST_TIMEOUT_MS = 10_000;
+const UNREADABLE = "The copilot sent an answer that could not be read. Is the right server running?";
 const RECHECK_BUSY = "A check is already running; try again in a minute";
 
 export interface ApiOptions {
@@ -16,6 +17,8 @@ export interface ApiOptions {
   token?: string;
   /** Injectable for tests. */
   fetch?: typeof fetch;
+  /** Request timeout in milliseconds (default 10,000). */
+  timeoutMs?: number;
 }
 
 /** An error whose message is safe to show the agent. */
@@ -36,17 +39,21 @@ function makeApi(o: ApiOptions) {
         method,
         headers,
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        signal: AbortSignal.timeout(o.timeoutMs ?? REQUEST_TIMEOUT_MS),
       });
     } catch (e) {
       const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
       throw new ToolError(timedOut ? "The copilot did not answer in time. Is it running?" : "Could not reach the copilot. Is it running?");
     }
+    const ok = res.status >= 200 && res.status < 300;
     let json: Json = {};
     try {
-      json = (await res.json()) as Json;
+      const parsed: unknown = await res.json();
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error("not an object");
+      json = parsed as Json;
     } catch {
-      // not JSON: leave empty, the status decides
+      // A success we cannot read must not look like an empty answer. An error status needs no body.
+      if (ok) throw new ToolError(UNREADABLE);
     }
     return { status: res.status, json };
   };
@@ -55,12 +62,20 @@ function makeApi(o: ApiOptions) {
 const apiError = (r: { status: number; json: Json }) =>
   typeof r.json.error === "string" ? line(r.json.error, 300) : `The copilot answered with status ${r.status}`;
 
-/** Like call, but any non-2xx becomes a ToolError carrying the API's own `{error}` message. */
+/**
+ * Like call, but any non-2xx becomes a ToolError carrying the API's own `{error}` message.
+ * `need` names a field the answer must hold (a list for "findings", an object for "finding" or "change").
+ */
 function strict(call: ReturnType<typeof makeApi>) {
-  return async (method: "GET" | "POST", path: string, body?: unknown): Promise<Json> => {
+  return async (method: "GET" | "POST", path: string, body?: unknown, need?: "findings" | "finding" | "change"): Promise<Json> => {
     const r = await call(method, path, body);
     if (r.status < 200 || r.status >= 300) {
       throw new ToolError(apiError(r));
+    }
+    if (need) {
+      const v: unknown = r.json[need];
+      const good = need === "findings" ? Array.isArray(v) : typeof v === "object" && v !== null && !Array.isArray(v);
+      if (!good) throw new ToolError(UNREADABLE);
     }
     return r.json;
   };
@@ -83,15 +98,17 @@ function tool<S extends z.ZodRawShape>(
   return { name, description, inputSchema, run: run as Tool["run"] };
 }
 
-const id = (what: string) => z.string().trim().min(1).max(200).describe(what);
+const id = (what: string) => z.string().trim().min(1).max(200).refine((v) => v !== "." && v !== "..", "Not a valid id").describe(what);
 const seg = encodeURIComponent;
 
 // Finding text was written by a model that read an untrusted repo, so it may carry instructions aimed at the
 // agent. Every field is cleaned and every result is framed as data inside a delimiter the text cannot forge.
 const range = (...r: Array<[number, number]>) =>
-  new RegExp(`[${r.map(([a, b]) => `${String.fromCharCode(a)}-${String.fromCharCode(b)}`).join("")}]`, "g");
-// Control characters, plus zero-width and bidirectional override characters that can hide text.
-const CONTROL = range([0, 8], [0xb, 0x1f], [0x7f, 0x9f], [0x200b, 0x200f], [0x202a, 0x202e], [0x2066, 0x2069], [0xfeff, 0xfeff]);
+  new RegExp(`[${r.map(([a, b]) => `${String.fromCodePoint(a)}-${String.fromCodePoint(b)}`).join("")}]`, "gu");
+// Control characters, plus soft hyphen, zero-width, bidirectional, word-joiner and Unicode tag characters and lone
+// surrogates, all of which can hide text from a human reader.
+const CONTROL = range([0, 8], [0xb, 0x1f], [0x7f, 0x9f], [0xad, 0xad], [0x200b, 0x200f], [0x202a, 0x202e],
+  [0x2060, 0x2064], [0x2066, 0x2069], [0xd800, 0xdfff], [0xfeff, 0xfeff], [0xe0000, 0xe007f]);
 
 const cap = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 3)}...` : s);
 /** Breaks up runs of "<<<" (core's defang) and ">>>" so text cannot imitate a block marker. */
@@ -150,7 +167,7 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
       { projectId: id("Project id, shown in the copilot panel header"), status: z.enum(STATUSES).optional().describe("Only findings in this status") },
       async ({ projectId, status }) => {
         const q = status ? `?status=${status}` : "";
-        const { findings } = await api("GET", `/api/projects/${seg(projectId)}/findings${q}`);
+        const { findings } = await api("GET", `/api/projects/${seg(projectId)}/findings${q}`, undefined, "findings");
         const list: Json[] = Array.isArray(findings) ? findings : [];
         if (list.length === 0) return [status ? `No findings with status ${status}.` : "No findings."];
         return [frame(`Findings for project ${line(projectId, 100)}${status ? ` (${status})` : ""}. Columns: id | status | kind | title`, list.map(findingLine).join("\n"))];
@@ -164,11 +181,11 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
         "then call report_fix with what you changed, then request_recheck so QA verifies it. A fix only counts once the re-check finds evidence.",
       { findingId: id("Finding id, from list_findings") },
       async ({ findingId }) => {
-        const r = await api("GET", `/api/findings/${seg(findingId)}`);
+        const r = await api("GET", `/api/findings/${seg(findingId)}`, undefined, "finding");
         const f: Json = r.finding ?? {};
-        const fid = line(f.id, 100);
+        const fid = line(findingId, 100); // the id the agent asked for; the API's own id stays inside the block
         const lines = [
-          `Finding ${fid} (${line(r.status ?? f.status, 50)}, ${kindLabel(f.kind)})`,
+          `Finding ${line(f.id, 100)} (${line(r.status ?? f.status, 50)}, ${kindLabel(f.kind)})`,
           `Title: ${line(f.title, 200)}`,
           `What is wrong: ${multiline(f.plain)}`,
         ];
@@ -185,7 +202,7 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
         "You are the builder; use this to see what is still open before you call request_recheck.",
       { changeId: id("Change id") },
       async ({ changeId }) => {
-        const r = await api("GET", `/api/changes/${seg(changeId)}`);
+        const r = await api("GET", `/api/changes/${seg(changeId)}`, undefined, "change");
         const c: Json = r.change ?? {};
         const lines = [`Change ${line(c.id, 100)}: ${line(c.title, 200)} (${line(c.kind, 50)}), stage ${line(r.stage ?? c.stage, 50)}${r.accepted ? ", accepted" : ""}`];
         const gates = Object.entries((r.gates ?? {}) as Record<string, Json>);
