@@ -8,7 +8,7 @@ export { discoverDocuments } from "./docs/discover.js";
 export { narrowFiles } from "./repo/narrow.js";
 export { loadPacks } from "./packs.js";
 export { understandApp, analyseChange, analyseImpact, baGate } from "./roles/ba.js";
-export { reviewDocuments } from "./roles/ba-docs.js";
+export { reviewDocuments, undocumentedFlows } from "./roles/ba-docs.js";
 export type { ReadRequirement } from "./roles/ba-docs.js";
 export { reviewCompliance, complianceGate } from "./roles/compliance.js";
 export { reviewOperations, architectGate } from "./roles/architect.js";

@@ -1,5 +1,16 @@
 import type { JsonSchema, Requirement } from "../types.js";
-import { contextBlock, defang, documentsBlock, quoteNear, systemPrompt, type RoleContext, type RoleResult } from "./context.js";
+import {
+  checkTriggers,
+  contextBlock,
+  defang,
+  documentsBlock,
+  quoteNear,
+  repoMaterial,
+  systemPrompt,
+  type RawFinding,
+  type RoleContext,
+  type RoleResult,
+} from "./context.js";
 
 // Schema helpers: every property is required (strict output); optional values are typed with null.
 const str: JsonSchema = { type: "string" };
@@ -47,6 +58,56 @@ const INSTRUCTIONS = `Task: read the project's documents (PRD, specs, requiremen
 1. Extract each requirement: one thing the product must do or be. Give its text in one sentence, its exact quote copied word for word from one line of the document, and that line's number as shown. Keep an ID written in the document (such as FR-3) as its key. Otherwise, when it is the same requirement as one in the previous requirements listed for that document (even reworded), reuse that key. Otherwise use the document's short name in capitals, a hyphen and the next free number (such as PRD-4).
 2. Raise at most ${MAX_GAPS} gaps, most important first. Check each requirement against the qualities in ISO/IEC/IEEE 29148 (necessary, unambiguous, verifiable, consistent, complete) and use kind "quality" for a requirement that lacks one. Use "failure_path" for a step that can fail, repeat or be reversed with no rule for it, "contradiction" when two documents or two lines disagree, and "missing_need" for a missing compliance, security or operations need. Each gap quotes the document word for word with its document name and line number. Say each gap in terms the owner can act on: title starts with what is wrong in plain words, fixPrompt says what to write in the document.
 Never quote text, a document or a line you were not given.`;
+
+const NOT_IN_DOCS = "Not in any document: ";
+
+const UNDOCUMENTED = `Task: compare what the app does today (the flows listed in the user message, recovered from the code) with the project requirements listed there. For each flow that no requirement asks for, raise a finding, at most ${MAX_GAPS}, most important first. The title names the behaviour in plain words. Say what a person can do in the app that nobody wrote down, and what that costs if nobody decided it. Every finding needs a code trigger: triggerType "code", the file and line exactly as numbered in the material where the behaviour lives, quote null. Never cite a file or line that is not in the material.`;
+
+/**
+ * Behaviour the code has that no requirement asks for, checked per flow the analyst recovered from the code.
+ * Each finding is conformance, needs a verified code trigger, and asks the owner to write it down or remove it.
+ */
+export async function undocumentedFlows(ctx: RoleContext, flows: string[], requirements: Requirement[]): Promise<RoleResult["findings"]> {
+  if (!flows.length || !requirements.length) return [];
+  const mat = await repoMaterial(ctx.repo.dir, flows.join(" "), { maxFiles: 12, maxChars: 30_000 });
+  const { data } = await ctx.model<{ findings: RawFinding[] }>({
+    name: "ba.undocumentedFlows",
+    system: systemPrompt(ctx.packs.role.ba, UNDOCUMENTED),
+    user: [
+      contextBlock(ctx),
+      `Flows in the code:\n${flows.map((f) => `- ${defang(f)}`).join("\n")}`,
+      `Project requirements (key: text):\n${requirements.map((r) => `${defang(r.key)}: ${defang(r.text)}`).join("\n")}`,
+      mat.text,
+    ].join("\n\n"),
+    schema: obj({
+      findings: arr(
+        obj({
+          title: str,
+          plain: str,
+          costIfIgnored: str,
+          fixPrompt: str,
+          triggerType: { type: "string", enum: ["code", "doc"] },
+          file: { type: ["string", "null"] },
+          line: { type: ["integer", "null"] },
+          quote: { type: ["string", "null"] },
+        }),
+      ),
+    }),
+    maxOutputTokens: 8000,
+    reasoningEffort: "medium",
+  });
+  const code = data.findings.filter((f) => f.triggerType === "code");
+  return checkTriggers(ctx.repo.dir, code, "", { commit: ctx.repo.commit, shown: mat.shown, kind: "conformance" })
+    .slice(0, MAX_GAPS)
+    .map((f) => {
+      const what = f.title.startsWith(NOT_IN_DOCS) ? f.title.slice(NOT_IN_DOCS.length) : f.title;
+      return {
+        ...f,
+        title: NOT_IN_DOCS + what,
+        fixPrompt: `Kryterea found this in the code but in no document: ${what}. If it is wanted, add it to the PRD as a requirement with what it must do. If nobody asked for it, remove it from the code.`,
+      };
+    });
+}
 
 /** The document's short name for new keys: "docs/PRD.md" gives "PRD". */
 const prefixOf = (name: string) =>

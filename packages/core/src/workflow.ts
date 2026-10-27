@@ -3,7 +3,7 @@ import { findingFingerprint, ledgerFor, type CopilotRecord } from "./record/reco
 import { changedFiles, listSourceFiles, readLines, syncRepo } from "./repo/repo.js";
 import { architectGate, reviewOperations } from "./roles/architect.js";
 import { analyseChange, analyseImpact, baGate, understandApp } from "./roles/ba.js";
-import { reviewDocuments } from "./roles/ba-docs.js";
+import { reviewDocuments, undocumentedFlows } from "./roles/ba-docs.js";
 import { complianceGate, reviewCompliance } from "./roles/compliance.js";
 import type { RoleContext, RoleResult } from "./roles/context.js";
 import { acceptanceSummary, poGate } from "./roles/po.js";
@@ -349,6 +349,15 @@ const DISPATCH: Record<StageId, (s: Session, c: Change) => Promise<Outcome>> = {
     await runRole(s, c, "ba", async (ctx) =>
       save(ctx, "ba", "intake", c.kind === "understand" ? await understandApp(ctx) : await analyseImpact(ctx, record.listCriteria(c.projectId))),
     );
+    // Both ways: behaviour in the code that no document asked for. Only when there are requirements to compare.
+    const requirements = record.listRequirements(c.projectId, { status: "active" });
+    const flows = (asBuiltFor(record, c) as { flows?: unknown }).flows;
+    if (c.kind === "understand" && requirements.length && Array.isArray(flows) && flows.length) {
+      await runRole(s, c, "ba", async (ctx) => {
+        const findings = await undocumentedFlows(ctx, flows.map(String), requirements);
+        save(ctx, "ba", "intake", { artifacts: [], criteria: [], findings, questions: [], affectedCriterionIds: [] });
+      });
+    }
     return NEXT;
   },
 

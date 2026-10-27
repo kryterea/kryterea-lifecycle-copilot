@@ -699,6 +699,7 @@ describe("workflow", () => {
         requirements: req.user.includes("FR-1: Customers book a slot online.") ? [{ document: "docs/PRD.md", key: "FR-1", text: "Customers book a slot online.", quote: "FR-1: Customers book a slot online.", line: 3 }] : [],
         gaps: req.user.includes("Cancelling should be easy.") ? [docGap] : [],
       });
+      t.models.handlers["ba.undocumentedFlows"] = () => ({ findings: [] });
       const base = t.models.handlers["ba.analyseChange"]!;
       t.models.handlers["ba.analyseChange"] = (req) => {
         const out = base(req) as { criteria: Array<{ text: string; requirementKeys?: string[] }> };
@@ -756,6 +757,23 @@ describe("workflow", () => {
       expect(record.findingStatus(gap!.id)).toBe("fixed");
       expect(record.findingHistory(gap!.id).at(-1)).toMatchObject({ actor: "ba" });
       expect(record.findingHistory(gap!.id).at(-1)!.reason).toMatch(/^Not raised again on re-read at [0-9a-f]{7}$/);
+    });
+
+    it("runs the undocumented check when the baseline has documents", async () => {
+      const { record, models, deps, change, project } = withPrd();
+      models.handlers["ba.undocumentedFlows"] = (req) => {
+        expect(req.user).toContain("- Book a slot");
+        return { findings: [{ title: "Cancel a booking", plain: "Customers can cancel, but no document says so.", costIfIgnored: "Nobody decided the refund rule.", fixPrompt: "x", triggerType: "code", file: "src/booking.js", line: 1, quote: null }] };
+      };
+      await advance(deps, change("understand").id);
+      expect(models.names().slice(0, 3)).toEqual(["ba.reviewDocuments", "ba.understandApp", "ba.undocumentedFlows"]);
+      expect(record.listFindings({ projectId: project.id }).map((f) => f.title)).toContain("Not in any document: Cancel a booking");
+    });
+
+    it("skips the undocumented check when there are no documents", async () => {
+      const { models, deps, change } = setup();
+      await advance(deps, change("understand").id);
+      expect(models.names()).not.toContain("ba.undocumentedFlows");
     });
 
     it("no documents: no document model call and no document findings", async () => {

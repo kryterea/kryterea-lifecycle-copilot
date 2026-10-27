@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { reviewDocuments, type CopilotRecord, type Model, type ModelRequest, type Packs, type Requirement, type RoleContext } from "../src/index.js";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
+import { undocumentedFlows, reviewDocuments, type CopilotRecord, type Model, type ModelRequest, type Packs, type Requirement, type RoleContext } from "../src/index.js";
 
 const packs: Packs = { role: { ba: "BA PACK", architect: "", qa: "", compliance: "", po: "" }, legal: [] };
 
@@ -132,5 +135,40 @@ describe("reviewDocuments", () => {
       [],
     );
     expect(out.findings[0]?.kind).toBe("failure_path");
+  });
+});
+
+describe("undocumentedFlows", () => {
+  const dir = mkdtempSync(join(tmpdir(), "lifecycle-ba-docs-"));
+  mkdirSync(join(dir, "src"));
+  writeFileSync(join(dir, "src", "server.js"), 'app.post("/links", create);\napp.post("/refund", refund);\napp.get("/export", exportCsv);\n');
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  const flow = (over: Record<string, unknown> = {}) => ({ title: "Merchants export payments as CSV", plain: "The app exports every payment, but no document asks for it.", costIfIgnored: "Customer data leaves the app with nobody deciding it should.", fixPrompt: "unused", triggerType: "code", file: "src/server.js", line: 3, quote: null, ...over });
+
+  it("raises behaviour no document asked for, at most 8, each with a code trigger", async () => {
+    const seen: ModelRequest[] = [];
+    const many = Array.from({ length: 10 }, (_, i) => flow({ title: `Flow ${i}` }));
+    const out = await undocumentedFlows(
+      { ...ctx(stub({ findings: [flow({ title: "No trigger", file: null, line: null, triggerType: "doc", quote: "x" }), flow({ line: 99 }), ...many] }, seen)), repo: { dir, commit: "abc1234" } },
+      ["Create a payment link", "Export payments as CSV"],
+      [previous("PRD-1", "Merchants create payment links")],
+    );
+    expect(seen[0]!.name).toBe("ba.undocumentedFlows");
+    expect(seen[0]!.user).toContain("Export payments as CSV");
+    expect(seen[0]!.user).toContain("PRD-1: Merchants create payment links");
+    expect(out).toHaveLength(8);
+    for (const f of out) {
+      expect(f.kind).toBe("conformance");
+      expect(f.title).toMatch(/^Not in any document: /);
+      expect(f.trigger).toMatchObject({ type: "code", file: "src/server.js", line: 3 });
+      expect(f.fixPrompt).toContain("PRD");
+    }
+  });
+
+  it("makes no model call with no flows or no requirements", async () => {
+    const seen: ModelRequest[] = [];
+    expect(await undocumentedFlows(ctx(stub({ findings: [] }, seen)), [], [previous("PRD-1", "x")])).toEqual([]);
+    expect(await undocumentedFlows(ctx(stub({ findings: [] }, seen)), ["a flow"], [])).toEqual([]);
+    expect(seen).toHaveLength(0);
   });
 });
