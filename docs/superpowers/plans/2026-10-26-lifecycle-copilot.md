@@ -228,11 +228,11 @@ Skills: superpowers:test-driven-development.
 **Interfaces:**
 - Produces: `reviewCompliance(ctx, asBuiltOrChange: unknown): Promise<RoleResult>`; every finding has `kind: 'legal'` and a `citationId` present in `ctx.packs.legal`; `complianceGate(openLegalFindings: number): {state: GateState; reason: string}` (held while > 0).
 
-- [ ] **Step 1: Write failing tests:** `drops a finding whose citationId is not in the pack and logs it`; `keeps a finding citing a pack id`; `gate is held with one open legal finding and cleared with none`; `finding copy contains "Check this" and never "breach"`; `a code trigger to a missing file is converted to a doc trigger` (same `verifyCodeTrigger` rule as Tasks 10 and 11).
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement. The model receives only the pack entries (id, section, title, duty, triggers), not the law text.
-- [ ] **Step 4:** Run. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): compliance role with cited-only legal findings`.
+- [x] **Step 1: Write failing tests:** `drops a finding whose citationId is not in the pack and logs it`; `keeps a finding citing a pack id`; `gate is held with one open legal finding and cleared with none`; `finding copy contains "Check this" and never "breach"`; `a code trigger to a missing file is converted to a doc trigger` (same `verifyCodeTrigger` rule as Tasks 10 and 11).
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement. The model receives only the pack entries (id, section, title, duty, triggers), not the law text.
+- [x] **Step 4:** Run. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): compliance role with cited-only legal findings`.
 
 ### Task 10: Architect / SRE role
 
