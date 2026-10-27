@@ -120,5 +120,17 @@ describe("QA in the running app", () => {
     const f2 = fakePage();
     expect((await exploreFlow(ctx(link.m), CRIT, APP, f2.open)).check.note).toMatch(/off the app/);
     expect(f2.closed()).toBe(true);
+
+    // The first page itself redirects elsewhere: nothing is looked at or sent to the model.
+    const redirect = model([{ kind: "done" }]);
+    const f3 = fakePage();
+    f3.page.goto = async () => {};
+    f3.page.url = () => "https://elsewhere.example/";
+    const shot = f3.page.screenshot;
+    let shots = 0;
+    f3.page.screenshot = async () => (shots++, shot());
+    expect((await exploreFlow(ctx(redirect.m), CRIT, APP, f3.open)).check.state).toBe("no_evidence");
+    expect(redirect.calls).toHaveLength(0);
+    expect(shots).toBe(0);
   });
 });

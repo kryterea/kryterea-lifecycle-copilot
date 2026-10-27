@@ -168,6 +168,8 @@ async function verify(s: Session, change: Change, stage: StageId, criteria: Crit
     let stopped = r.stopped === "budget";
     // The running app, when there is one: QA tries each criterion the code alone did not show working. What it
     // sees there is recorded after the code check, so it is the latest word. An app that is down changes nothing.
+    // Page text can carry instructions to the model, so what the app shows never overturns a gap in the code and
+    // never closes a finding: only evidence in the code does that.
     const { openPage, screensDir } = s.deps;
     const appUrl = s.project.appUrl;
     if (!stopped && openPage && appUrl) {
@@ -176,7 +178,7 @@ async function verify(s: Session, change: Change, stage: StageId, criteria: Crit
         if (!code || code.state === "evidence_found") continue;
         try {
           const seen = await exploreFlow(ctx, k, appUrl, openPage, screensDir);
-          if (seen.check.state === "no_evidence") continue;
+          if (seen.check.state === "no_evidence" || (seen.check.state === "evidence_found" && code.state === "gap")) continue;
           checks.push(seen.check);
           if (seen.finding) findings.push(seen.finding);
         } catch (e) {
@@ -190,7 +192,7 @@ async function verify(s: Session, change: Change, stage: StageId, criteria: Crit
     }
     for (const c of checks) record.recordCheck(c);
     save(ctx, "qa", stage, { artifacts: [], criteria: [], findings, questions: [], affectedCriterionIds: [] });
-    const found = new Set(checks.filter((c) => c.state === "evidence_found").map((c) => c.criterionId));
+    const found = new Set(r.checks.filter((c) => c.state === "evidence_found").map((c) => c.criterionId));
     for (const f of record.listFindings({ projectId: change.projectId, status: "open" })) {
       if (f.criterionId && found.has(f.criterionId)) record.setFindingStatus(f.id, "fixed", "Evidence found on re-check", "qa");
     }

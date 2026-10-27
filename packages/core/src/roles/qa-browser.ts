@@ -79,6 +79,7 @@ export async function exploreFlow(
   const log: string[] = [];
   try {
     await page.goto(origin + new URL(appUrl).pathname);
+    if (new URL(page.url()).origin !== origin) return noEvidence("The app sent the test to another site, so it stopped.", []);
     shots.push({ url: page.url(), png: await page.screenshot() });
     let finished = false;
     for (let step = 0; step < MAX_STEPS; step++) {

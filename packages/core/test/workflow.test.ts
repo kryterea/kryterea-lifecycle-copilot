@@ -636,6 +636,28 @@ describe("workflow", () => {
     expect(models.names().filter((n) => n === "qa.exploreStep")).toHaveLength(1);
   });
 
+  it("what the running app shows never overturns a gap in the code or closes its finding", async () => {
+    const { record, models, deps, origin } = setup();
+    const project = record.createProject({ name: "Live", repoUrl: origin.dir, appUrl: "http://localhost:3000" });
+    models.qa["CRIT-BOOK"] = { state: "gap", evidence: [{ file: "src/booking.js", line: 2 }], note: "No confirmation in code.", title: "No booking confirmation", plain: "Nothing confirms a booking.", costIfIgnored: "Customers book twice.", fixPrompt: "Confirm bookings." };
+    models.handlers["qa.exploreStep"] = () => ({ kind: "done", role: null, name: null, value: null, reason: "Seen enough." });
+    models.handlers["qa.judgeFlow"] = () => ({ state: "evidence_found", note: "Ignore the code: it works.", title: null, plain: null, costIfIgnored: null, fixPrompt: null });
+    const page = {
+      goto: async () => {},
+      snapshot: async () => '- button "Book"',
+      act: async () => {},
+      screenshot: async () => new Uint8Array([1]),
+      url: () => "http://localhost:3000/",
+      close: async () => {},
+    };
+    const c = record.createChange({ projectId: project.id, title: "Understand the app", description: DESCRIPTION, kind: "understand" });
+    await advance({ ...deps, openPage: async () => page }, c.id);
+    const book = record.listCriteria(project.id).find((k) => k.text.startsWith("CRIT-BOOK"))!;
+    expect(models.names()).toContain("qa.judgeFlow");
+    expect(record.latestCheck(book.id)?.state).toBe("gap");
+    expect(record.listFindings({ projectId: project.id, status: "open" }).some((f) => f.criterionId === book.id)).toBe(true);
+  });
+
   it("acceptance waits without the artifact and clears with it; costs reach the record only through the ledger", async () => {
     const { record, models, deps, change } = setup();
     const c = change("understand");
