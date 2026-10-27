@@ -1,20 +1,15 @@
 import { useState } from "react";
 import type { FindingKind, FindingStatus, Trigger } from "@lifecycle/core";
 import { api, message, safeHref, useActor, type FindingView } from "../api";
+import { CheckIcon, ChevronIcon, ClockIcon, CopyIcon, ShieldIcon } from "./Icon";
 import { Reasoned } from "./SpendMeter";
+import { StatusStamp } from "./Stamp";
 
-const KIND: Record<FindingKind, string> = {
-  legal: "Legal duty",
+export const KIND: Record<FindingKind, string> = {
+  legal: "Legal",
   failure_path: "Failure path",
   operations: "Operations",
-  conformance: "Acceptance criterion",
-};
-
-export const STATUS: Record<FindingStatus, string> = {
-  open: "Open",
-  fixed: "Fixed",
-  accepted_risk: "Risk accepted",
-  deferred: "Deferred",
+  conformance: "Criterion",
 };
 
 /** PCI DSS is an industry standard, the NDPA is law; the tag says which. */
@@ -23,28 +18,27 @@ export const lawTag = (law: FindingView["law"]) => (law === "PCI DSS" ? "Standar
 export function TriggerLine({ trigger }: { trigger: Trigger }) {
   if (trigger.type === "code") {
     return (
-      <p>
+      <p className="trigger">
         <code>
           {trigger.file}:{trigger.line}
-        </code>{" "}
-        <span className="muted small">at commit {trigger.commit.slice(0, 7)}</span>
+        </code>
+        <span className="muted"> at {trigger.commit.slice(0, 7)}</span>
       </p>
     );
   }
-  if (trigger.type === "doc") return <blockquote>{trigger.quote}</blockquote>;
+  if (trigger.type === "doc") return <blockquote className="trigger">{trigger.quote}</blockquote>;
   const href = safeHref(trigger.url);
   return (
-    <p>
-      Seen on {href ? <a href={href}>{trigger.url}</a> : <code>{trigger.url}</code>}{" "}
-      <span className="muted small">({trigger.screenshotPath})</span>
+    <p className="trigger">
+      {href ? <a href={href}>{trigger.url}</a> : <code>{trigger.url}</code>} <span className="muted">({trigger.screenshotPath})</span>
     </p>
   );
 }
 
-const DECISIONS: Array<[FindingStatus, string]> = [
-  ["fixed", "Fixed"],
-  ["accepted_risk", "Accept risk"],
-  ["deferred", "Defer"],
+const DECISIONS: Array<[FindingStatus, string, typeof CheckIcon]> = [
+  ["fixed", "Fixed", CheckIcon],
+  ["accepted_risk", "Accept risk", ShieldIcon],
+  ["deferred", "Defer", ClockIcon],
 ];
 
 export function FindingItem({ finding, onChanged }: { finding: FindingView; onChanged: () => void }) {
@@ -53,8 +47,12 @@ export function FindingItem({ finding, onChanged }: { finding: FindingView; onCh
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [more, setMore] = useState(false);
   const tag = lawTag(finding.law);
-  const open = finding.status === "open";
+  // The title already says "Check this:"; the body need not say it twice.
+  const lead = finding.title.startsWith("Check this:") ? finding.plain.replace(/^Check this:\s*/, "") : finding.plain;
+  const long = lead.length > 240;
+  const settled = finding.status === "fixed" || finding.status === "accepted_risk";
 
   const copy = async () => {
     try {
@@ -62,7 +60,7 @@ export function FindingItem({ finding, onChanged }: { finding: FindingView; onCh
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError("The browser blocked the clipboard. Select the prompt text and copy it by hand.");
+      setError("The browser blocked the clipboard. Select the prompt and copy it by hand.");
     }
   };
 
@@ -83,69 +81,69 @@ export function FindingItem({ finding, onChanged }: { finding: FindingView; onCh
   const ready = reason.trim() !== "" && actor.trim() !== "" && !saving;
 
   return (
-    <details className="finding">
+    <details className={settled ? "finding is-settled" : "finding"}>
       <summary>
-        <span className="tags">
-          <span className={open ? "tag is-open" : "tag is-closed"}>{STATUS[finding.status]}</span>
-          <span className="tag">{KIND[finding.kind]}</span>
-          {tag && <span className={tag === "Law" ? "tag is-law" : "tag is-standard"}>{tag}</span>}
-          {finding.law && (
-            <span className="muted small">
-              {finding.law}, {finding.section}
-            </span>
-          )}
+        <StatusStamp status={finding.status} kind={finding.kind} />
+        <span className="finding-title">{finding.title}</span>
+        <span className="finding-meta">
+          {KIND[finding.kind]}
+          {tag && <span className={tag === "Law" ? "law is-law" : "law"}>{tag}</span>}
         </span>
-        <strong>{finding.title}</strong>
-        <span>{finding.plain}</span>
-        <Reasoned />
+        <ChevronIcon size={16} className="caret" />
       </summary>
-      <div className="body">
-        {finding.kind === "legal" && (
-          <p className="note">
-            Not legal advice. A qualified lawyer should confirm before you rely on it. Deferring a legal finding keeps release held; fix it or accept the risk with a reason.
+
+      <div className="finding-body">
+        <p className={more ? "lead" : "lead is-clamped"}>{lead}</p>
+        {long && (
+          <button type="button" className="btn ghost sm more" onClick={() => setMore(!more)} aria-expanded={more}>
+            {more ? "Less" : "More"}
+          </button>
+        )}
+        {finding.law && (
+          <p className="cite">
+            {finding.law}, {finding.section}. Not legal advice.
           </p>
         )}
-        <div>
-          <h4>What it costs you</h4>
-          <p>{finding.costIfIgnored}</p>
-        </div>
-        <div>
-          <h4>What set it off</h4>
-          <TriggerLine trigger={finding.trigger} />
-        </div>
-        <div>
-          <h4>Fix prompt for your coding agent</h4>
-          <p className="mono prompt">{finding.fixPrompt}</p>
-          <div className="row" style={{ marginTop: 8 }}>
-            <button type="button" className="quiet" onClick={copy}>
-              {copied ? "Copied" : "Copy fix prompt"}
+
+        <dl className="facts">
+          <dt>Cost if ignored</dt>
+          <dd>{finding.costIfIgnored}</dd>
+          <dt>Evidence</dt>
+          <dd>
+            <TriggerLine trigger={finding.trigger} />
+          </dd>
+        </dl>
+
+        <div className="prompt">
+          <div className="prompt-head">
+            <span>Fix prompt</span>
+            <button type="button" className="btn ghost sm" onClick={copy}>
+              {copied ? <CheckIcon size={15} /> : <CopyIcon size={15} />}
+              {copied ? "Copied" : "Copy"}
             </button>
           </div>
+          <p>{finding.fixPrompt}</p>
         </div>
-        <div className="decide stack">
-          <label className="field">
-            Reason
-            <span className="hint">Kept in the record with your name.</span>
-            <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} />
-          </label>
-          <label className="field">
-            Your name
-            <input value={actor} onChange={(e) => setActor(e.target.value)} maxLength={100} autoComplete="name" />
-          </label>
-          <div className="row">
-            {DECISIONS.map(([status, label]) => (
-              <button key={status} type="button" className="quiet" disabled={!ready || finding.status === status} onClick={() => decide(status)}>
+
+        <div className="decide">
+          <input aria-label="Reason" placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} />
+          <input aria-label="Your name" placeholder="Your name" value={actor} onChange={(e) => setActor(e.target.value)} maxLength={100} autoComplete="name" />
+          <div className="decide-actions" role="group" aria-label="Decision">
+            {DECISIONS.map(([status, label, Icon]) => (
+              <button key={status} type="button" className="btn secondary sm" disabled={!ready || finding.status === status} onClick={() => decide(status)}>
+                <Icon size={15} />
                 {label}
               </button>
             ))}
           </div>
-          {!ready && !saving && <p className="hint">Add a reason and your name to record a decision.</p>}
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
         </div>
+        {finding.kind === "legal" && finding.status === "open" && <p className="hint">Deferring keeps release held.</p>}
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        <Reasoned />
       </div>
     </details>
   );

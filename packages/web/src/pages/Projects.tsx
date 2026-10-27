@@ -1,12 +1,14 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { Project } from "@lifecycle/core";
 import { api, message } from "../api";
+import { ChevronIcon, CloseIcon, PlusIcon } from "../components/Icon";
 
 export function Projects() {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", repoUrl: "", appUrl: "" });
   const [saving, setSaving] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     api.projects().then(setProjects, (e) => setError(message(e)));
@@ -30,60 +32,70 @@ export function Projects() {
   };
 
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+  const empty = projects?.length === 0;
+  const open = adding || empty;
 
   return (
-    <>
-      <div className="page-head">
+    <div className="page">
+      <header className="page-head">
         <div>
           <h1>Projects</h1>
-          <p>Each project is one app the copilot watches. It reads the code and never writes to it.</p>
+          <p className="pane-line">One app each. Read only.</p>
         </div>
-      </div>
-
-      <section className="sheet" aria-label="Your projects">
-        {projects === null && !error && <p className="muted">Loading projects.</p>}
-        {projects?.length === 0 && <p className="empty">No projects yet. Add the first one below.</p>}
-        {projects && projects.length > 0 && (
-          <ul className="list">
-            {projects.map((p) => (
-              <li key={p.id}>
-                <a href={`#/projects/${p.id}`}>
-                  <strong>{p.name}</strong>
-                  <span className="muted mono">{p.repoUrl}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
+        {!empty && (
+          <button type="button" className={open ? "btn ghost" : "btn primary"} onClick={() => setAdding(!adding)} aria-expanded={open}>
+            {open ? <CloseIcon size={16} /> : <PlusIcon size={16} />}
+            {open ? "Close" : "New project"}
+          </button>
         )}
-      </section>
+      </header>
 
-      <section className="sheet">
-        <h2>New project</h2>
-        <form className="stack" onSubmit={create}>
+      {open && (
+        <form className="card form" onSubmit={create}>
           <label>
-            Name
-            <input value={form.name} onChange={set("name")} required maxLength={200} />
+            <span>Name</span>
+            <input value={form.name} onChange={set("name")} required maxLength={200} autoFocus={!empty} />
           </label>
           <label>
-            Repo URL
-            <span className="hint">An https git URL. A local path works when the server allows local repos.</span>
-            <input value={form.repoUrl} onChange={set("repoUrl")} required maxLength={2000} spellCheck={false} />
+            <span>Repo URL</span>
+            <input value={form.repoUrl} onChange={set("repoUrl")} required maxLength={2000} spellCheck={false} placeholder="https://github.com/you/app" />
           </label>
           <label>
-            App URL
-            <span className="hint">Optional. Where the running app lives.</span>
-            <input type="url" value={form.appUrl} onChange={set("appUrl")} maxLength={2000} spellCheck={false} />
+            <span>
+              App URL <em>optional</em>
+            </span>
+            <input type="url" value={form.appUrl} onChange={set("appUrl")} maxLength={2000} spellCheck={false} placeholder="https://app.example.com" />
           </label>
           {error && (
             <p className="error" role="alert">
               {error}
             </p>
           )}
-          <button type="submit" disabled={saving}>
-            Add project
-          </button>
+          <div className="row">
+            <button type="submit" className="btn primary" disabled={saving}>
+              <PlusIcon size={16} /> Add project
+            </button>
+          </div>
         </form>
-      </section>
-    </>
+      )}
+
+      {projects === null && !error && <p className="muted">Loading.</p>}
+      {!open && error && <p className="error">{error}</p>}
+      {projects && projects.length > 0 && (
+        <ul className="rows" aria-label="Your projects">
+          {projects.map((p) => (
+            <li key={p.id}>
+              <a href={`#/projects/${p.id}`}>
+                <span className="row-main">
+                  <strong>{p.name}</strong>
+                  <span className="mono muted">{p.repoUrl.replace(/^https:\/\//i, "")}</span>
+                </span>
+                <ChevronIcon size={16} className="go" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

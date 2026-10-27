@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import type { AcceptanceRecord, RunStatus } from "@lifecycle/core";
 import { api, message, type ChangeView } from "../api";
-import { STATUS, TriggerLine, lawTag } from "../components/FindingItem";
-import { EVIDENCE, ROLE_ORDER, ROLES } from "../components/ProfessionalCard";
+import { TriggerLine, lawTag } from "../components/FindingItem";
+import { BackIcon, PrintIcon } from "../components/Icon";
+import { EvidenceStamp, ROLE_ORDER, ROLES } from "../components/ProfessionalCard";
 import { Reasoned } from "../components/SpendMeter";
-import { STAGE_NAMES } from "../components/StageStrip";
+import { GateStamp, StatusStamp } from "../components/Stamp";
+import { STAGE_NAMES } from "../components/Trail";
 
 const RUN: Record<RunStatus, string> = {
   running: "Running",
   done: "Done",
-  stopped_budget: "Paused: copilot budget used",
+  stopped_budget: "Paused: budget used",
   failed: "Stopped with an error",
 };
 
@@ -31,7 +33,7 @@ export function Record({ id }: { id: string }) {
     );
   }, [id]);
 
-  if (!rec || !view) return error ? <p className="error">{error}</p> : <p className="muted">Loading the acceptance record.</p>;
+  if (!rec || !view) return error ? <p className="error page-pad">{error}</p> : <p className="muted page-pad">Loading.</p>;
   const { change } = rec;
   const findingTitle = new Map(rec.findings.map((f) => [f.id, f.title]));
   const lawOf = new Map(view.findings.map((f) => [f.id, f]));
@@ -39,182 +41,187 @@ export function Record({ id }: { id: string }) {
   const totalUsd = rec.runs.reduce((n, r) => n + r.costUsd, 0);
 
   return (
-    <article className="record">
-      <nav className="crumbs no-print">
-        <a href={`#/changes/${id}`}>Back to the change</a>
-      </nav>
-      <div className="page-head">
-        <div>
-          <h1>Acceptance record</h1>
-          <p>
-            {change.title}. Stage: {STAGE_NAMES[change.stage]}. Opened {when(change.createdAt)}.
-          </p>
-        </div>
-        <button type="button" className="quiet no-print" onClick={() => window.print()}>
-          Print record
+    <article className="page record">
+      <div className="row no-print record-bar">
+        <a className="back" href={`#/changes/${id}`}>
+          <BackIcon size={15} /> Change
+        </a>
+        <button type="button" className="btn secondary sm" onClick={() => window.print()}>
+          <PrintIcon size={15} /> Print
         </button>
       </div>
 
-      <section className="sheet">
-        <h2>What was asked</h2>
-        <p>{change.description}</p>
+      <header className="record-head">
+        <h1>Acceptance record</h1>
+        <p className="record-title">{change.title}</p>
+        <p className="muted">
+          {STAGE_NAMES[change.stage]} · opened {when(change.createdAt)}
+        </p>
+      </header>
 
-        <h2>Acceptance summary</h2>
+      <section>
+        <h2>Asked</h2>
+        <p>{change.description}</p>
+      </section>
+
+      <section>
+        <h2>Summary</h2>
         {rec.summary ? (
           <>
             <p className="summary">{rec.summary}</p>
             <Reasoned />
           </>
         ) : (
-          <p className="empty">Written by the product owner when delivery is accepted.</p>
+          <p className="empty">Written by the product owner at acceptance.</p>
         )}
+      </section>
 
+      <section>
         <h2>Gates</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Professional</th>
-              <th>Gate</th>
-              <th>Why</th>
-              <th>When</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ROLE_ORDER.map((r) => {
-              const g = rec.gates[r];
-              return (
-                <tr key={r}>
-                  <td>{ROLES[r].name}</td>
-                  <td>{g ? (g.state === "cleared" ? "Cleared" : "Held") : "Not reviewed yet"}</td>
-                  <td>{g?.reason ?? ""}</td>
-                  <td>{g ? when(g.at) : ""}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        <h2>Acceptance criteria</h2>
-        {rec.criteria.length === 0 ? (
-          <p className="empty">No criteria written yet.</p>
-        ) : (
+        <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Criterion</th>
-                <th>Latest evidence</th>
+                <th>Professional</th>
+                <th>Gate</th>
+                <th>Why</th>
+                <th>When</th>
               </tr>
             </thead>
             <tbody>
-              {rec.criteria.map((k) => (
-                <tr key={k.id}>
-                  <td>
-                    {k.text}
-                    {k.isFailurePath ? " (failure path)" : ""}
-                  </td>
-                  <td>{k.latest ? EVIDENCE[k.latest] : "Not checked yet"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        <h2>Findings</h2>
-        {hasLegal && <p className="note">Legal findings are things to check, not legal advice.</p>}
-        {rec.findings.length === 0 ? (
-          <p className="empty">No findings raised.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Finding</th>
-                <th>Raised by</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rec.findings.map((f) => {
-                const cited = lawOf.get(f.id);
-                const tag = lawTag(cited?.law);
+              {ROLE_ORDER.map((r) => {
+                const g = rec.gates[r];
                 return (
-                  <tr key={f.id}>
+                  <tr key={r}>
+                    <td>{ROLES[r].name}</td>
                     <td>
-                      <strong>{f.title}</strong>
-                      {tag && (
-                        <span className="small muted">
-                          {" "}
-                          ({tag}: {cited?.law}, {cited?.section})
-                        </span>
-                      )}
-                      <p>{f.plain}</p>
-                      <TriggerLine trigger={f.trigger} />
+                      <GateStamp state={g?.state} />
                     </td>
-                    <td>{ROLES[f.role].name}</td>
-                    <td>{STATUS[f.status]}</td>
+                    <td>{g?.reason ?? ""}</td>
+                    <td className="nowrap">{g ? when(g.at) : ""}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-        )}
+        </div>
+      </section>
 
+      <section>
+        <h2>Criteria</h2>
+        {rec.criteria.length === 0 ? (
+          <p className="empty">None written yet.</p>
+        ) : (
+          <ul className="criteria">
+            {rec.criteria.map((k) => (
+              <li key={k.id}>
+                <EvidenceStamp state={k.latest} />
+                <span>
+                  {k.text}
+                  {k.isFailurePath && <span className="muted"> Failure path.</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2>Findings</h2>
+        {hasLegal && <p className="hint">Legal findings are things to check, not legal advice.</p>}
+        {rec.findings.length === 0 ? (
+          <p className="empty">None raised.</p>
+        ) : (
+          <ul className="record-findings">
+            {rec.findings.map((f) => {
+              const cited = lawOf.get(f.id);
+              const tag = lawTag(cited?.law);
+              return (
+                <li key={f.id}>
+                  <p className="record-finding-head">
+                    <StatusStamp status={f.status} kind={f.kind} />
+                    <strong>{f.title}</strong>
+                  </p>
+                  <p className="muted small">
+                    {ROLES[f.role].name}
+                    {tag && ` · ${tag}: ${cited?.law}, ${cited?.section}`}
+                  </p>
+                  <p>{f.plain}</p>
+                  <TriggerLine trigger={f.trigger} />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section>
         <h2>Decisions</h2>
         {rec.decisions.length === 0 ? (
-          <p className="empty">No one has changed a finding yet.</p>
+          <p className="empty">None yet.</p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Finding</th>
-                <th>Decision</th>
-                <th>Reason</th>
-                <th>By</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rec.decisions.map((d, i) => (
-                <tr key={i}>
-                  <td>{when(d.at)}</td>
-                  <td>{findingTitle.get(d.findingId) ?? d.findingId}</td>
-                  <td>{STATUS[d.status]}</td>
-                  <td>{d.reason}</td>
-                  <td>{d.actor}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        <h2>Model runs</h2>
-        {rec.runs.length === 0 ? (
-          <p className="empty">No runs yet.</p>
-        ) : (
-          <>
+          <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Professional</th>
-                  <th>Commit</th>
-                  <th>Outcome</th>
-                  <th>Cost</th>
+                  <th>When</th>
+                  <th>Finding</th>
+                  <th>Decision</th>
+                  <th>Reason</th>
+                  <th>By</th>
                 </tr>
               </thead>
               <tbody>
-                {rec.runs.map((r) => (
-                  <tr key={r.id}>
-                    <td>{ROLES[r.role].name}</td>
+                {rec.decisions.map((d, i) => (
+                  <tr key={i}>
+                    <td className="nowrap">{when(d.at)}</td>
+                    <td>{findingTitle.get(d.findingId) ?? d.findingId}</td>
                     <td>
-                      <code>{r.commit.slice(0, 7)}</code>
+                      <StatusStamp status={d.status} />
                     </td>
-                    <td>{RUN[r.status]}</td>
-                    <td>${r.costUsd.toFixed(2)}</td>
+                    <td>{d.reason}</td>
+                    <td>{d.actor}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p className="small muted" style={{ marginTop: 8 }}>
-              Copilot spend on this change: ${totalUsd.toFixed(2)}. <Reasoned />
+          </div>
+        )}
+      </section>
+
+      <section>
+        <h2>Model runs</h2>
+        {rec.runs.length === 0 ? (
+          <p className="empty">None yet.</p>
+        ) : (
+          <>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Professional</th>
+                    <th>Commit</th>
+                    <th>Outcome</th>
+                    <th className="num">Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rec.runs.map((r) => (
+                    <tr key={r.id}>
+                      <td>{ROLES[r.role].name}</td>
+                      <td>
+                        <code>{r.commit.slice(0, 7)}</code>
+                      </td>
+                      <td>{RUN[r.status]}</td>
+                      <td className="num">${r.costUsd.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="row small muted spend-line">
+              <span>Copilot spend: ${totalUsd.toFixed(2)}</span>
+              <Reasoned />
             </p>
           </>
         )}

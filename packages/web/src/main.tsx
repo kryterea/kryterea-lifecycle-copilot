@@ -35,7 +35,8 @@ function App() {
     <SpendProvider>
       <header className="top">
         <div className="top-inner">
-          <a className="brand" href="#/">
+          <a className="brand" href="#/" aria-label="Kryterea Lifecycle Copilot, projects">
+            <span className="brand-mark" aria-hidden="true" />
             <b>Kryterea</b>
             <span>Lifecycle Copilot</span>
           </a>

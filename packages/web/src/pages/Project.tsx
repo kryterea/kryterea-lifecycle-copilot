@@ -1,37 +1,44 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import type { Change, ChangeKind, Project as ProjectT } from "@lifecycle/core";
 import { api, message, safeHref, useJob } from "../api";
-import { STAGE_NAMES } from "../components/StageStrip";
+import { BackIcon, ChevronIcon, CloseIcon, ExternalIcon, PlusIcon, RefreshIcon } from "../components/Icon";
 import { JobNote, useSpend } from "../components/SpendMeter";
+import { MiniTrail, STAGE_NAMES } from "../components/Trail";
 
 const KINDS: Array<[ChangeKind, string]> = [
-  ["understand", "Understand the app as it is built"],
-  ["feature", "New feature"],
+  ["understand", "Baseline"],
+  ["feature", "Feature"],
   ["fix", "Fix"],
 ];
+const KIND_NAME = Object.fromEntries(KINDS) as Record<ChangeKind, string>;
 
-/** A repo URL as a link when it is one; a local path stays plain text. */
-const RepoLink = ({ url }: { url: string }) =>
-  /^https:\/\//i.test(url) ? (
-    <a href={url} target="_blank" rel="noreferrer">
-      {url}
+/** A link that opens the URL when it is a safe one; a local path stays plain text. */
+function Out({ label, url }: { label: string; url: string }) {
+  const href = safeHref(url);
+  return href ? (
+    <a className="btn ghost sm" href={href} target="_blank" rel="noreferrer">
+      <ExternalIcon size={14} /> {label}
     </a>
   ) : (
-    <code>{url}</code>
+    <code className="muted" title={label}>
+      {url}
+    </code>
   );
+}
 
 export function Project({ id }: { id: string }) {
   const [data, setData] = useState<{ project: ProjectT; changes: Change[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", description: "", kind: "feature" as ChangeKind });
   const [saving, setSaving] = useState(false);
+  const [adding, setAdding] = useState(false);
   const kindSet = useRef(false);
   const { refresh: refreshSpend } = useSpend();
 
   const load = useCallback(() => {
     api.project(id).then((d) => {
       setData(d);
-      // On first load only: a project with no changes starts with understanding the app as built (the baseline).
+      // On first load only: a project with no changes starts with a baseline of the app as built.
       if (!kindSet.current && d.changes.length === 0) setForm((f) => ({ ...f, kind: "understand" }));
       kindSet.current = true;
     }, (e) => setError(message(e)));
@@ -56,98 +63,90 @@ export function Project({ id }: { id: string }) {
     }
   };
 
-  if (!data) return error ? <p className="error">{error}</p> : <p className="muted">Loading project.</p>;
+  if (!data) return error ? <p className="error page-pad">{error}</p> : <p className="muted page-pad">Loading.</p>;
   const { project, changes } = data;
+  const empty = changes.length === 0;
+  const open = adding || empty;
 
   return (
-    <>
-      <nav className="crumbs">
-        <a href="#/">Projects</a>
-      </nav>
-      <div className="page-head">
+    <div className="page">
+      <a className="back" href="#/">
+        <BackIcon size={15} /> Projects
+      </a>
+      <header className="page-head">
         <div>
           <h1>{project.name}</h1>
-          <div className="links" style={{ marginTop: 8 }}>
-            <span>
-              Repo <RepoLink url={project.repoUrl} />
-            </span>
-            {project.appUrl && (
-              <span>
-                App{" "}
-                {safeHref(project.appUrl) ? (
-                  <a href={safeHref(project.appUrl)!} target="_blank" rel="noreferrer">
-                    {project.appUrl}
-                  </a>
-                ) : (
-                  <code>{project.appUrl}</code>
-                )}
-              </span>
-            )}
+          <div className="row links">
+            <Out label="Repo" url={project.repoUrl} />
+            {project.appUrl && <Out label="App" url={project.appUrl} />}
           </div>
         </div>
-        <div className="stack">
-          <button type="button" disabled={running} onClick={() => start(() => api.recheck(id))}>
-            Re-check now
+        <div className="row">
+          <button type="button" className="btn secondary icon" disabled={running} onClick={() => start(() => api.recheck(id))} aria-label="Re-check now" title="Re-check now">
+            <RefreshIcon size={16} className={running ? "spin" : undefined} />
           </button>
-          <JobNote job={job} startError={startError} />
+          {!empty && (
+            <button type="button" className={open ? "btn ghost" : "btn primary"} onClick={() => setAdding(!adding)} aria-expanded={open}>
+              {open ? <CloseIcon size={16} /> : <PlusIcon size={16} />}
+              {open ? "Close" : "New change"}
+            </button>
+          )}
         </div>
-      </div>
+      </header>
+      <JobNote job={job} startError={startError} />
 
-      <section className="sheet">
-        <h2>Changes</h2>
-        {changes.length === 0 ? (
-          <p className="empty">No changes yet. Start with "Understand the app as it is built" so every later change has a baseline.</p>
-        ) : (
-          <ul className="list">
-            {changes.map((c) => (
-              <li key={c.id}>
-                <a href={`#/changes/${c.id}`}>
-                  <strong>{c.title}</strong>
-                  <span className="muted">{STAGE_NAMES[c.stage]}</span>
-                </a>
-              </li>
+      {open && (
+        <form className="card form" onSubmit={create}>
+          {empty && <p className="hint">Start with a baseline so every later change has one.</p>}
+          <fieldset className="segmented">
+            <legend className="sr-only">Kind</legend>
+            {KINDS.map(([k, label]) => (
+              <label key={k} className={form.kind === k ? "is-on" : undefined}>
+                <input type="radio" name="kind" value={k} checked={form.kind === k} onChange={() => setForm({ ...form, kind: k })} />
+                {label}
+              </label>
             ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="sheet">
-        <h2>New change</h2>
-        <form className="stack" onSubmit={create}>
+          </fieldset>
           <label>
-            Title
+            <span>Title</span>
             <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required maxLength={200} />
           </label>
           <label>
-            Description
-            <span className="hint">What should change, for whom, and why. Plain words are best.</span>
-            <textarea
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              required
-              maxLength={20000}
-            />
-          </label>
-          <label>
-            Kind
-            <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as ChangeKind })}>
-              {KINDS.map(([k, label]) => (
-                <option key={k} value={k}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            <span>What should change, for whom, and why</span>
+            <textarea rows={4} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required maxLength={20000} />
           </label>
           {error && (
             <p className="error" role="alert">
               {error}
             </p>
           )}
-          <button type="submit" disabled={saving}>
-            Add change
-          </button>
+          <div className="row">
+            <button type="submit" className="btn primary" disabled={saving}>
+              <PlusIcon size={16} /> Add change
+            </button>
+          </div>
         </form>
-      </section>
-    </>
+      )}
+
+      {!empty && (
+        <ul className="rows" aria-label="Changes">
+          {changes.map((c) => (
+            <li key={c.id}>
+              <a href={`#/changes/${c.id}`}>
+                <span className="row-main">
+                  <strong>{c.title}</strong>
+                  <span className="row-sub">
+                    <MiniTrail stage={c.stage} />
+                    <span>{STAGE_NAMES[c.stage]}</span>
+                    <span className="muted">{KIND_NAME[c.kind]}</span>
+                  </span>
+                </span>
+                <ChevronIcon size={16} className="go" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

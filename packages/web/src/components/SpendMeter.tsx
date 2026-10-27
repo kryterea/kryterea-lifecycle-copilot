@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, type JobState, type Spend } from "../api";
+import { CheckIcon, SparkIcon } from "./Icon";
+import { Stamp } from "./Stamp";
 
 const SpendContext = createContext<{ spend: Spend | null; refresh: () => void }>({ spend: null, refresh: () => {} });
 
@@ -29,17 +31,25 @@ export function SpendMeter() {
   const out = spend.spentUsd >= spend.budgetUsd;
   const share = spend.budgetUsd > 0 ? Math.min(1, spend.spentUsd / spend.budgetUsd) : 1;
   return (
-    <div className="row">
+    <div className="spend">
       {spend.fake && (
-        <span className="badge" title="Model outputs are replayed from recorded fixtures. Nothing is sent to Meta.">
-          Fixture replay
-        </span>
+        <Stamp tone="idle" title="Model outputs are replayed from recorded Muse Spark runs. Nothing is sent to Meta.">
+          Replay
+        </Stamp>
       )}
       <div className={out ? "meter is-out" : "meter"} role="status">
         <span className="meter-bar" aria-hidden="true">
-          <i style={{ width: `${share * 100}%` }} />
+          <i style={{ transform: `scaleX(${share})` }} />
         </span>
-        {out ? "Paused: copilot budget used" : `${usd(spend.spentUsd)} of ${budget(spend.budgetUsd)} copilot budget used`}
+        <span className="meter-text">
+          {out ? (
+            "Paused: copilot budget used"
+          ) : (
+            <>
+              <b>{usd(spend.spentUsd)}</b> of {budget(spend.budgetUsd)} <span className="meter-tail">copilot budget used</span>
+            </>
+          )}
+        </span>
       </div>
     </div>
   );
@@ -48,17 +58,43 @@ export function SpendMeter() {
 /** The model credit on every role result and finding. */
 export function Reasoned() {
   const { spend } = useSpend();
-  return <span className="byline">Reasoned by Muse Spark{spend?.fake ? " (recorded)" : ""}</span>;
+  return (
+    <span className="byline">
+      <SparkIcon size={12} />
+      Reasoned by Muse Spark{spend?.fake ? " (recorded)" : ""}
+    </span>
+  );
 }
 
-export const Working = () => <span className="working">Analysing with Muse Spark</span>;
+/**
+ * The Instrument: the dark band that appears only while Muse Spark is working, and the panel's only ambient
+ * motion. Its steps are the professionals actually on duty, ticked as their runs land.
+ */
+export function Instrument({ steps }: { steps: Array<{ name: string; done: boolean }> }) {
+  const current = steps.findIndex((s) => !s.done);
+  return (
+    <section className="instrument" role="status" aria-live="polite">
+      <p className="instrument-title">
+        <SparkIcon size={15} /> Analysing with Muse Spark
+      </p>
+      {steps.length > 0 && (
+        <ol className="instrument-steps">
+          {steps.map((s, i) => (
+            <li key={s.name} className={s.done ? "is-done" : i === current ? "is-now" : undefined} aria-current={i === current ? "step" : undefined}>
+              {s.done ? <CheckIcon size={13} /> : <i aria-hidden="true" />}
+              {s.name}
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
 
-/** What a finished or running job means for the person watching. Nothing when it simply finished. */
+/** What a finished job means for the person watching. Nothing when it simply finished. */
 export function JobNote({ job, startError }: { job: JobState | null; startError: string | null }) {
   if (startError) return <p className="error" role="alert">{startError}</p>;
-  if (!job) return null;
-  if (job.state === "running") return <Working />;
+  if (!job || job.state === "running" || job.state === "done") return null;
   if (job.state === "stopped_budget") return <p className="paused">Paused: copilot budget used</p>;
-  if (job.state === "failed") return <p className="error" role="alert">{job.error ?? "The job stopped with an error."}</p>;
-  return null;
+  return <p className="error" role="alert">{job.error ?? "The job stopped with an error."}</p>;
 }
