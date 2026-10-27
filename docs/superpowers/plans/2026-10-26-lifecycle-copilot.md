@@ -258,11 +258,11 @@ Skills: superpowers:test-driven-development.
 **Interfaces:**
 - Produces: `verifyCriteria(ctx, criteria: Criterion[], onlyFiles?: string[]): Promise<{checks: Check[]; findings: RoleResult['findings']}>`. One model call per criterion, each with the top 6 files from `narrowFiles(criterion.text, ...)` (restricted to `onlyFiles` when given) truncated at 20k characters. A `gap` produces a `conformance` finding (or `failure_path` when the criterion is a failure path) with a code trigger, `criterionId` set, and a fix prompt naming the file and line and quoting the criterion. `qaGate(checks: Check[]): {state, reason}` (held while any latest check is `gap` or `no_evidence`).
 
-- [ ] **Step 1: Write failing tests:** `evidence citing a missing file becomes no_evidence` (Review Focus 1); `evidence citing a line past the end becomes no_evidence`; `a gap produces a finding whose fixPrompt contains the file, line and criterion text`; `onlyFiles restricts which files are sent to the model`.
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Run. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): QA conformance role with verified evidence`.
+- [x] **Step 1: Write failing tests:** `evidence citing a missing file becomes no_evidence` (Review Focus 1); `evidence citing a line past the end becomes no_evidence`; `a gap produces a finding whose fixPrompt contains the file, line and criterion text`; `onlyFiles restricts which files are sent to the model`.
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Run. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): QA conformance role with verified evidence`.
 
 ### Task 12: Product owner role
 
