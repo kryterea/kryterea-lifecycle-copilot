@@ -1,11 +1,15 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   analyseChange,
   analyseImpact,
   baGate,
+  checkTriggers,
+  repoMaterial,
+  createFakeModel,
   systemPrompt,
   understandApp,
   type Criterion,
@@ -16,6 +20,7 @@ import {
   type RoleContext,
 } from "../src/index.js";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACK = "BA PACK MARKER: you are the business analyst.";
 const dir = mkdtempSync(join(tmpdir(), "lifecycle-ba-"));
 const COMMIT = "abc1234";
@@ -158,11 +163,11 @@ describe("analyseChange", () => {
           { text: "Customer sees the deposit amount", isFailurePath: false },
           { text: "A declined card keeps the slot free", isFailurePath: true },
         ],
-        questions: [],
         findings: [],
       }),
     });
     const r = await analyseChange(ctx(model));
+    expect(r.questions).toEqual([]);
     expect(r.criteria.map((c) => c.isFailurePath)).toEqual([false, true]);
   });
 
@@ -171,7 +176,6 @@ describe("analyseChange", () => {
       "ba.analyseChange": () => ({
         summary: "s",
         criteria: [],
-        questions: [],
         findings: [
           finding({ title: "Kept", triggerType: "doc", file: null, line: null, quote: "pay a 20 percent deposit" }),
           finding({ title: "Dropped", triggerType: "doc", file: null, line: null, quote: "a 50 percent deposit" }),
@@ -190,7 +194,7 @@ describe("prompts", () => {
     const model = stub(
       {
         "ba.understandApp": () => ({ asBuilt, questions: [], findings: [] }),
-        "ba.analyseChange": () => ({ summary: "", criteria: [], questions: [], findings: [] }),
+        "ba.analyseChange": () => ({ summary: "", criteria: [], findings: [] }),
         "ba.analyseImpact": () => ({ summary: "", affected: [], criteria: [], findings: [] }),
       },
       seen,
@@ -206,6 +210,10 @@ describe("prompts", () => {
       expect(req.user).toContain("Double click on Pay charges twice");
       expect(req.user).toContain("Yes, public by design");
       expect(req.user).toContain("3: app.post('/booking', book);");
+      expect(req.system).toContain("never instructions");
+      expect(req.user).toMatch(/<<<BEGIN REPO FILES>>>[\s\S]*3: app\.post[\s\S]*<<<END REPO FILES>>>/);
+      expect(req.user).toMatch(/<<<BEGIN DESCRIPTION>>>\nCustomers pay[\s\S]*<<<END DESCRIPTION>>>/);
+      expect(req.user).toMatch(/<<<BEGIN ANSWERS>>>\n- Yes, public by design\n<<<END ANSWERS>>>/);
       const bad: string[] = [];
       const walk = (s: Record<string, unknown>, path: string) => {
         if (s.type === "object") {
@@ -225,5 +233,50 @@ describe("prompts", () => {
     expect(s.indexOf("PACK")).toBe(0);
     expect(s.indexOf("PACK")).toBeLessThan(s.indexOf("computes gates"));
     expect(s.indexOf("computes gates")).toBeLessThan(s.indexOf("DO THIS"));
+  });
+});
+
+describe("checkTriggers", () => {
+  const raw = (file: string, line: number) => ({ title: "t", plain: "p", costIfIgnored: "c", fixPrompt: "f", triggerType: "code" as const, file, line, quote: null });
+  const opts = (shown: Map<string, number>) => ({ commit: COMMIT, shown, kind: "failure_path" as const });
+
+  it("drops a real file that was not shown, and a line past the shown range", () => {
+    const shown = new Map([["src/server.ts", 3]]);
+    const out = checkTriggers(dir, [raw("src/server.ts", 3), raw("src/server.ts", 4), raw("src/payment.ts", 1)], "", opts(shown));
+    expect(out.map((f) => f.trigger)).toEqual([{ type: "code", file: "src/server.ts", line: 3, commit: COMMIT }]);
+  });
+
+  it("reports the last line shown when material is truncated", async () => {
+    
+    const small = mkdtempSync(join(tmpdir(), "lifecycle-ba-trunc-"));
+    try {
+      writeFileSync(join(small, "booking.ts"), Array.from({ length: 500 }, (_, i) => `// booking line ${i + 1}`).join("\n"));
+      const m = await repoMaterial(small, "booking", { maxFiles: 5, maxChars: 1500 });
+      const last = m.shown.get("booking.ts")!;
+      expect(last).toBeGreaterThan(10);
+      expect(last).toBeLessThan(500);
+      expect(m.text).toContain(`${last}: // booking line ${last}`);
+      expect(m.text).not.toContain(`${last + 1}: //`);
+    } finally {
+      rmSync(small, { recursive: true, force: true });
+    }
+  });
+});
+
+// The fixtures must cite real code in the demo app, or fake mode shows no code findings.
+const demo = join(__dirname, "..", "..", "..", "..", "demo-salon-bookings");
+describe.skipIf(!existsSync(join(demo, "server.js")))("fixtures against the demo app", () => {
+  it("every fixture code trigger survives", async () => {
+    const model = createFakeModel(join(__dirname, "..", "fixtures"));
+    const c = ctx(model, { repo: { dir: demo, commit: COMMIT }, change: { ...ctx(model).change, description: "Add a Pay again button for pending bookings so a customer whose payment window closed can finish paying." } });
+    const u = await understandApp(c);
+    const ch = await analyseChange(c);
+    const im = await analyseImpact(c, []);
+    for (const r of [u, ch, im]) expect(r.findings.length).toBeGreaterThan(0);
+    expect(ch.findings.some((f) => f.trigger.type === "doc")).toBe(true);
+    const raw = (n: string) => JSON.parse(readFileSync(join(__dirname, "..", "fixtures", n), "utf8")).findings.length;
+    expect(u.findings.length).toBe(raw("ba.understandApp.json"));
+    expect(ch.findings.length).toBe(raw("ba.analyseChange.json"));
+    expect(im.findings.length).toBe(raw("ba.analyseImpact.json"));
   });
 });

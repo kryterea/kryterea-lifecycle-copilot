@@ -7,5 +7,5 @@ export { syncRepo, listSourceFiles, changedFiles, readLines, verifyCodeTrigger }
 export { narrowFiles } from "./repo/narrow.js";
 export { loadPacks } from "./packs.js";
 export { understandApp, analyseChange, analyseImpact, baGate } from "./roles/ba.js";
-export { systemPrompt } from "./roles/context.js";
+export { systemPrompt, checkTriggers, repoMaterial } from "./roles/context.js";
 export type { RoleContext, RoleResult, RoleFinding } from "./roles/context.js";

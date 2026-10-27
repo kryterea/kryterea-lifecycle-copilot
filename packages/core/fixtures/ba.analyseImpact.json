@@ -1,25 +1,35 @@
 {
-  "summary": "The deposit changes the booking flow, the stored payment data and what the admin page shows. The earlier confirmation and cancellation behaviour may change.",
-  "affected": ["C1", "C2"],
+  "summary": "Pay again reuses the verify route and the pending status. It raises the chance of repeated verify calls on one booking and of payments for bookings that were cancelled meanwhile. The My bookings table gains a button, and demo mode behaves the same.",
+  "affected": ["C1", "C3"],
   "criteria": [
     {
-      "text": "When the owner cancels a paid booking, the admin page shows that the deposit needs to be refunded by hand.",
-      "isFailurePath": true
+      "text": "In demo mode, Pay again still asks for the simulated payment and the booking shows as confirmed afterwards.",
+      "isFailurePath": false
     },
     {
-      "text": "The admin booking list shows the deposit amount and the payment reference for each booking.",
-      "isFailurePath": false
+      "text": "A payment reference that already confirmed one booking is refused when it is used for another booking.",
+      "isFailurePath": true
     }
   ],
   "findings": [
     {
-      "title": "Cancelled bookings keep the deposit with no refund note",
-      "plain": "Cancelling a booking in the admin page removes it but says nothing about the deposit already paid.",
-      "costIfIgnored": "Customers lose their deposit when the salon cancels, and the owner has no record that a refund is owed.",
-      "fixPrompt": "When a paid booking is cancelled, store a refund-needed flag and show it on the admin page.",
+      "title": "Demo mode confirms bookings with no real charge",
+      "plain": "When no Paystack secret key is set, any reference text confirms the booking as paid and records the full deposit as received.",
+      "costIfIgnored": "If the app goes live without the key, every Pay again press confirms a booking for free.",
+      "fixPrompt": "In server.js, refuse demo confirmation when the app runs in production, and show a warning on the admin page while no Paystack secret key is set.",
       "triggerType": "code",
-      "file": "src/admin.ts",
-      "line": 30,
+      "file": "server.js",
+      "line": 193,
+      "quote": null
+    },
+    {
+      "title": "Cancelling a confirmed booking gives no refund note",
+      "plain": "Cancel only changes the status to cancelled. The deposit already paid stays recorded and nothing tells the customer or the salon whether it is refunded.",
+      "costIfIgnored": "Customers who cancel after paying lose their deposit with no explanation, and the owner has no record of what is owed back.",
+      "fixPrompt": "In the cancel route in server.js, when a paid booking is cancelled, record that a refund decision is needed and show it in the admin bookings list.",
+      "triggerType": "code",
+      "file": "server.js",
+      "line": 226,
       "quote": null
     }
   ]

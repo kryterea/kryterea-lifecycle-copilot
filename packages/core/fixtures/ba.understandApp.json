@@ -1,48 +1,87 @@
 {
   "asBuilt": {
-    "flows": [
-      "A customer picks a stylist and a time slot, enters a name and phone number, and pays a deposit through Paystack to hold the booking.",
-      "After payment the customer sees a booking confirmation page and receives an SMS reminder.",
-      "The owner opens the admin page, signs in with a shared password and sees all bookings for the week."
-    ],
     "dataCollected": [
-      "Customer name, phone number and email address, stored with each booking.",
-      "Paystack payment reference and amount for each deposit."
+      "Account: name, phone, email lowercased, password hash with bcrypt, admin flag",
+      "Service catalogue: name, price in kobo, duration in minutes, deposit in kobo",
+      "Booking: user id, service id, date text, time text, status pending or confirmed or cancelled, Paystack reference, amount paid in kobo, created timestamp",
+      "Session cookie: logged in user id stored for 24 hours",
+      "Payment verification input: Paystack reference typed or generated as salon booking id plus timestamp"
+    ],
+    "flows": [
+      "Visitor opens home page, sees service cards with price, duration and deposit, then selects a service to start booking",
+      "Visitor picks a date Monday to Saturday and a time from 09:00 to 16:00, sees which slots are taken, then continues to deposit",
+      "New visitor creates account with name, phone, email and password or returning visitor logs in, then creates a pending booking for the chosen service, date and time",
+      "Customer pays deposit in Paystack popup using booking reference, app verifies reference and shows confirmed booking, or confirms instantly with OK in demo mode when keys are missing",
+      "Logged in customer opens My bookings to see service, date, time, status and amount paid, and can cancel own booking",
+      "Admin logs in on admin page and views all bookings with customer contact, service, status, deposit and reference, with filter by status and refresh"
     ],
     "payments": [
-      "A fixed deposit is charged through Paystack when a booking is made. The remaining balance is paid in the salon.",
-      "Refunds are not handled in the app."
+      "Deposit amount is per service, for example Box Braids deposit ₦5,000 on price ₦35,000 and Bridal Package deposit ₦15,000 on price ₦80,000",
+      "Live path uses Paystack inline with public key, email, amount in kobo, currency NGN and generated reference, then server verifies reference with Paystack secret key and requires paid amount at least deposit",
+      "Demo path when secret key is missing marks booking confirmed with DEMO plus reference and no real charge, after OK on confirm dialog",
+      "Paid display shows formatted naira amount from amount paid in kobo on My bookings and admin list"
     ],
     "roles": [
-      "Customer: books and pays a deposit without creating an account.",
-      "Admin: one shared login for the owner and staff, who can see and cancel every booking."
+      "Anonymous visitor: can see services, check slots for a date, and see login forms",
+      "Logged in customer: can create bookings, verify own deposit, see own bookings and cancel own bookings",
+      "Admin user with is admin flag: can log in and view all bookings with customer name, phone and email on admin page"
     ]
   },
-  "questions": [
-    "Anyone with the booking link can see the customer's name and phone number. Is that meant?",
-    "A booking is confirmed on the page before the payment result is checked. Should a declined deposit release the slot?",
-    "The admin page uses one shared password. Do staff need separate logins?"
-  ],
   "findings": [
     {
-      "title": "Booking shows as confirmed before the deposit is checked",
-      "plain": "The customer sees Booking confirmed as soon as they return from Paystack, even if the payment was declined or abandoned.",
-      "costIfIgnored": "Slots are held for people who never paid, and real customers find the time already taken.",
-      "fixPrompt": "In the booking route, mark a booking as confirmed only after the Paystack payment is verified on the server. Release the slot if verification fails.",
-      "triggerType": "code",
-      "file": "src/server.ts",
-      "line": 42,
-      "quote": null
+      "costIfIgnored": "Confusion over whether a cancelled slot is free, double work for staff, and disputes about money owed or returned.",
+      "file": "server.js",
+      "fixPrompt": "In POST /api/bookings/:id/verify in server.js, reject verify when booking status is cancelled or already confirmed, return 400 with message like Already cancelled, and only update pending bookings.",
+      "line": 193,
+      "plain": "Today a customer can cancel a booking and then verify a payment reference for the same booking and the app marks it confirmed again with paid amount. The customer sees confirmed status after cancellation.",
+      "quote": null,
+      "title": "Cancelled booking can be made confirmed again by verifying",
+      "triggerType": "code"
     },
     {
-      "title": "Admin page has one shared password with no lockout",
-      "plain": "Anyone who guesses the single admin password can see every customer's name and phone number and cancel bookings.",
-      "costIfIgnored": "Customer details can leak and bookings can be cancelled by a stranger.",
-      "fixPrompt": "Add a limit on failed admin sign-in attempts and give each staff member their own login.",
-      "triggerType": "code",
-      "file": "src/admin.ts",
-      "line": 12,
-      "quote": null
+      "costIfIgnored": "Lost deposits, blocked chairs that others cannot book, and extra calls to the salon to fix pending bookings.",
+      "file": "public/app.js",
+      "fixPrompt": "In public/app.js add a Pay again button for pending rows in My bookings that reopens Paystack popup with stored deposit and calls verify, or update the onClose message to describe the correct manual step.",
+      "line": 147,
+      "plain": "Today if the customer closes the Paystack window the app says the slot is held as pending and to retry from My bookings, but My bookings only shows Cancel and no Pay again option. The customer sees pending status with no way forward in the app.",
+      "quote": null,
+      "title": "Closed payment leaves slot blocked with no retry button",
+      "triggerType": "code"
+    },
+    {
+      "costIfIgnored": "Lost deposit income because one payment can secure many chairs and records show paid when money was received once.",
+      "file": "server.js",
+      "fixPrompt": "In server.js before confirming, reject if paystack ref already exists on another booking, enforce UNIQUE on bookings paystack ref, and store each successful reference only once.",
+      "line": 204,
+      "plain": "Today the verify step checks the reference with Paystack but never checks if that reference was already used for another booking. The customer can reuse one successful deposit to mark multiple pending bookings as confirmed.",
+      "quote": null,
+      "title": "Same Paystack reference can confirm many bookings",
+      "triggerType": "code"
+    },
+    {
+      "costIfIgnored": "Chairs held for bookings that look paid but have no deposit, lost income and confusion at arrival.",
+      "file": "server.js",
+      "fixPrompt": "In server.js gate demo confirmation behind an explicit test flag or admin only setting, label demo bookings clearly as demo in UI and admin list, and document when live keys are required.",
+      "line": 191,
+      "plain": "Today when Paystack secret key is missing the app confirms any booking as paid after the customer clicks OK on the demo dialog. The customer sees booking confirmed and deposit paid without any money moving.",
+      "quote": null,
+      "title": "Demo mode confirms bookings with no real charge",
+      "triggerType": "code"
+    },
+    {
+      "costIfIgnored": "Lost income from late cancellations, empty chairs that could have been sold, and disputes about deposit refunds.",
+      "file": "server.js",
+      "fixPrompt": "In POST /api/bookings/:id/cancel in server.js, add rules for when paid bookings can be cancelled, block cancel for past dates, keep amount paid visible after cancel, and show refund or forfeit message in UI.",
+      "line": 226,
+      "plain": "Today a customer can cancel a confirmed and paid booking at any time including after the date and the app marks it cancelled and makes the time available again. The customer sees cancelled but gets no info about deposit refund or forfeit.",
+      "quote": null,
+      "title": "Cancelling a confirmed booking frees slot with no refund rule",
+      "triggerType": "code"
     }
+  ],
+  "questions": [
+    "Pending bookings keep a date and time marked taken and there is no expiry or cleanup. Should a pending hold expire after a short time so others can book?",
+    "In demo mode any reference text confirms a booking as paid with no real charge. Is demo mode meant for public visitors or only for internal testing?",
+    "My bookings shows Cancel for pending and confirmed bookings but no Pay again button even though the closed payment message says retry from My bookings. Should customers be able to retry payment and should admin be able to confirm or cancel bookings?"
   ]
 }

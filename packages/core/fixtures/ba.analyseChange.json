@@ -1,44 +1,67 @@
 {
-  "summary": "Customers should pay a 20 percent deposit when they book. This touches the booking form, the Paystack charge and the admin booking list.",
+  "summary": "A customer whose Paystack window closed is left with a pending booking and no way to finish paying. The change adds a Pay again button on the My bookings list for pending bookings. It touches the My bookings table, the payment step and the verify call.",
   "criteria": [
     {
-      "text": "On the booking page the customer sees the deposit amount, equal to 20 percent of the service price, before they pay.",
+      "text": "On My bookings, a booking with the status pending shows a Pay again button, and confirmed or cancelled bookings do not.",
       "isFailurePath": false
     },
     {
-      "text": "After a successful deposit the customer sees Booking confirmed and the admin page lists the booking as paid.",
+      "text": "Pressing Pay again opens the payment step for the deposit of that booking, and after a successful payment the booking shows as confirmed.",
       "isFailurePath": false
     },
     {
-      "text": "If the card is declined, the customer sees a clear message and the time slot stays free for others.",
+      "text": "If the customer closes the payment window again, the booking stays pending and the customer sees the same message and can press Pay again once more.",
       "isFailurePath": true
     },
     {
-      "text": "If the customer presses Pay twice, only one deposit is charged and only one booking is created.",
+      "text": "If the booking was cancelled in another tab, Pay again does not confirm it and the customer sees that the booking is cancelled.",
+      "isFailurePath": true
+    },
+    {
+      "text": "If the customer presses Pay again twice quickly, only one payment is started for the booking.",
       "isFailurePath": true
     }
   ],
-  "questions": [],
   "findings": [
     {
-      "title": "Booking shows as confirmed before the deposit is checked",
-      "plain": "The booking is saved as confirmed before the Paystack result is known, so a declined deposit still leaves a confirmed booking.",
-      "costIfIgnored": "Unpaid bookings block real customers from the slot.",
-      "fixPrompt": "Save the booking as pending, and confirm it only after the Paystack payment is verified on the server.",
+      "title": "Unpaid bookings hold the slot with no expiry",
+      "plain": "A new booking is saved as pending and its time is treated as taken, but nothing ever releases it if the deposit is never paid.",
+      "costIfIgnored": "Slots stay blocked for people who walked away, so real customers see no free time and the salon loses bookings.",
+      "fixPrompt": "In server.js, give pending bookings an expiry time and ignore expired pending bookings when listing free slots in /api/slots. Keep the Pay again button working only while the booking has not expired.",
       "triggerType": "code",
-      "file": "src/server.ts",
-      "line": 42,
+      "file": "server.js",
+      "line": 164,
       "quote": null
     },
     {
-      "title": "Deposit amount is not defined in the request",
-      "plain": "The request says customers pay a deposit but does not say how the amount is worked out.",
-      "costIfIgnored": "The coding agent will guess the amount and customers may be charged the wrong sum.",
-      "fixPrompt": "Compute the deposit as 20 percent of the service price on the server and show it to the customer before payment.",
+      "title": "Same Paystack reference can confirm many bookings",
+      "plain": "When a payment is verified, the app confirms the booking with the reference it was sent but never checks whether that reference already confirmed another booking.",
+      "costIfIgnored": "One deposit could be used to confirm several bookings, and a Pay again button makes repeated verify calls more likely.",
+      "fixPrompt": "In the verify route in server.js, reject a Paystack reference that is already stored on another booking, and store the reference with a uniqueness rule.",
+      "triggerType": "code",
+      "file": "server.js",
+      "line": 204,
+      "quote": null
+    },
+    {
+      "title": "Cancelled booking can be confirmed by a late payment",
+      "plain": "The verify route does not look at the booking status, so a booking that was cancelled can still be marked confirmed when a payment arrives.",
+      "costIfIgnored": "A customer who pays again on a cancelled booking is shown as confirmed for a slot that may already be given to someone else.",
+      "fixPrompt": "In the verify route in server.js, refuse to confirm a booking whose status is cancelled and tell the customer to book again.",
+      "triggerType": "code",
+      "file": "server.js",
+      "line": 187,
+      "quote": null
+    },
+    {
+      "title": "The request does not say how long a booking can wait for payment",
+      "plain": "The request mentions a payment window that closed but does not say how long a pending booking may be paid for later.",
+      "costIfIgnored": "The coding agent will guess a time limit, and customers may lose a slot sooner or later than the owner expects.",
+      "fixPrompt": "Ask the owner how long a pending booking should be kept, then write that time limit into the acceptance criteria before building Pay again.",
       "triggerType": "doc",
       "file": null,
       "line": null,
-      "quote": "pay a 20 percent deposit"
+      "quote": "payment window closed"
     }
   ]
 }
