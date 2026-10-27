@@ -4,6 +4,8 @@ Meta Global AI Developer Hackathon, Startup track. Build window: 2026-10-26 to 2
 
 ## What is new
 
+This project is a hackathon spin-off of Kryterea, our existing platform for professional software delivery work. The rules ask for new work only, so the Kryterea platform is not entered or extended here. This copilot was built from scratch during the event as a separate product, and no code, prompts or content from the Kryterea platform are in this repository.
+
 Everything in this repository was written during the build window. The first commit is `dc447bb` on 2026-10-27 (build day 2; the design and plan were written on 2026-10-26). The commit history is the record of the work.
 
 Built during the event (update as tasks finish):

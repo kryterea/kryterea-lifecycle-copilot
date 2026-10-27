@@ -147,7 +147,7 @@ Left to the builder: stack (default TypeScript; avoid Next.js on Windows, the Op
 - Theme: "Build for Your World" (my call): Meta models brought into the domain the founder knows, professional software delivery.
 - Judging (kickoff): a pass or fail screen on theme fit and use of Meta AI products, then Meta judges score against the rubric (impact, use of Meta AI tooling, technical depth, demo), then live finals on 11-09 from the video.
 - Bonus prizes (my call, founder confirms): enter best agentic use case, which fits role agents gating a change while a coding agent fixes findings over MCP, and community vote. Most viral needs an X post after the event. Open weights only if the Muse Spark Open fallback is used.
-- Startup track eligibility: the kickoff described it as for incorporated startups. The founder confirms Kryterea's status before submission.
+- Startup track: the event page defines it as "for teams and founders building a real product", judged on technical execution and whether it holds up in production. The submission presents this entry as a hackathon spin-off of Kryterea, built from scratch because the existing platform cannot be entered.
 
 ## 13. Business Analysis OS (BA OS) in this project
 
