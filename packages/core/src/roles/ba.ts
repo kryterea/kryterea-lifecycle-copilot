@@ -2,6 +2,7 @@ import type { Criterion, GateState, JsonSchema } from "../types.js";
 import {
   checkTriggers,
   contextBlock,
+  defang,
   repoMaterial,
   systemPrompt,
   type RawFinding,
@@ -33,17 +34,19 @@ const findingSchema = obj({
   line: { type: ["integer", "null"] },
   quote: { type: ["string", "null"] },
 });
-const criterionSchema = obj({ text: str, isFailurePath: { type: "boolean" } });
+const criterionSchema = obj({ text: str, isFailurePath: { type: "boolean" }, requirementKeys: strArr });
 
 interface RawCriterion {
   text: string;
   isFailurePath: boolean;
+  requirementKeys?: string[];
 }
 
 const keepVerified = (raw: RawFinding[], ctx: RoleContext, shown: Map<string, number>): RoleFinding[] =>
   checkTriggers(ctx.repo.dir, raw, ctx.change.description, { commit: ctx.repo.commit, shown, kind: "failure_path" });
 
-const criteriaOf = (raw: RawCriterion[]) => raw.map((c) => ({ text: c.text, isFailurePath: c.isFailurePath }));
+const criteriaOf = (raw: RawCriterion[]) =>
+  raw.map((c) => ({ text: c.text, isFailurePath: c.isFailurePath, requirementKeys: c.requirementKeys ?? [] }));
 
 export function baGate(questions: string[], answers: string[]): { state: GateState; reason: string } {
   if (questions.length === 0) return { state: "cleared", reason: "No open questions for the owner." };
@@ -84,7 +87,19 @@ export async function understandApp(ctx: RoleContext): Promise<RoleResult> {
 
 const CHANGE_QUERY = (ctx: RoleContext) => `${ctx.change.title} ${ctx.change.description}`;
 
-const CHANGE_RULES = `Acceptance criteria are one sentence each about something a person can observe in the app. Each failure path (a declined card, a double click, a step cancelled halfway) gets its own criterion with isFailurePath true. A finding is a failure-path problem you can show evidence for. Its trigger is either a code trigger (triggerType "code", file and line exactly as numbered in the material, quote null) or a doc trigger (triggerType "doc", file and line null, quote copied word for word from the change description). Never cite a file, line or quote you were not given.`;
+const CHANGE_RULES = `Acceptance criteria are one sentence each about something a person can observe in the app. Each failure path (a declined card, a double click, a step cancelled halfway) gets its own criterion with isFailurePath true. A finding is a failure-path problem you can show evidence for. Its trigger is either a code trigger (triggerType "code", file and line exactly as numbered in the material, quote null) or a doc trigger (triggerType "doc", file and line null, quote copied word for word from the change description). Never cite a file, line or quote you were not given. For each criterion, list in requirementKeys the keys of the project requirements it covers, exactly as listed; empty if none.`;
+
+/** The project's active requirements, so each criterion can name the ones it covers. */
+const requirementsText = (ctx: RoleContext) =>
+  ctx.requirements?.length
+    ? `\n\nProject requirements (key: text):\n${ctx.requirements.map((r) => `${defang(r.key)}: ${defang(r.text)}`).join("\n")}`
+    : "";
+
+/** Keys the model named that are real requirements of the project. */
+const realKeys = (ctx: RoleContext, criteria: RoleResult["criteria"]) => {
+  const keys = new Set((ctx.requirements ?? []).map((r) => r.key));
+  return criteria.map((c) => ({ ...c, requirementKeys: [...new Set(c.requirementKeys ?? [])].filter((k) => keys.has(k)) }));
+};
 
 export async function analyseChange(ctx: RoleContext): Promise<RoleResult> {
   const mat = await repoMaterial(ctx.repo.dir, CHANGE_QUERY(ctx), { maxFiles: 12, maxChars: 30_000 });
@@ -98,14 +113,14 @@ export async function analyseChange(ctx: RoleContext): Promise<RoleResult> {
       ctx.packs.role.ba,
       `Task: analyse the change. If the change description is a pasted document, treat it as the source of what is wanted. Summarise what is being asked and who is affected, write acceptance criteria for the change. If the request is vague, state your assumptions in the summary. ${CHANGE_RULES}`,
     ),
-    user: `${contextBlock(ctx)}\n\n${mat.text}`,
+    user: `${contextBlock(ctx)}${requirementsText(ctx)}\n\n${mat.text}`,
     schema: obj({ summary: str, criteria: arr(criterionSchema), findings: arr(findingSchema) }),
     maxOutputTokens: 8000,
     reasoningEffort: "medium",
   });
   return {
     artifacts: [{ kind: "analysis", body: { summary: data.summary } }],
-    criteria: criteriaOf(data.criteria),
+    criteria: realKeys(ctx, criteriaOf(data.criteria)),
     findings: keepVerified(data.findings, ctx, mat.shown),
     questions: [],
     affectedCriterionIds: [],
@@ -127,7 +142,7 @@ export async function analyseImpact(ctx: RoleContext, existing: Criterion[]): Pr
       ctx.packs.role.ba,
       `Task: work out the impact of the change on what already exists. From the existing criteria listed in the user message, return in "affected" the labels (such as C1) of those the change could break or alter; return only labels from that list. Write new criteria for the change, and failure-path findings. ${CHANGE_RULES}`,
     ),
-    user: `${contextBlock(ctx)}\n\nExisting criteria:\n${list}\n\n${mat.text}`,
+    user: `${contextBlock(ctx)}${requirementsText(ctx)}\n\nExisting criteria:\n${list}\n\n${mat.text}`,
     schema: obj({ summary: str, affected: strArr, criteria: arr(criterionSchema), findings: arr(findingSchema) }),
     maxOutputTokens: 8000,
     reasoningEffort: "medium",
@@ -136,7 +151,7 @@ export async function analyseImpact(ctx: RoleContext, existing: Criterion[]): Pr
   const affected = [...new Set(data.affected.map((l) => byLabel.get(l.trim())).filter((id): id is string => !!id))];
   return {
     artifacts: [{ kind: "impact", body: { summary: data.summary } }],
-    criteria: criteriaOf(data.criteria),
+    criteria: realKeys(ctx, criteriaOf(data.criteria)),
     findings: keepVerified(data.findings, ctx, mat.shown),
     questions: [],
     affectedCriterionIds: affected,

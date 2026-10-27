@@ -152,7 +152,7 @@ describe("analyseImpact", () => {
     );
     const r = await analyseImpact(ctx(model), existing);
     expect(r.affectedCriterionIds).toEqual(["id-b"]);
-    expect(r.criteria).toEqual([{ text: "Deposit is shown", isFailurePath: false }]);
+    expect(r.criteria).toEqual([{ text: "Deposit is shown", isFailurePath: false, requirementKeys: [] }]);
     expect(seen[0]!.user).toContain("C1: Booking confirms");
     expect(seen[0]!.user).toContain("C2: Declined card shows a message");
     expect(seen[0]!.maxOutputTokens).toBe(8000);
@@ -160,6 +160,28 @@ describe("analyseImpact", () => {
 });
 
 describe("analyseChange", () => {
+  it("returns the requirement keys each criterion covers", async () => {
+    const seen: ModelRequest[] = [];
+    const model = stub(
+      {
+        "ba.analyseChange": () => ({
+          summary: "s",
+          criteria: [
+            { text: "Customer sees the deposit amount", isFailurePath: false, requirementKeys: ["PRD-1"] },
+            { text: "A declined card keeps the slot free", isFailurePath: true, requirementKeys: [] },
+          ],
+          findings: [],
+        }),
+      },
+      seen,
+    );
+    const requirements = [{ id: "r1", projectId: "p1", documentId: "d1", key: "PRD-1", text: "Customers pay a deposit", quote: "q", line: 2, status: "active" as const, createdAt: "t", updatedAt: "t" }];
+    const r = await analyseChange(ctx(model, { requirements }));
+    expect(seen[0]!.user).toContain("PRD-1: Customers pay a deposit");
+    expect(JSON.stringify(seen[0]!.schema)).toContain("requirementKeys");
+    expect(r.criteria.map((c) => c.requirementKeys)).toEqual([["PRD-1"], []]);
+  });
+
   it("flags failure path criteria with isFailurePath", async () => {
     const model = stub({
       "ba.analyseChange": () => ({

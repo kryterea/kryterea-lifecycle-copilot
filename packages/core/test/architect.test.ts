@@ -78,6 +78,15 @@ const finding = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("reviewOperations", () => {
+  it("can cite a spec line as the trigger for an operations finding", async () => {
+    const seen: ModelRequest[] = [];
+    const spec = { name: "docs/SPEC.md", body: "# Spec\nThe app must stay up during sales." };
+    const quoted = finding({ triggerType: "doc", file: "docs/SPEC.md", line: 2, quote: "The app must stay up during sales." });
+    const r = await reviewOperations(ctx(stub(() => ({ findings: [quoted] }), seen), { documents: [spec] }), asBuilt);
+    expect(seen[0]!.user).toContain("<<<BEGIN DOCUMENT docs/SPEC.md>>>");
+    expect(r.findings[0]!.trigger).toEqual({ type: "doc", quote: "The app must stay up during sales.", document: "docs/SPEC.md", line: 2 });
+  });
+
   it("operations findings carry kind operations and a verified code trigger", async () => {
     const r = await reviewOperations(ctx(stub(() => ({ findings: [finding()] }))), asBuilt);
     expect(r.findings).toHaveLength(1);

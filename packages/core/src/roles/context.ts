@@ -8,6 +8,7 @@ import type {
   Model,
   Packs,
   Project,
+  Requirement,
 } from "../types.js";
 
 export interface RoleContext {
@@ -22,13 +23,17 @@ export interface RoleContext {
   existingFindings: Array<{ id: string; title: string; kind: FindingKind }>;
   /** From the latest 'answers' artifact, empty if none. */
   answers: string[];
+  /** The project's PRD, specs and other documents, latest version of each. */
+  documents?: Array<{ name: string; body: string }>;
+  /** Active requirements read from those documents. */
+  requirements?: Requirement[];
 }
 
 export type RoleFinding = Omit<FindingInput, "projectId" | "changeId" | "runId" | "role" | "stage">;
 
 export interface RoleResult {
   artifacts: Array<{ kind: string; body: unknown }>;
-  criteria: Array<{ text: string; isFailurePath: boolean }>;
+  criteria: Array<{ text: string; isFailurePath: boolean; requirementKeys?: string[] }>;
   findings: RoleFinding[];
   questions: string[];
   affectedCriterionIds: string[];
@@ -164,6 +169,15 @@ export function documentsBlock(docs: Array<{ name: string; body: string }>, maxC
     if (kept.length < all.length) break;
   }
   return { text: out, lines };
+}
+
+/** Added to a role's instructions when the project has documents. */
+export const DOC_TRIGGER_RULE = `The project documents in the user message are also evidence: a doc trigger may quote one of them, with triggerType "doc", file set to the document name exactly as in its BEGIN DOCUMENT marker, line set to the line number as shown, and quote copied word for word from that line.`;
+
+/** The project's documents as role material (text, lines shown, the trigger rule), or null when there are none. */
+export function projectDocuments(ctx: RoleContext): { text: string; lines: Map<string, string[]>; rule: string } | null {
+  if (!ctx.documents?.length) return null;
+  return { ...documentsBlock(ctx.documents), rule: DOC_TRIGGER_RULE };
 }
 
 /** True when the quote appears word for word on the given line or within 3 lines of it. */
