@@ -158,6 +158,34 @@ function save(ctx: RoleContext, role: RoleId, stage: StageId, r: RoleResult): vo
   for (const f of r.findings) record.addFinding({ projectId: change.projectId, changeId: change.id, runId: ctx.runId, role, stage, ...f });
 }
 
+/** Criteria an existing finding was matched to (QA folded its own finding into it), so evidence found closes it. */
+const findingCriteria = (record: CopilotRecord, findingId: string) =>
+  record
+    .linksFrom({ type: "finding", id: findingId })
+    .filter((l) => l.rel === "affects" && l.to.type === "criterion")
+    .map((l) => l.to.id);
+
+/**
+ * QA's findings that no open finding already covers, so one issue warns once. Covered: an open finding on the
+ * same criterion (QA rewords its title between checks), or an open failure path from any role citing the same
+ * file within 3 lines. A covered finding is linked to the criterion instead, so evidence found later closes it.
+ */
+function notRaisedYet(record: CopilotRecord, projectId: string, findings: RoleResult["findings"]): RoleResult["findings"] {
+  const open = record.listFindings({ projectId, status: "open" });
+  return findings.filter((f) => {
+    const t = f.trigger;
+    const same = open.find(
+      (o) =>
+        (f.criterionId !== undefined && o.criterionId === f.criterionId) ||
+        (o.kind === "failure_path" && t.type === "code" && o.trigger.type === "code" && o.trigger.file === t.file && Math.abs(o.trigger.line - t.line) <= 3),
+    );
+    if (same && f.criterionId && same.criterionId !== f.criterionId) {
+      record.link({ type: "finding", id: same.id }, "affects", { type: "criterion", id: f.criterionId });
+    }
+    return !same;
+  });
+}
+
 /** One QA run. Checks made before a budget stop are kept; evidence found closes that criterion's open findings. */
 async function verify(s: Session, change: Change, stage: StageId, criteria: Criterion[]): Promise<void> {
   const { record } = s.deps;
@@ -191,10 +219,11 @@ async function verify(s: Session, change: Change, stage: StageId, criteria: Crit
       }
     }
     for (const c of checks) record.recordCheck(c);
-    save(ctx, "qa", stage, { artifacts: [], criteria: [], findings, questions: [], affectedCriterionIds: [] });
+    save(ctx, "qa", stage, { artifacts: [], criteria: [], findings: notRaisedYet(record, change.projectId, findings), questions: [], affectedCriterionIds: [] });
     const found = new Set(r.checks.filter((c) => c.state === "evidence_found").map((c) => c.criterionId));
     for (const f of record.listFindings({ projectId: change.projectId, status: "open" })) {
-      if (f.criterionId && found.has(f.criterionId)) record.setFindingStatus(f.id, "fixed", "Evidence found on re-check", "qa");
+      const on = f.criterionId ? [f.criterionId] : findingCriteria(record, f.id);
+      if (on.some((id) => found.has(id))) record.setFindingStatus(f.id, "fixed", "Evidence found on re-check", "qa");
     }
     if (stopped) throw new BudgetExceededError("Copilot budget used during verification");
   });

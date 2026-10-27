@@ -658,6 +658,36 @@ describe("workflow", () => {
     expect(record.listFindings({ projectId: project.id, status: "open" }).some((f) => f.criterionId === book.id)).toBe(true);
   });
 
+  it("QA adds no finding on a criterion that already has an open finding from any role", async () => {
+    const { record, models, deps, change, crit, project } = setup();
+    const gapOn = (title: string) => ({ state: "gap", evidence: [{ file: "src/app.js", line: 3 }], note: "Slot stays held.", title, plain: "The slot is not freed.", costIfIgnored: "Lost bookings.", fixPrompt: "Free the slot." });
+    models.qa["CRIT-CANCEL"] = gapOn("Cancelled booking keeps the slot");
+    await advance(deps, change("understand").id);
+    const cancel = crit("CRIT-CANCEL");
+    // A later check words the same gap differently: still one warning.
+    models.qa["CRIT-CANCEL"] = gapOn("Cancelling does not free the slot");
+    await recheck(deps, project.id, "manual");
+    expect(record.listFindings({ projectId: project.id, status: "open" }).filter((f) => f.criterionId === cancel.id)).toHaveLength(1);
+    expect(record.latestCheck(cancel.id)?.state).toBe("gap");
+  });
+
+  it("QA adds no finding where the analyst already raised the failure path, and evidence found later closes it", async () => {
+    const { record, models, deps, change, crit, project } = setup();
+    const base = models.handlers["ba.understandApp"]!;
+    const baFinding = { title: "Cancel never frees the slot", plain: "Cancelling leaves the slot taken.", costIfIgnored: "Lost bookings.", fixPrompt: "Free the slot on cancel.", triggerType: "code", file: "src/booking.js", line: 2, quote: null };
+    models.handlers["ba.understandApp"] = (req) => ({ ...(base(req) as object), findings: [baFinding] });
+    models.qa["CRIT-CANCEL"] = { state: "gap", evidence: [{ file: "src/booking.js", line: 2 }], note: "Slot stays held.", title: "Cancelled booking keeps the slot", plain: "The slot is not freed.", costIfIgnored: "Lost bookings.", fixPrompt: "Free the slot." };
+    await advance(deps, change("understand").id);
+    const cancel = crit("CRIT-CANCEL");
+    const open = record.listFindings({ projectId: project.id, status: "open" }).filter((f) => f.kind === "failure_path");
+    expect(open.map((f) => [f.role, f.title])).toEqual([["ba", "Cancel never frees the slot"]]);
+    expect(record.latestCheck(cancel.id)?.state).toBe("gap");
+
+    delete models.qa["CRIT-CANCEL"];
+    await recheck(deps, project.id, "manual");
+    expect(record.listFindings({ projectId: project.id, status: "open" }).filter((f) => f.kind === "failure_path")).toHaveLength(0);
+  });
+
   it("acceptance waits without the artifact and clears with it; costs reach the record only through the ledger", async () => {
     const { record, models, deps, change } = setup();
     const c = change("understand");

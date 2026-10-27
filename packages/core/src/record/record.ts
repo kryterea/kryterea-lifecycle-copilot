@@ -517,6 +517,13 @@ export class CopilotRecord {
     }));
   }
 
+  linksFrom(from: LinkEnd): Array<{ rel: LinkRel; to: LinkEnd }> {
+    return this.all("SELECT * FROM links WHERE from_type = ? AND from_id = ? ORDER BY rowid", from.type, from.id).map((r) => ({
+      rel: r.rel as LinkRel,
+      to: { type: r.to_type as string, id: r.to_id as string },
+    }));
+  }
+
   /** Criteria are the change's own plus any it affects. Decisions are status changes made by people. */
   acceptanceRecord(changeId: string): AcceptanceRecord {
     const change = this.getChange(changeId);
