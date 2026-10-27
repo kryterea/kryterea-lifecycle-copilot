@@ -1,0 +1,44 @@
+{
+  "summary": "Customers should pay a 20 percent deposit when they book. This touches the booking form, the Paystack charge and the admin booking list.",
+  "criteria": [
+    {
+      "text": "On the booking page the customer sees the deposit amount, equal to 20 percent of the service price, before they pay.",
+      "isFailurePath": false
+    },
+    {
+      "text": "After a successful deposit the customer sees Booking confirmed and the admin page lists the booking as paid.",
+      "isFailurePath": false
+    },
+    {
+      "text": "If the card is declined, the customer sees a clear message and the time slot stays free for others.",
+      "isFailurePath": true
+    },
+    {
+      "text": "If the customer presses Pay twice, only one deposit is charged and only one booking is created.",
+      "isFailurePath": true
+    }
+  ],
+  "questions": [],
+  "findings": [
+    {
+      "title": "Booking shows as confirmed before the deposit is checked",
+      "plain": "The booking is saved as confirmed before the Paystack result is known, so a declined deposit still leaves a confirmed booking.",
+      "costIfIgnored": "Unpaid bookings block real customers from the slot.",
+      "fixPrompt": "Save the booking as pending, and confirm it only after the Paystack payment is verified on the server.",
+      "triggerType": "code",
+      "file": "src/server.ts",
+      "line": 42,
+      "quote": null
+    },
+    {
+      "title": "Deposit amount is not defined in the request",
+      "plain": "The request says customers pay a deposit but does not say how the amount is worked out.",
+      "costIfIgnored": "The coding agent will guess the amount and customers may be charged the wrong sum.",
+      "fixPrompt": "Compute the deposit as 20 percent of the service price on the server and show it to the customer before payment.",
+      "triggerType": "doc",
+      "file": null,
+      "line": null,
+      "quote": "pay a 20 percent deposit"
+    }
+  ]
+}

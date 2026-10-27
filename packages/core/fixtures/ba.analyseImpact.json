@@ -1,0 +1,26 @@
+{
+  "summary": "The deposit changes the booking flow, the stored payment data and what the admin page shows. The earlier confirmation and cancellation behaviour may change.",
+  "affected": ["C1", "C2"],
+  "criteria": [
+    {
+      "text": "When the owner cancels a paid booking, the admin page shows that the deposit needs to be refunded by hand.",
+      "isFailurePath": true
+    },
+    {
+      "text": "The admin booking list shows the deposit amount and the payment reference for each booking.",
+      "isFailurePath": false
+    }
+  ],
+  "findings": [
+    {
+      "title": "Cancelled bookings keep the deposit with no refund note",
+      "plain": "Cancelling a booking in the admin page removes it but says nothing about the deposit already paid.",
+      "costIfIgnored": "Customers lose their deposit when the salon cancels, and the owner has no record that a refund is owed.",
+      "fixPrompt": "When a paid booking is cancelled, store a refund-needed flag and show it on the admin page.",
+      "triggerType": "code",
+      "file": "src/admin.ts",
+      "line": 30,
+      "quote": null
+    }
+  ]
+}

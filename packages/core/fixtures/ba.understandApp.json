@@ -1,0 +1,48 @@
+{
+  "asBuilt": {
+    "flows": [
+      "A customer picks a stylist and a time slot, enters a name and phone number, and pays a deposit through Paystack to hold the booking.",
+      "After payment the customer sees a booking confirmation page and receives an SMS reminder.",
+      "The owner opens the admin page, signs in with a shared password and sees all bookings for the week."
+    ],
+    "dataCollected": [
+      "Customer name, phone number and email address, stored with each booking.",
+      "Paystack payment reference and amount for each deposit."
+    ],
+    "payments": [
+      "A fixed deposit is charged through Paystack when a booking is made. The remaining balance is paid in the salon.",
+      "Refunds are not handled in the app."
+    ],
+    "roles": [
+      "Customer: books and pays a deposit without creating an account.",
+      "Admin: one shared login for the owner and staff, who can see and cancel every booking."
+    ]
+  },
+  "questions": [
+    "Anyone with the booking link can see the customer's name and phone number. Is that meant?",
+    "A booking is confirmed on the page before the payment result is checked. Should a declined deposit release the slot?",
+    "The admin page uses one shared password. Do staff need separate logins?"
+  ],
+  "findings": [
+    {
+      "title": "Booking shows as confirmed before the deposit is checked",
+      "plain": "The customer sees Booking confirmed as soon as they return from Paystack, even if the payment was declined or abandoned.",
+      "costIfIgnored": "Slots are held for people who never paid, and real customers find the time already taken.",
+      "fixPrompt": "In the booking route, mark a booking as confirmed only after the Paystack payment is verified on the server. Release the slot if verification fails.",
+      "triggerType": "code",
+      "file": "src/server.ts",
+      "line": 42,
+      "quote": null
+    },
+    {
+      "title": "Admin page has one shared password with no lockout",
+      "plain": "Anyone who guesses the single admin password can see every customer's name and phone number and cancel bookings.",
+      "costIfIgnored": "Customer details can leak and bookings can be cancelled by a stranger.",
+      "fixPrompt": "Add a limit on failed admin sign-in attempts and give each staff member their own login.",
+      "triggerType": "code",
+      "file": "src/admin.ts",
+      "line": 12,
+      "quote": null
+    }
+  ]
+}
