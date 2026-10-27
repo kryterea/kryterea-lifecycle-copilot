@@ -1,0 +1,6 @@
+{
+  "requirements": [
+    { "document": "docs/PRD.md", "key": "PRD-1", "text": "A merchant creates a payment link with an amount and a description.", "quote": "create a payment link", "line": 1 }
+  ],
+  "gaps": []
+}
