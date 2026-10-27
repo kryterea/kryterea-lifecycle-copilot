@@ -92,7 +92,7 @@ Skills: superpowers:using-git-worktrees is not needed (fresh repo); use superpow
 - [x] **Step 4:** CI workflow on ubuntu-latest: install, `pnpm typecheck`, `pnpm test`.
 - [x] **Step 5:** One placeholder test in `packages/core/test/smoke.test.ts` asserting `1 + 1 === 2`. Run `pnpm test`. Expected: 1 passed.
 - [x] **Step 6:** Commit `chore: scaffold repo (hackathon build starts 2026-10-26)`.
-- [ ] **Step 7:** Ask the founder to approve creating the public GitHub repo (owner from HANDOFF.md). Only on a clear yes: `gh repo create <owner>/kryterea-lifecycle-copilot --public --source . --push`. Confirm CI is green.
+- [x] **Step 7:** Ask the founder to approve creating the public GitHub repo (owner from HANDOFF.md). Only on a clear yes: `gh repo create <owner>/kryterea-lifecycle-copilot --public --source . --push`. Confirm CI is green.
 
 ### Task 2: Meta model adapter and spend guard
 
