@@ -105,5 +105,5 @@ export async function reviewCompliance(ctx: RoleContext, asBuiltOrChange: unknow
     }
     findings.push(out);
   }
-  return { ...empty, findings };
+  return { ...empty, findings, shown: mat.shown };
 }

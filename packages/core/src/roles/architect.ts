@@ -67,5 +67,5 @@ export async function reviewOperations(ctx: RoleContext, asBuiltOrChange: unknow
   });
 
   const findings = checkTriggers(ctx.repo.dir, data.findings, seenDoc, { commit: ctx.repo.commit, shown: mat.shown, kind: "operations", fallbackQuote });
-  return { artifacts: [], criteria: [], findings, questions: [], affectedCriterionIds: [] };
+  return { artifacts: [], criteria: [], findings, questions: [], affectedCriterionIds: [], shown: mat.shown };
 }

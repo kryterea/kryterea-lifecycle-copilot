@@ -323,13 +323,15 @@ export function openFixChange(record: CopilotRecord, changeId: string): Change {
 }
 
 /**
- * A reported fix is confirmed when the reviewer who raised the finding looked again and did not raise it. A code
- * finding also needs its file among the reviewed ones. Findings tied to a criterion are left to QA's evidence.
+ * A reported fix is confirmed only when the reviewer who raised the finding completed a review that showed it the
+ * finding's file, through the finding's line, and did not raise it again. Findings with no code location, and
+ * findings tied to a criterion (QA's evidence settles those), are left to a person or to QA.
  */
-function confirmReportedFixes(record: CopilotRecord, projectId: string, commit: string, reviewed: string[] | undefined): void {
+function confirmReportedFixes(record: CopilotRecord, projectId: string, commit: string, shown: Partial<Record<RoleId, Map<string, number>>>): void {
   for (const f of record.listFindings({ projectId, status: "open" })) {
-    if (f.criterionId || (f.role !== "compliance" && f.role !== "architect")) continue;
-    if (reviewed && f.trigger.type === "code" && !reviewed.includes(f.trigger.file)) continue;
+    if (f.criterionId || f.trigger.type !== "code") continue;
+    const lastLine = shown[f.role]?.get(f.trigger.file);
+    if (lastLine === undefined || lastLine < f.trigger.line) continue;
     const report = record.pendingFixReport(f.id);
     if (report) record.setFindingStatus(f.id, "fixed", `Not raised again on re-check at ${commit.slice(0, 7)}. Reported fix: ${report.summary}`, f.role);
   }
@@ -387,9 +389,19 @@ export async function recheck(
     if (!diff || diff.changed.length) {
       const asBuilt = asBuiltFor(record, newest, true);
       const only = diff?.changed;
-      await runRole(s, newest, "compliance", async (ctx) => save(ctx, "compliance", "operate", await reviewCompliance(ctx, asBuilt, only)));
-      await runRole(s, newest, "architect", async (ctx) => save(ctx, "architect", "operate", await reviewOperations(ctx, asBuilt, only)));
-      confirmReportedFixes(record, projectId, repo.commit, only);
+      // What each review was shown, kept only once its run completes (runRole throws on a failed run).
+      const shown: Partial<Record<RoleId, Map<string, number>>> = {};
+      await runRole(s, newest, "compliance", async (ctx) => {
+        const r = await reviewCompliance(ctx, asBuilt, only);
+        save(ctx, "compliance", "operate", r);
+        shown.compliance = r.shown;
+      });
+      await runRole(s, newest, "architect", async (ctx) => {
+        const r = await reviewOperations(ctx, asBuilt, only);
+        save(ctx, "architect", "operate", r);
+        shown.architect = r.shown;
+      });
+      confirmReportedFixes(record, projectId, repo.commit, shown);
     }
     if (toVerify.length) await verify(s, newest, "operate", toVerify);
     for (const c of changes) {

@@ -32,6 +32,8 @@ export interface RoleResult {
   findings: RoleFinding[];
   questions: string[];
   affectedCriterionIds: string[];
+  /** Reviews only: each file the model was shown, with the last line it saw. Confirms reported fixes. */
+  shown?: Map<string, number>;
 }
 
 /** Shared by every role. The banned words appear here only, as an instruction to the model. */

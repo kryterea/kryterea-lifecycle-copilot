@@ -523,7 +523,8 @@ describe("workflow", () => {
 
   it("a reported fix keeps the finding open until a re-check does not raise it again", async () => {
     const { record, models, deps, change, project, origin } = setup();
-    models.handlers["compliance.reviewCompliance"] = () => ({ findings: [legalFinding] });
+    const codeFinding = { ...legalFinding, triggerType: "code", file: "src/privacy.js", line: 1, quote: null };
+    models.handlers["compliance.reviewCompliance"] = () => ({ findings: [codeFinding] });
     const c = change("understand");
     await advance(deps, c.id);
     expect((await advance(deps, c.id)).held).toEqual(["compliance"]);
@@ -547,6 +548,22 @@ describe("workflow", () => {
     expect(record.findingStatus(finding!.id)).toBe("fixed");
     expect(record.findingHistory(finding!.id).at(-1)).toMatchObject({ actor: "compliance" });
     expect(record.getChange(c.id).stage).toBe("acceptance");
+  });
+
+  it("a reported fix on a finding with no code location waits for a person", async () => {
+    const { record, models, deps, change, project, origin } = setup();
+    models.handlers["compliance.reviewCompliance"] = () => ({ findings: [legalFinding] });
+    const c = change("understand");
+    await advance(deps, c.id);
+    await advance(deps, c.id);
+    const [finding] = record.listFindings({ changeId: c.id });
+    record.addArtifact({ changeId: c.id, role: "compliance", stage: "release", kind: "fix_report", body: { findingId: finding!.id, summary: "Asked consent" } });
+    models.handlers["compliance.reviewCompliance"] = () => ({ findings: [] });
+    origin.put("src/privacy.js", "export const consent = true;\n");
+    origin.commit("ask consent");
+    await recheck(deps, project.id, "push");
+    expect(record.findingStatus(finding!.id)).toBe("open");
+    expect(record.pendingFixReport(finding!.id)?.summary).toBe("Asked consent");
   });
 
   it("questions asked after the answers are open again and hold the BA gate", async () => {

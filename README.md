@@ -27,7 +27,7 @@ Every path has an end:
 |---|---|
 | The analyst has questions | You answer them in the panel; a later round of questions opens again |
 | A finding is raised | Fixed (confirmed by a re-check), accepted as a risk with a reason, or deferred with a reason. Deferring a legal finding keeps release held |
-| The coding agent says it fixed something | The finding stays open until a re-check no longer raises it |
+| The coding agent says it fixed something | The finding stays open until a completed re-check reads the flagged code and no longer raises it. A finding with no code location waits for a person to decide |
 | No acceptance criteria were written | The change goes back to the analyst |
 | The work will not ship | Withdraw it with a reason; it stops and the record says why |
 | Something breaks after delivery | Open a fix change from the delivered one; it carries the findings through the gates again, and both records link to each other |
