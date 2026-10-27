@@ -25,7 +25,13 @@ function makeLedger(start = 0): SpendLedger & { input: number; output: number } 
   return l;
 }
 
-type Reply = { status?: number; content?: string | null; usage?: Record<string, unknown> };
+type Reply = {
+  status?: number;
+  content?: string | null;
+  usage?: Record<string, unknown> | null; // null = no usage field at all
+  finish?: string;
+  retryAfter?: string;
+};
 
 function fakeFetch(replies: Reply[]) {
   const bodies: Record<string, any>[] = [];
@@ -33,11 +39,21 @@ function fakeFetch(replies: Reply[]) {
     bodies.push(JSON.parse(init.body as string));
     const r = replies[bodies.length - 1] ?? replies[replies.length - 1]!;
     const status = r.status ?? 200;
-    if (status !== 200) return new Response("nope", { status });
+    if (status !== 200) {
+      const headers: Record<string, string> = r.retryAfter ? { "retry-after": r.retryAfter } : {};
+      return new Response("nope body", { status, headers });
+    }
     return new Response(
       JSON.stringify({
-        choices: [{ message: { content: r.content === undefined ? '{"ok":true}' : r.content } }],
-        usage: r.usage ?? { prompt_tokens: 10, completion_tokens: 10 },
+        choices: [
+          {
+            message: { content: r.content === undefined ? '{"ok":true}' : r.content },
+            finish_reason: r.finish ?? "stop",
+          },
+        ],
+        ...(r.usage === null
+          ? {}
+          : { usage: r.usage ?? { prompt_tokens: 10, completion_tokens: 10 } }),
       }),
       { status: 200 },
     );
@@ -50,6 +66,7 @@ const req: ModelRequest = { name: "t.t", system: "s", user: "u", schema, maxOutp
 
 function build(replies: Reply[], ledger = makeLedger(), budgetUsd = 70) {
   const f = fakeFetch(replies);
+  const sleeps: number[] = [];
   const model = createModel({
     baseUrl: "https://example.test/v1",
     apiKey: "k",
@@ -59,8 +76,11 @@ function build(replies: Reply[], ledger = makeLedger(), budgetUsd = 70) {
     budgetUsd,
     ledger,
     fetchImpl: f.fetchImpl,
+    sleep: async (ms) => {
+      sleeps.push(ms);
+    },
   });
-  return { model, ledger, ...f };
+  return { model, ledger, sleeps, ...f };
 }
 
 describe("createModel", () => {
@@ -145,6 +165,64 @@ describe("createModel", () => {
       image_url: { url: "data:image/png;base64,AA" },
     });
   });
+
+  it("transient and empty retries are independent: 503, empty, ok", async () => {
+    const { model, bodies } = build([{ status: 503 }, { content: null }, {}]);
+    const res = await model<{ ok: boolean }>(req);
+    expect(res.data.ok).toBe(true);
+    expect(bodies.map((b) => b.max_completion_tokens)).toEqual([4000, 4000, 8000]);
+  });
+
+  it("two 503s throw after 2 calls", async () => {
+    const { model, bodies } = build([{ status: 503 }, { status: 503 }]);
+    await expect(model(req)).rejects.toThrow(/503/);
+    expect(bodies.length).toBe(2);
+  });
+
+  it("retries once on 429 after waiting 1000 ms", async () => {
+    const { model, bodies, sleeps } = build([{ status: 429 }, {}]);
+    await model(req);
+    expect(bodies.length).toBe(2);
+    expect(sleeps).toEqual([1000]);
+  });
+
+  it("honours retry-after seconds before the transient retry", async () => {
+    const { model, sleeps } = build([{ status: 429, retryAfter: "3" }, {}]);
+    await model(req);
+    expect(sleeps).toEqual([3000]);
+  });
+
+  it("finish_reason length retries once at the doubled cap", async () => {
+    const { model, bodies } = build([{ content: '{"ok":tr', finish: "length" }, {}]);
+    const res = await model<{ ok: boolean }>(req);
+    expect(res.data.ok).toBe(true);
+    expect(bodies.map((b) => b.max_completion_tokens)).toEqual([4000, 8000]);
+  });
+
+  it("a response with no usage charges the pre-checked worst case", async () => {
+    const { model, ledger } = build([{ usage: null }]);
+    const res = await model(req);
+    const worst = (1 * 1.25 + 4000 * 4.25) / 1_000_000; // "s" + "u" is 1 estimated input token
+    expect(ledger.spentUsd()).toBeCloseTo(worst, 12);
+    expect(res.costUsd).toBeCloseTo(worst, 12);
+  });
+
+  it("accepts union types such as string or null", async () => {
+    const union = {
+      type: "object",
+      required: ["note"],
+      properties: { note: { type: ["string", "null"] } },
+    };
+    const a = build([{ content: '{"note":null}' }]);
+    await expect(a.model({ ...req, schema: union })).resolves.toBeTruthy();
+    const b = build([{ content: '{"note":3}' }]);
+    await expect(b.model({ ...req, schema: union })).rejects.toThrow(/schema/);
+  });
+
+  it("non-retryable 4xx includes the response body", async () => {
+    const { model } = build([{ status: 400 }]);
+    await expect(model(req)).rejects.toThrow(/400 nope body/);
+  });
 });
 
 describe("createFakeModel", () => {
@@ -155,5 +233,7 @@ describe("createFakeModel", () => {
     const res = await model<{ ok: boolean }>(req);
     expect(res).toEqual({ data: { ok: true }, usage: { input: 0, output: 0 }, costUsd: 0 });
     await expect(model({ ...req, name: "x.missing" })).rejects.toThrow(/x\.missing\.json/);
+    writeFileSync(join(dir, "bad.json"), "{nope");
+    await expect(model({ ...req, name: "bad" })).rejects.toThrow(/bad\.json/);
   });
 });

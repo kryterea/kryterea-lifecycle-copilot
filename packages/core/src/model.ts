@@ -18,22 +18,24 @@ export interface CreateModelOptions {
   budgetUsd: number;
   ledger: SpendLedger;
   fetchImpl?: typeof fetch;
+  /** Delay before the transient retry. Injectable so tests do not wait. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
-// ponytail: hand-written subset of JSON Schema (type, required, properties, items, enum). Add keywords when a role schema needs them.
+// ponytail: hand-written subset of JSON Schema (type incl. unions, required, properties, items, enum). Add keywords when a role schema needs them.
 function validate(value: unknown, schema: JsonSchema, path: string): string | null {
-  const type = schema.type as string | undefined;
+  const rawType = schema.type as string | string[] | undefined;
+  const types = rawType === undefined ? undefined : Array.isArray(rawType) ? rawType : [rawType];
   const isObj = typeof value === "object" && value !== null && !Array.isArray(value);
-  const ok =
-    type === undefined ||
-    (type === "object" && isObj) ||
-    (type === "array" && Array.isArray(value)) ||
-    (type === "string" && typeof value === "string") ||
-    (type === "number" && typeof value === "number") ||
-    (type === "integer" && Number.isInteger(value)) ||
-    (type === "boolean" && typeof value === "boolean") ||
-    (type === "null" && value === null);
-  if (!ok) return `${path} should be ${type}`;
+  const matches = (t: string) =>
+    (t === "object" && isObj) ||
+    (t === "array" && Array.isArray(value)) ||
+    (t === "string" && typeof value === "string") ||
+    (t === "number" && typeof value === "number") ||
+    (t === "integer" && Number.isInteger(value)) ||
+    (t === "boolean" && typeof value === "boolean") ||
+    (t === "null" && value === null);
+  if (types && !types.some(matches)) return `${path} should be ${types.join(" or ")}`;
   const en = schema.enum as unknown[] | undefined;
   if (en && !en.includes(value)) return `${path} is not one of the allowed values`;
   if (isObj) {
@@ -60,6 +62,7 @@ function validate(value: unknown, schema: JsonSchema, path: string): string | nu
 
 export function createModel(opts: CreateModelOptions): Model {
   const doFetch = opts.fetchImpl ?? fetch;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const cost = (i: number, o: number) =>
     (i * opts.priceInPerM) / 1_000_000 + (o * opts.priceOutPerM) / 1_000_000;
 
@@ -71,9 +74,11 @@ export function createModel(opts: CreateModelOptions): Model {
     let input = 0;
     let output = 0;
     let costUsd = 0;
-    let lastFailure = "";
+    // One transient retry and one empty/truncated retry, independent: at most 3 sends.
+    let transientRetried = false;
+    let emptyRetried = false;
 
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (;;) {
       const worst = cost(estInput, cap);
       if (opts.ledger.spentUsd() + worst > opts.budgetUsd) {
         throw new BudgetExceededError(
@@ -104,27 +109,41 @@ export function createModel(opts: CreateModelOptions): Model {
         }),
       });
       if (res.status === 429 || res.status >= 500) {
-        lastFailure = `HTTP ${res.status}`;
+        if (transientRetried) {
+          throw new Error(`Model call ${req.name} failed after retry: HTTP ${res.status}`);
+        }
+        transientRetried = true;
+        const header = res.headers.get("retry-after");
+        const seconds = header === null ? Number.NaN : Number(header);
+        await sleep(Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : 1000);
         continue;
       }
-      if (!res.ok) throw new Error(`Model call ${req.name} failed: HTTP ${res.status}`);
+      if (!res.ok) {
+        const text = (await res.text().catch(() => "")).slice(0, 300);
+        throw new Error(`Model call ${req.name} failed: HTTP ${res.status} ${text}`);
+      }
 
       const body = (await res.json()) as {
-        choices?: { message?: { content?: string | null } }[];
+        choices?: { message?: { content?: string | null }; finish_reason?: string | null }[];
         usage?: { prompt_tokens?: number; completion_tokens?: number };
       };
       // completion_tokens already includes reasoning tokens (billed as output).
-      const i = body.usage?.prompt_tokens ?? 0;
-      const o = body.usage?.completion_tokens ?? 0;
-      const c = cost(i, o);
+      // No usage reported: charge the pre-checked worst case rather than nothing.
+      const i = body.usage ? (body.usage.prompt_tokens ?? 0) : estInput;
+      const o = body.usage ? (body.usage.completion_tokens ?? 0) : cap;
+      const c = body.usage ? cost(i, o) : worst;
       opts.ledger.add(c, i, o);
       input += i;
       output += o;
       costUsd += c;
 
-      const text = body.choices?.[0]?.message?.content;
-      if (text === null || text === undefined || text === "") {
-        lastFailure = "empty content";
+      const choice = body.choices?.[0];
+      const text = choice?.message?.content;
+      if (text === null || text === undefined || text === "" || choice?.finish_reason === "length") {
+        if (emptyRetried) {
+          throw new Error(`Model call ${req.name} returned empty or truncated output after retry`);
+        }
+        emptyRetried = true;
         cap *= 2;
         continue;
       }
@@ -138,7 +157,6 @@ export function createModel(opts: CreateModelOptions): Model {
       if (err) throw new Error(`Model call ${req.name} output does not match the schema: ${err}`);
       return { data: data as T, usage: { input, output }, costUsd };
     }
-    throw new Error(`Model call ${req.name} failed after retry: ${lastFailure}`);
   };
 }
 
@@ -151,6 +169,12 @@ export function createFakeModel(fixturesDir: string): Model {
     } catch {
       throw new Error(`Missing fixture ${req.name}.json (looked in ${fixturesDir})`);
     }
-    return { data: JSON.parse(text) as T, usage: { input: 0, output: 0 }, costUsd: 0 };
+    let data: T;
+    try {
+      data = JSON.parse(text) as T;
+    } catch {
+      throw new Error(`Fixture ${req.name}.json is not valid JSON`);
+    }
+    return { data, usage: { input: 0, output: 0 }, costUsd: 0 };
   };
 }
