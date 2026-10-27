@@ -3,6 +3,7 @@ import {
   checkTriggers,
   contextBlock,
   defang,
+  renderDocText,
   repoMaterial,
   systemPrompt,
   type RawFinding,
@@ -32,25 +33,6 @@ const soften = (t: string): string => t.replace(/breach/gi, (m) => (m[0] === "B"
 
 interface RawLegalFinding extends RawFinding {
   citationId: string;
-}
-
-/** The as_built body as plain lines (one fact per line, so the model can quote a line), then the change description. */
-function renderDocText(asBuilt: unknown, description: string): string {
-  const lines: string[] = [];
-  const b = (asBuilt && typeof asBuilt === "object" ? asBuilt : {}) as Record<string, unknown>;
-  const labels: Array<[string, string]> = [
-    ["flows", "Flow"],
-    ["dataCollected", "Data collected"],
-    ["payments", "Payment"],
-    ["roles", "Role"],
-  ];
-  for (const [key, label] of labels) {
-    const v = b[key];
-    if (Array.isArray(v)) for (const item of v) lines.push(`${label}: ${String(item)}`);
-  }
-  if (typeof asBuilt === "string" && asBuilt.trim()) lines.push(asBuilt.trim());
-  lines.push(description);
-  return lines.join("\n");
 }
 
 export function complianceGate(openLegalFindings: number): { state: GateState; reason: string } {

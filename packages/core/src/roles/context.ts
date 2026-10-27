@@ -81,12 +81,14 @@ export interface RepoMaterial {
 export async function repoMaterial(
   dir: string,
   query: string,
-  opts: { maxFiles: number; maxChars: number; onlyFiles?: string[] },
+  opts: { maxFiles: number; maxChars: number; onlyFiles?: string[]; allowDotDirs?: string[] },
 ): Promise<RepoMaterial> {
   // Tool caches and graphs (".cache", ".graph") are noise that can eat the whole budget.
+  // A role can opt a dot-directory back in (the architect needs ".github" for CI and deploy workflows).
   const only = opts.onlyFiles ? new Set(opts.onlyFiles) : null;
+  const allowed = new Set(opts.allowDotDirs ?? []);
   const files = (await listSourceFiles(dir))
-    .filter((f) => !f.split("/").slice(0, -1).some((seg) => seg.startsWith(".")))
+    .filter((f) => !f.split("/").slice(0, -1).some((seg) => seg.startsWith(".") && !allowed.has(seg)))
     .filter((f) => !only || only.has(f));
   const list = defang(files.join("\n"));
   let out = `<<<BEGIN REPO FILES>>>\nFiles (${files.length}):\n${list.slice(0, LIST_CHARS)}${list.length > LIST_CHARS ? "\n[list truncated]" : ""}`;
@@ -116,6 +118,25 @@ export async function repoMaterial(
     }
   }
   return { text: `${out}\n<<<END REPO FILES>>>`, shown };
+}
+
+/** The as_built body as plain lines (one fact per line, so the model can quote a line), then the change description. */
+export function renderDocText(asBuilt: unknown, description: string): string {
+  const lines: string[] = [];
+  const b = (asBuilt && typeof asBuilt === "object" ? asBuilt : {}) as Record<string, unknown>;
+  const labels: Array<[string, string]> = [
+    ["flows", "Flow"],
+    ["dataCollected", "Data collected"],
+    ["payments", "Payment"],
+    ["roles", "Role"],
+  ];
+  for (const [key, label] of labels) {
+    const v = b[key];
+    if (Array.isArray(v)) for (const item of v) lines.push(`${label}: ${String(item)}`);
+  }
+  if (typeof asBuilt === "string" && asBuilt.trim()) lines.push(asBuilt.trim());
+  lines.push(description);
+  return lines.join("\n");
 }
 
 /** A finding as the model returns it (flat trigger fields; optional ones are null). */

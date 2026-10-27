@@ -1,0 +1,84 @@
+{
+  "findings": [
+    {
+      "costIfIgnored": "A dead disk, a bad deploy or a deleted file wipes every customer, booking and deposit record, and the owner cannot say who has paid.",
+      "file": "server.js",
+      "fixPrompt": "Add a nightly backup of salon.db to storage off the server (for example a copy to a cloud bucket), keep the last 14 copies, and add a short README section that says how to restore and has been tried once.",
+      "line": 23,
+      "plain": "All customers, bookings and payment references live in one file, salon.db, on the same machine as the app. Nothing in the project copies it anywhere else.",
+      "quote": null,
+      "title": "Booking data has no backup",
+      "triggerType": "code"
+    },
+    {
+      "costIfIgnored": "Someone can guess customer passwords all night, and a single script can make the app slow for everyone while it does.",
+      "file": "server.js",
+      "fixPrompt": "Add a limit on POST /api/login and POST /api/register (for example 10 tries per address per 15 minutes, using the express-rate-limit package), return a clear 'Too many attempts, try again later' message, and add a test for it.",
+      "line": 129,
+      "plain": "Anyone can try to sign in as fast as they like. There is no limit per address or per account.",
+      "quote": null,
+      "title": "Nothing slows repeated sign-in attempts",
+      "triggerType": "code"
+    },
+    {
+      "costIfIgnored": "A bored visitor or a script can book every slot for weeks and the salon loses real customers without anyone being told why.",
+      "file": "server.js",
+      "fixPrompt": "Make a booking that is still pending after 15 minutes release its slot (a scheduled clean-up or a check in the slots query), limit each account to 3 pending bookings, and add tests for both.",
+      "line": 164,
+      "plain": "A new booking holds its time slot as soon as it is created, before any deposit is paid, and nothing ever releases it. Each slot can only be held once.",
+      "quote": null,
+      "title": "Unpaid bookings hold slots forever",
+      "triggerType": "code"
+    },
+    {
+      "costIfIgnored": "A crash at night goes unnoticed until a customer phones the owner. The owner then has nothing to look at to find out when it broke or why.",
+      "file": "server.js",
+      "fixPrompt": "Add a GET /health route that checks the database answers, add one central error handler that logs the route, the time and the error, and send those logs and a simple uptime check to a service that emails the owner when the app is down.",
+      "line": 242,
+      "plain": "The app writes one line to the console when it starts and nothing else. There is no health check, no error report and no alert if it stops.",
+      "quote": null,
+      "title": "The owner would not know the app is down",
+      "triggerType": "code"
+    },
+    {
+      "costIfIgnored": "The owner loses hours matching bank alerts to bookings by hand, and a customer who paid can be told their booking is not confirmed.",
+      "file": "server.js",
+      "fixPrompt": "Add a payments log table that records every verify attempt (booking id, reference, result, time), add a Paystack webhook that confirms the booking if the customer's browser never calls verify, and show unmatched payments on the admin page.",
+      "line": 209,
+      "plain": "If Paystack cannot be reached when the customer's browser asks to confirm a deposit, the booking stays pending and the customer is told to try again. Nothing records the attempt, and nothing confirms the booking later by itself.",
+      "quote": null,
+      "title": "A customer who paid may not get a confirmed booking, and the owner cannot check",
+      "triggerType": "code"
+    },
+    {
+      "costIfIgnored": "Every restart or update signs all customers out in the middle of booking, and memory use grows with each visitor until the app stops.",
+      "file": "server.js",
+      "fixPrompt": "Keep sessions in the database instead of memory (for example connect-sqlite3 or a session table), set the cookie to secure and httpOnly, and add a test that a session survives a restart.",
+      "line": 15,
+      "plain": "Sign-in sessions are kept in the app's own memory, which the app clears on every restart and which grows with the number of visitors.",
+      "quote": null,
+      "title": "Sessions are lost on restart and grow with visitors",
+      "triggerType": "code"
+    },
+    {
+      "costIfIgnored": "With ten times the customers, a rush of sign-ins at the same moment makes every page wait, including people who are already paying.",
+      "file": "server.js",
+      "fixPrompt": "Replace bcrypt.hashSync and bcrypt.compareSync in the register and login routes with the async versions (bcrypt.hash and bcrypt.compare) and add a test that two sign-ins at once both complete.",
+      "line": 132,
+      "plain": "Checking a password takes a fraction of a second during which the whole app stands still and serves nobody else. Today that is invisible. With many sign-ins at once, everyone queues behind each other.",
+      "quote": null,
+      "title": "Many sign-ins at once would freeze the app",
+      "triggerType": "code"
+    },
+    {
+      "costIfIgnored": "A mistyped or missing payment key in production quietly turns the shop into one that confirms bookings without taking any money, and nobody sees it.",
+      "file": "server.js",
+      "fixPrompt": "Make the app refuse to start when NODE_ENV is production and the Paystack keys or SESSION_SECRET are missing, keep the no-payment demo mode only when NODE_ENV is not production, and stop printing the seeded admin password to the console.",
+      "line": 191,
+      "plain": "When the Paystack secret key is missing, the app confirms bookings without any payment and says nothing to the owner. The admin account is also seeded with a default password that is printed to the console on first start.",
+      "quote": null,
+      "title": "A missing payment key confirms bookings for free",
+      "triggerType": "code"
+    }
+  ]
+}
