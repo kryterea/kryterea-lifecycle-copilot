@@ -407,12 +407,17 @@ export class CopilotRecord {
     return Number(this.one("SELECT COALESCE(SUM(cost_usd), 0) AS total FROM runs")?.total ?? 0);
   }
 
-  /** Commit of the newest finished run in the project. A stopped or failed run did not cover the diff. */
-  lastRunCommit(projectId: string): string | null {
+  /**
+   * Commit of the newest finished run in the project, of one role when given. A stopped or failed run
+   * did not cover the diff.
+   */
+  lastRunCommit(projectId: string, role?: RoleId): string | null {
     const r = this.one(
       `SELECT r.commit_sha FROM runs r JOIN changes c ON c.id = r.change_id
-       WHERE c.project_id = ? AND r.status = 'done' ORDER BY r.rowid DESC LIMIT 1`,
+       WHERE c.project_id = ? AND r.status = 'done' AND (? IS NULL OR r.role = ?) ORDER BY r.rowid DESC LIMIT 1`,
       projectId,
+      role ?? null,
+      role ?? null,
     );
     return r ? (r.commit_sha as string) : null;
   }

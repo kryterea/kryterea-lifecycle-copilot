@@ -64,6 +64,17 @@ describe("runs, gates, links, acceptance", () => {
     expect(record.lastRunCommit(other.id)).toBeNull();
   });
 
+  it("lastRunCommit can filter by role, so a later run of another role does not move the baseline", () => {
+    const { record, project, change } = setup();
+    const q = record.startRun({ changeId: change.id, role: "qa", commit: "q1" });
+    record.finishRun(q, "done");
+    const b = record.startRun({ changeId: change.id, role: "ba", commit: "b2" });
+    record.finishRun(b, "done");
+    expect(record.lastRunCommit(project.id)).toBe("b2");
+    expect(record.lastRunCommit(project.id, "qa")).toBe("q1");
+    expect(record.lastRunCommit(project.id, "po")).toBeNull();
+  });
+
   it("latest gate state wins", () => {
     const { record, change } = setup();
     expect(record.gates(change.id)).toEqual({});
