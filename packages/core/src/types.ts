@@ -86,3 +86,34 @@ export interface Criterion {
   isFailurePath: boolean;
   createdAt: string;
 }
+
+export type FindingKind = "legal" | "failure_path" | "operations" | "conformance";
+
+export type FindingStatus = "open" | "fixed" | "accepted_risk" | "deferred";
+
+export type Trigger =
+  | { type: "code"; file: string; line: number; commit: string }
+  | { type: "doc"; quote: string }
+  | { type: "screen"; url: string; screenshotPath: string };
+
+export interface FindingInput {
+  projectId: string;
+  changeId: string;
+  runId: string;
+  role: RoleId;
+  stage: StageId;
+  kind: FindingKind;
+  title: string;
+  plain: string;
+  costIfIgnored: string;
+  fixPrompt: string;
+  trigger: Trigger;
+  citationId?: string;
+  criterionId?: string;
+}
+
+export type Finding = FindingInput & {
+  id: string;
+  fingerprint: string;
+  createdAt: string;
+};

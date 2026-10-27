@@ -39,4 +39,58 @@ CREATE TABLE IF NOT EXISTS criteria (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS criteria_project ON criteria(project_id);
+
+CREATE TABLE IF NOT EXISTS findings (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id),
+  change_id TEXT NOT NULL REFERENCES changes(id),
+  run_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('legal','failure_path','operations','conformance')),
+  title TEXT NOT NULL,
+  plain TEXT NOT NULL,
+  cost_if_ignored TEXT NOT NULL,
+  fix_prompt TEXT NOT NULL,
+  trigger TEXT NOT NULL,
+  citation_id TEXT,
+  criterion_id TEXT,
+  fingerprint TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS findings_project ON findings(project_id);
+
+CREATE TRIGGER IF NOT EXISTS findings_immutable_update BEFORE UPDATE ON findings
+BEGIN SELECT RAISE(ABORT, 'findings are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS findings_immutable_delete BEFORE DELETE ON findings
+BEGIN SELECT RAISE(ABORT, 'findings are immutable'); END;
+
+CREATE TABLE IF NOT EXISTS finding_evidence (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  finding_id TEXT NOT NULL REFERENCES findings(id),
+  run_id TEXT NOT NULL,
+  trigger TEXT NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS finding_evidence_finding ON finding_evidence(finding_id);
+
+CREATE TABLE IF NOT EXISTS finding_status_events (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  finding_id TEXT NOT NULL REFERENCES findings(id),
+  status TEXT NOT NULL CHECK (status IN ('open','fixed','accepted_risk','deferred')),
+  reason TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS finding_status_finding ON finding_status_events(finding_id);
+
+CREATE TABLE IF NOT EXISTS links (
+  from_type TEXT NOT NULL,
+  from_id TEXT NOT NULL,
+  rel TEXT NOT NULL CHECK (rel IN ('affects','satisfies','raised_on')),
+  to_type TEXT NOT NULL,
+  to_id TEXT NOT NULL,
+  PRIMARY KEY (from_type, from_id, rel, to_type, to_id)
+);
+CREATE INDEX IF NOT EXISTS links_to ON links(to_type, to_id);
 `;
