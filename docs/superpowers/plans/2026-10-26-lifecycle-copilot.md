@@ -24,6 +24,7 @@
 - Every `ModelRequest.name` is `<role>.<function>` (for example `qa.verifyCriteria`), and each role task adds a fixture `packages/core/fixtures/<name>.json` for it.
 - Real-model checkpoint (from the day-1 pre-mortem): Tasks 8, 9, 10 and 11 each end with one real Muse Spark call of the new role on the demo repo (`COPILOT_FAKE_MODEL` unset), output read by the controller and saved as that role's fixture if it is sound. Budget about $1 per checkpoint. A prompt that fails on the real model is fixed in the same task, not on 11-02.
 - Slow model, live panel: Muse Spark takes 2 to 8 seconds even for trivial calls. Role functions that make several independent calls (QA per criterion) run them 3 at a time. Long HTTP actions return a run id at once and the panel polls (Task 14).
+- Pre-flight amendments at the end of this plan override the task text they name.
 - Windows dev machine: avoid native npm modules (that is why `node:sqlite`, not better-sqlite3). Run CI on Linux (GitHub Actions) as the source of truth for typecheck and tests.
 
 ## Review Focus
@@ -406,3 +407,60 @@ Skills: business-analysis-os:technical-writer then business-analysis-os:natural-
 - [ ] **Step 5:** Founder records the 3-minute video from the script (screen capture of the panel, the coding agent and the demo app). Upload as unlisted YouTube or Loom; check it plays logged out.
 - [ ] **Step 6:** Founder submits at https://cerebralvalley.ai/e/meta-ai-developer-hackathon/hackathon/submit by midday ET on 2026-11-04: Startup track, public repo URL, video link, every team member added, the prior-work call-out inside the Project Description (the form has no field for it): a hackathon spin-off of Kryterea built from scratch because the existing platform cannot be entered, new work starting at the first commit `dc447bb`. The only bonus field is the X post link for most viral. Claude prepares the text for each form field in `docs/hackathon/submission.md`; the founder submits.
 - [ ] **Step 7:** After submitting: founder shares the project gallery link for the community vote and, if chosen, posts on X and adds the post link to the form.
+
+---
+
+## Pre-flight amendments (2026-10-27)
+
+A conflict scan of Tasks 2 to 19 against the spec and the day-1 API facts found the problems below. Each line is the ruling; it overrides the task text it names. Every line is tagged with the tasks it binds, so each task brief carries its own lines.
+
+### Record and runs
+
+- **[T3]** `CopilotRecord` gains `close(): void` (the reopen test needs it) and `listProjects(): Project[]`.
+- **[T4]** `findingEvidence(findingId): Array<{runId, trigger, at}>` reads the evidence rows; the duplicate test asserts one new row. Replace the "no update path" test: read `record.ts` source and assert no `/UPDATE\s+findings\b/i`, and assert a re-raised finding keeps its original title, plain text and trigger.
+- **[T4][T5][T14]** Findings for a change are selected through `raised_on` links to that change (any status), not `Finding.changeId`, so a finding raised again on a later change shows on both. T13 writes the `raised_on` link for duplicates too.
+- **[T5]** `finishRun(runId, status: RunStatus): void` only sets status; costs come from `addRunCost` alone. `ledgerFor(record, runId).spentUsd()` returns `record.spentUsd()` (all runs), so the budget guard sees total spend.
+- **[T5]** Add `lastRunCommit(projectId): string | null`. `gates(changeId)` returns `Partial<Record<RoleId, {state, reason, at}>>`, the same shape as `AcceptanceRecord.gates`.
+- **[T5][T13]** `affects` links run `link({type:'change'}, 'affects', {type:'criterion'})`. Drop `verifies` from the rel enum.
+
+### Repo reader
+
+- **[T6]** Full clone, no `--depth`: `changedFiles(from, to)` needs old commits. `changedFiles` uses `git diff --name-status --no-renames`, so a renamed file's old path is listed as deleted; add a rename case to the test.
+- **[T6]** `readLines` and `verifyCodeTrigger` return null or false for absolute paths and for paths that resolve outside `dir`; test `../` traversal.
+- **[T6]** A private-repo token is passed per command with `-c http.extraHeader=Authorization: Bearer <token>`, never in the URL, git config or logs.
+
+### Packs
+
+- **[T7][T9][T16]** `LegalDuty.law` is `'NDPA 2023' | 'PCI DSS'`. The pack may hold a few PCI DSS entries (card handling), each citing its requirement number; the panel labels them "Standard", not "Law". Founder review covers both.
+
+### Demo app before the roles
+
+- **[T7b]** New Task 7b, run before Task 8: build the demo app locally (Task 18 Step 1's prompts and rules) in a sibling folder `../demo-salon-bookings` with OpenCode on Muse Spark, `git init` locally. Creating its public GitHub repo waits for the founder's approval (HANDOFF section 9). Tasks 8 to 11's real-model checkpoints run on this local copy.
+- **[T8][T9][T10][T11]** Each of these tasks ends with "Step 6: real-model checkpoint" as described in Global Constraints.
+
+### Roles
+
+- **[T8][T9][T10][T11][T12]** Output caps (reasoning headroom, Task 2): `ba.understandApp` 16000; `ba.analyseChange`, `ba.analyseImpact`, `compliance.reviewCompliance`, `architect.reviewOperations` 8000; `qa.verifyCriteria` 6000 per criterion; `po.acceptanceSummary` 4000. Length limits are enforced in the prompt or by trimming, never by the cap. Reasoning effort: `low` for QA per criterion and PO, `medium` for the rest.
+- **[T8][T9][T10][T11][T12]** Strict JSON schemas list every property in `required`; optional fields are typed `["string","null"]` and mapped from null to undefined in role code.
+- **[T8]** `roles/context.ts` adds `systemPrompt(pack, instructions)` that puts the pack text first (prompt caching); every role uses it.
+- **[T8]** `understandApp` returns no criteria (test 1 adjusted); criteria come from `analyseChange` only. The doc-trigger test moves into Step 1: the role drops doc triggers whose quote is not a substring of `change.description`, and the test asserts a non-matching quote is dropped.
+- **[T8]** `analyseImpact` lists existing criteria to the model as C1..Cn; the schema returns those labels; the role maps them back to ids and drops unknown labels.
+- **[T8][T9][T10][T11][T12][T13]** Role and workflow tests use inline stub `Model`/`ModelFactory` functions keyed by `req.name` (they can capture prompts and throw `BudgetExceededError` on call N), not `createFakeModel`. Fixtures are still added for fake mode.
+- **[T9]** The role prefixes "Check this: " when missing and drops any finding matching `/breach/i`, logging it with `console.warn`; tests feed an unprefixed finding and spy on `console.warn`. Narrowing query: "user account email phone password consent privacy delete payment card log retention".
+- **[T9][T10]** One helper `checkTriggers(dir, findings, fallbackQuote)` in `roles/context.ts`, added in T9 and reused in T10. Both role functions take `onlyFiles?: string[]` as the last parameter. A feature change uses the newest `as_built` artifact across `listChanges(projectId)`.
+- **[T11]** `qaGate` gets a test; with zero checks it is held, reason "No criteria checked yet".
+- **[T12]** `acceptanceSummary` uses schema `{summary: string}`, fixture `po.acceptanceSummary.json`, and a test that it sends `po.acceptanceSummary` and keeps at most 200 words.
+
+### Workflow, server, panel
+
+- **[T13]** At analysis, `advance` checks `baGate` first and calls `analyseChange` only once it clears. Recheck runs compliance and architect with `onlyFiles` and charges them to the project's newest change. Recheck also re-verifies every criterion whose latest check is not `evidence_found`. When a new check is `evidence_found`, that criterion's open findings become `fixed` (actor `qa`, reason "Evidence found on re-check"). Release is gated by QA, compliance and architect, and the PO acts at acceptance; this deviates from spec section 5 (which names the PO at release) on purpose, because the "built as agreed" gate must block somewhere.
+- **[T12][T13][T14]** `/accept` stores an artifact of kind `acceptance` `{actor}` (role po), then starts a job that calls `advance`. Only `advance` runs `poGate` and `acceptanceSummary`; "accepted" means that artifact exists.
+- **[T14]** Long actions return `{jobId}`; `GET /api/jobs/:id` returns `{state: RunStatus, error?}` from an in-memory map in `app.ts` (replaces `/api/runs/:id`). Add `GET /api/projects`; `GET /api/projects/:id` returns `{project, changes}`. `startPoller(deps, intervalMs, lsRemote, recheckFn = recheck)`; the poller compares the remote head with `lastRunCommit` and skips projects where it is null.
+- **[T14]** Step 0: wire the workspace. Server depends on `@lifecycle/core` (`workspace:*`), core gets `exports` pointing at `dist/src/index.js` with types, tsconfig `references`, Hono added, and a Vitest alias from `@lifecycle/core` to `packages/core/src/index.ts`. Paths resolve from the repo root via `import.meta.url` (never the working directory). The SQL schema is a TypeScript string export (`schema.ts`) so builds carry it. Env is loaded with `process.loadEnvFile()` when `.env` exists.
+- **[T15]** Tool descriptions say the `projectId` is shown in the panel header; T16 shows it there.
+- **[T16]** Vite `build.outDir` is `dist/app`; the server serves `packages/web/dist/app`. Step 1 is a guard test (expected PASS): scan whole source text for `\b(score|rubric|grade|rating|pass|fail)\b` (case-insensitive), U+2014 and U+2013. The panel has a project list and a "New project" form (name, repo URL, app URL). The fake-mode walk runs against the local demo repo with fixtures for all seven request names.
+
+### Video and close-out
+
+- **[T18]** Step 4 reads "Record whether release held and what cleared it" (no presumed outcome). Step 4b tells the user before the run that their code is sent to the Meta API.
+- **[T19]** The README also states that BA OS was used as pre-existing tooling, none of its content is in the repo, and it is not part of what is judged.
