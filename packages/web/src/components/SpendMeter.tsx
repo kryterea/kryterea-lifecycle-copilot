@@ -21,36 +21,26 @@ export function SpendProvider({ children }: { children: ReactNode }) {
 
 export const useSpend = () => useContext(SpendContext);
 
-const usd = (n: number) => `$${n.toFixed(2)}`;
-/** The budget reads "$70" when whole, "$70.50" otherwise. */
-const budget = (n: number) => (Number.isInteger(n) ? `$${n}` : usd(n));
-
+/**
+ * The header says nothing about money until it matters: a Replay stamp when outputs are recorded, and a held
+ * stamp once the copilot budget is used. Per-run cost lives in the acceptance record.
+ */
 export function SpendMeter() {
   const { spend } = useSpend();
   if (!spend) return null;
   const out = spend.spentUsd >= spend.budgetUsd;
-  const share = spend.budgetUsd > 0 ? Math.min(1, spend.spentUsd / spend.budgetUsd) : 1;
   return (
-    <div className="spend">
+    <div className="spend" role="status">
       {spend.fake && (
         <Stamp tone="idle" title="Model outputs are replayed from recorded Muse Spark runs. Nothing is sent to Meta.">
           Replay
         </Stamp>
       )}
-      <div className={out ? "meter is-out" : "meter"} role="status">
-        <span className="meter-bar" aria-hidden="true">
-          <i style={{ transform: `scaleX(${share})` }} />
-        </span>
-        <span className="meter-text">
-          {out ? (
-            "Paused: copilot budget used"
-          ) : (
-            <>
-              <b>{usd(spend.spentUsd)}</b> of {budget(spend.budgetUsd)} <span className="meter-tail">copilot budget used</span>
-            </>
-          )}
-        </span>
-      </div>
+      {out && (
+        <Stamp tone="held" title="The copilot stops calling the model once its budget is used. Raise COPILOT_BUDGET_USD to continue.">
+          Paused: budget used
+        </Stamp>
+      )}
     </div>
   );
 }

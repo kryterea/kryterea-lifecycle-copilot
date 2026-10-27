@@ -32,6 +32,17 @@ typography:
     fontWeight: 650
     lineHeight: 1.15
     letterSpacing: "-0.02em"
+  page-phone:
+    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "1.5rem"
+    fontWeight: 650
+    lineHeight: 1.15
+    letterSpacing: "-0.02em"
+  record-title:
+    fontFamily: "Source Serif 4, Georgia, serif"
+    fontSize: "1.25rem"
+    fontWeight: 400
+    lineHeight: 1.35
   title:
     fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.375rem"
@@ -58,6 +69,16 @@ typography:
     fontSize: "0.8125rem"
     fontWeight: 400
     lineHeight: 1.5
+  micro:
+    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 400
+    lineHeight: 1.4
+  tag:
+    fontFamily: "JetBrains Mono, ui-monospace, Consolas, monospace"
+    fontSize: "0.6875rem"
+    fontWeight: 500
+    lineHeight: 1.3
   document:
     fontFamily: "Source Serif 4, Georgia, serif"
     fontSize: "1.03125rem"
@@ -192,7 +213,7 @@ Restrained: cool neutrals plus one cobalt, with three status hues kept off large
 
 ## Layout
 
-A 1200px shell (24px side padding, 16px at 560px and below) under a sticky 56px top bar with the wordmark and the spend meter; the bar is identical on every screen. Document pages (projects, record) centre a 760px column. The change screen is a two-column grid: 264px sticky rail (project crumb as back link, change title, Trail) and a fluid stage pane, 48px apart. Inside the pane, blocks sit on a 20px gap and rows use 14 to 18px padding. Lists are one bordered container with hairline dividers, never a stack of separate cards.
+A 1200px shell (24px side padding, 16px at 560px and below) under a sticky 56px top bar with the wordmark and the status stamps; the bar is identical on every screen. Document pages (projects, record) centre a 760px column. The change screen is a two-column grid: 264px sticky rail (project crumb as back link, change title, Trail) and a fluid stage pane, 48px apart. Inside the pane, blocks sit on a 20px gap and rows use 14 to 18px padding. Lists are one bordered container with hairline dividers, never a stack of separate cards.
 
 **Phone (860px and below):** the grid collapses to one column. The Trail turns horizontal, eight equal columns, dots only, inside a bordered strip, with "N of 8" under it; the stage heading names the stop. Open counts become small badges on the dot. At 560px, finding rows re-flow to two lines and facts, forms and decisions go single column. No horizontal scroll at 375px. Reduced motion collapses all animation; print hides the bar and mutes stamps to black.
 
@@ -238,8 +259,8 @@ A `details` row: stamp, title, meta (law tag, file:line), caret that rotates 90d
 ### Duty rows (ProfessionalCard)
 Name in 600 with the duty in muted meta, one reason line, a meta line (byline, paused, error), and the gate stamp at the right edge.
 
-### Spend meter
-Top-bar text with a 88px bar (56px on phone) that scales from the left over 220ms. Cobalt fill; at budget it turns amber and the label says so.
+### Top bar status
+No money in the chrome. An idle **Replay** stamp shows when model outputs are recorded; a held **Paused: budget used** stamp appears only once the copilot budget is spent. Per-run cost lives in the acceptance record.
 
 ### Inputs
 40px tall, white, `border`, 6px radius. Focus: cobalt border plus a 3px cobalt ring at 22%. Segmented control: a pill track with a white selected segment.
