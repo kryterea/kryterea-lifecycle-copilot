@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, unlinkSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -11,6 +11,7 @@ import {
   syncRepo,
   verifyCodeTrigger,
 } from "../src/index.js";
+import { checkRepoUrl } from "../src/repo/repo.js";
 
 const root = mkdtempSync(join(tmpdir(), "lifecycle-repo-"));
 const origin = join(root, "origin");
@@ -19,6 +20,19 @@ let c2 = "";
 let c3 = "";
 
 const LOCAL = { allowLocal: true };
+
+// Symlink creation needs a privilege on Windows; probe once and skip the symlink test if it is missing.
+const canSymlink = (() => {
+  try {
+    const probe = mkdtempSync(join(tmpdir(), "lifecycle-link-"));
+    writeFileSync(join(probe, "a"), "x");
+    symlinkSync(join(probe, "a"), join(probe, "b"));
+    rmSync(probe, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync(
@@ -111,6 +125,25 @@ describe("repo reader", () => {
     }
   });
 
+  it("validates repo URLs: parser-differential URLs are rejected, plain github URLs become canonical", () => {
+    for (const bad of [
+      "https://github.com\\@evil.example/x.git",
+      "https://evil.example%2f@github.com/x",
+      "https://github.com/o/my repo.git",
+      "https://github.com:444/o/r.git",
+      "https://github.com/o/r.git?x=1",
+      "https://github.com/o/r.git#frag",
+    ]) {
+      expect(() => checkRepoUrl(bad, false)).toThrow(/repoUrl rejected/);
+    }
+    expect(checkRepoUrl("https://github.com/o/r.git", false)).toEqual({
+      url: "https://github.com/o/r.git",
+      github: true,
+    });
+    expect(checkRepoUrl("https://GitHub.com/o/r", false)).toEqual({ url: "https://github.com/o/r", github: true });
+    expect(checkRepoUrl("https://gitlab.com/o/r.git", false).github).toBe(false);
+  });
+
   it("rejects unsafe repo URLs before running git", async () => {
     const cache = join(root, "cache3");
     for (const bad of [
@@ -179,6 +212,12 @@ describe("repo reader", () => {
     expect(readLines(origin, "big.ts", 1, 1)).toBeNull();
     put("..foo.txt", "dotdot\n");
     expect(readLines(origin, "..foo.txt", 1, 1)).toBe("dotdot");
+  });
+
+  it.skipIf(!canSymlink)("a symlink to .git/config is not evidence", () => {
+    symlinkSync(join(origin, ".git", "config"), join(origin, "cfg-link"));
+    expect(readLines(origin, "cfg-link", 1, 1)).toBeNull();
+    expect(verifyCodeTrigger(origin, { file: "cfg-link", line: 1 })).toBe(false);
   });
 
   it("rejects absolute paths and ../ traversal", () => {

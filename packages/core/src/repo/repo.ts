@@ -46,7 +46,7 @@ async function git(args: string[], o: GitOptions = {}): Promise<string> {
   if (o.auth && o.token) {
     const b64 = Buffer.from(`x-access-token:${o.token}`).toString("base64");
     env.GIT_CONFIG_COUNT = "1";
-    env.GIT_CONFIG_KEY_0 = "http.extraHeader";
+    env.GIT_CONFIG_KEY_0 = "http.https://github.com/.extraHeader";
     env.GIT_CONFIG_VALUE_0 = `Authorization: Basic ${b64}`;
   }
   const scrub = scrubber(o.token);
@@ -65,25 +65,27 @@ async function git(args: string[], o: GitOptions = {}): Promise<string> {
 }
 
 /**
- * Returns the parsed URL for an https repo, or null for a local path / file:// (only with allowLocal).
- * Rejects options, userinfo, control characters and every other scheme.
+ * Validates a repo URL and returns the ONLY string git may see. An https URL is rebuilt from the
+ * parsed host and path (no port, query, fragment, userinfo), after rejecting characters that git and
+ * WHATWG URL parse differently. Local paths and file:// need allowLocal and pass through unchanged.
  */
-function checkRepoUrl(repoUrl: string, allowLocal: boolean): URL | null {
-  if (!repoUrl || repoUrl.startsWith("-") || /[\u0000-\u001f]/.test(repoUrl)) {
+export function checkRepoUrl(repoUrl: string, allowLocal: boolean): { url: string; github: boolean } {
+  if (!repoUrl || repoUrl.startsWith("-") || /[\u0000-\u001f\u007f]/.test(repoUrl)) {
     throw new Error("repoUrl rejected: invalid");
   }
   if (/^https:\/\//i.test(repoUrl)) {
+    if (/[\\@%?#\s\u0000-\u001f\u007f]/.test(repoUrl)) throw new Error("repoUrl rejected: unsafe characters");
     let u: URL;
     try {
       u = new URL(repoUrl);
     } catch {
       throw new Error("repoUrl rejected: not a valid URL");
     }
-    if (u.username || u.password || u.host.includes("@")) throw new Error("repoUrl rejected: credentials in URL");
-    return u;
+    if (u.username || u.password || u.port || u.search || u.hash) throw new Error("repoUrl rejected: unsafe parts");
+    return { url: `https://${u.hostname}${u.pathname}`, github: u.hostname === "github.com" };
   }
   const isLocal = /^file:\/\//i.test(repoUrl) || !/^[a-z][a-z0-9+.-]*:\/\//i.test(repoUrl);
-  if (allowLocal && isLocal) return null;
+  if (allowLocal && isLocal) return { url: repoUrl, github: false };
   throw new Error("repoUrl rejected: only https URLs are allowed");
 }
 
@@ -99,17 +101,17 @@ export async function syncRepo(
   opts: { allowLocal?: boolean } = {},
 ): Promise<{ dir: string; commit: string }> {
   const allowLocal = opts.allowLocal === true;
-  const parsed = checkRepoUrl(repoUrl, allowLocal);
-  const base = { token, auth: parsed?.hostname.toLowerCase() === "github.com", allowLocal };
-  const name = basename(repoUrl.replace(/[\\/]+$/, "")).replace(/\.git$/, "").replace(/[^\w.-]/g, "_") || "repo";
-  const dir = resolve(cacheDir, `${name}-${createHash("sha1").update(repoUrl).digest("hex").slice(0, 8)}`);
+  const { url, github } = checkRepoUrl(repoUrl, allowLocal);
+  const base = { token, auth: github, allowLocal };
+  const name = basename(url.replace(/[\\/]+$/, "")).replace(/\.git$/, "").replace(/[^\w.-]/g, "_") || "repo";
+  const dir = resolve(cacheDir, `${name}-${createHash("sha1").update(url).digest("hex").slice(0, 8)}`);
   if (existsSync(join(dir, ".git"))) {
     await git(["fetch", "--prune", "origin", "HEAD"], { ...base, cwd: dir, timeoutMs: GIT_NET_MS });
     await git(["reset", "--hard", "FETCH_HEAD"], { ...base, cwd: dir });
   } else {
     // An interrupted first clone leaves a .git-less dir that would block every later clone.
     rmSync(dir, { recursive: true, force: true });
-    await git(["clone", "--quiet", "--", repoUrl, dir], { ...base, timeoutMs: GIT_NET_MS });
+    await git(["clone", "--quiet", "--", url, dir], { ...base, timeoutMs: GIT_NET_MS });
   }
   const commit = (await git(["rev-parse", "HEAD"], { ...base, cwd: dir })).trim();
   return { dir: fwd(dir), commit };
@@ -150,6 +152,8 @@ export async function changedFiles(
   return { changed, deleted };
 }
 
+const hasBlockedSegment = (rel: string) => rel.split(sep).some((seg) => NO_EVIDENCE_DIRS.has(seg.toLowerCase()));
+
 /**
  * Absolute path of a citable file inside dir, or null if the path is absolute, escapes dir
  * (lexically or by symlink), is missing, or sits under .git, node_modules or dist.
@@ -161,9 +165,10 @@ export function safePath(dir: string, file: string): string | null {
   const rel = relative(root, target);
   const inside = (r: string) => r !== "" && r !== ".." && !r.startsWith(".." + sep) && !isAbsolute(r);
   if (!inside(rel)) return null;
-  if (rel.split(sep).some((seg) => NO_EVIDENCE_DIRS.has(seg.toLowerCase()))) return null;
+  if (hasBlockedSegment(rel)) return null;
   try {
-    return inside(relative(realpathSync(root), realpathSync(target))) ? target : null;
+    const real = relative(realpathSync(root), realpathSync(target));
+    return inside(real) && !hasBlockedSegment(real) ? target : null;
   } catch {
     return null;
   }
