@@ -93,7 +93,7 @@ export type FindingStatus = "open" | "fixed" | "accepted_risk" | "deferred";
 
 export type Trigger =
   | { type: "code"; file: string; line: number; commit: string }
-  | { type: "doc"; quote: string }
+  | { type: "doc"; quote: string; document?: string; line?: number }
   | { type: "screen"; url: string; screenshotPath: string };
 
 export interface FindingInput {
@@ -150,6 +150,59 @@ export interface AcceptanceRecord {
   runs: Array<{ id: string; role: RoleId; commit: string; status: RunStatus; costUsd: number }>;
   /** From the latest `acceptance_summary` artifact, null when none. */
   summary: string | null;
+}
+
+/** A PRD, spec or other project document: a repo file, or one uploaded or pasted (kept in the record only). */
+export interface Document {
+  id: string;
+  projectId: string;
+  name: string;
+  source: "repo" | "upload";
+  createdAt: string;
+}
+
+export interface DocumentVersion {
+  id: string;
+  documentId: string;
+  contentHash: string;
+  commit: string | null;
+  body: string;
+  createdAt: string;
+}
+
+/** One requirement read from a document line. Its key is its identity across document versions. */
+export interface Requirement {
+  id: string;
+  projectId: string;
+  documentId: string;
+  key: string;
+  text: string;
+  quote: string;
+  line: number;
+  status: "active" | "removed";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RequirementEvent {
+  requirementId: string;
+  kind: "added" | "changed" | "removed";
+  text: string;
+  versionId: string;
+  at: string;
+}
+
+export interface RequirementLink {
+  requirementId: string;
+  toType: "criterion" | "linear_issue";
+  toId: string;
+  createdAt: string;
+}
+
+/** Glob patterns added to and removed from the default document discovery. */
+export interface DocSettings {
+  include: string[];
+  exclude: string[];
 }
 
 export interface LegalDuty {

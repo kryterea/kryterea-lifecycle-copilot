@@ -7,6 +7,9 @@ import type {
   AcceptanceRecord,
   Check,
   Criterion,
+  DocSettings,
+  Document,
+  DocumentVersion,
   EvidenceState,
   Finding,
   FindingInput,
@@ -16,6 +19,9 @@ import type {
   LinkEnd,
   LinkRel,
   Project,
+  Requirement,
+  RequirementEvent,
+  RequirementLink,
   RoleId,
   RunStatus,
   SpendLedger,
@@ -101,6 +107,40 @@ function toFinding(r: Row): Finding {
   if (r.citation_id != null) f.citationId = r.citation_id as string;
   if (r.criterion_id != null) f.criterionId = r.criterion_id as string;
   return f;
+}
+
+function toDocument(r: Row): Document {
+  return {
+    id: r.id as string,
+    projectId: r.project_id as string,
+    name: r.name as string,
+    source: r.source as Document["source"],
+    createdAt: r.created_at as string,
+  };
+}
+
+function toRequirement(r: Row): Requirement {
+  return {
+    id: r.id as string,
+    projectId: r.project_id as string,
+    documentId: r.document_id as string,
+    key: r.key as string,
+    text: r.text as string,
+    quote: r.quote as string,
+    line: r.line as number,
+    status: r.status as Requirement["status"],
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  };
+}
+
+function toLink(r: Row): RequirementLink {
+  return {
+    requirementId: r.requirement_id as string,
+    toType: r.to_type as RequirementLink["toType"],
+    toId: r.to_id as string,
+    createdAt: r.created_at as string,
+  };
 }
 
 const LATEST_STATUS =
@@ -515,6 +555,232 @@ export class CopilotRecord {
       from: { type: r.from_type as string, id: r.from_id as string },
       rel: r.rel as LinkRel,
     }));
+  }
+
+  /** A new version only when the body's hash differs from the latest one. */
+  saveDocumentVersion(i: { projectId: string; name: string; source: Document["source"]; body: string; commit: string | null }): {
+    document: Document;
+    version: DocumentVersion;
+    changed: boolean;
+  } {
+    let row = this.one("SELECT * FROM documents WHERE project_id = ? AND name = ?", i.projectId, i.name);
+    if (!row) {
+      this.run(
+        "INSERT INTO documents (id, project_id, name, source, created_at) VALUES (?, ?, ?, ?, ?)",
+        randomUUID(),
+        i.projectId,
+        i.name,
+        i.source,
+        now(),
+      );
+      row = this.one("SELECT * FROM documents WHERE project_id = ? AND name = ?", i.projectId, i.name)!;
+    }
+    const document = toDocument(row);
+    const contentHash = createHash("sha256").update(i.body).digest("hex");
+    const latest = this.documentVersions(document.id).at(-1);
+    if (latest?.contentHash === contentHash) return { document, version: latest, changed: false };
+    const version: DocumentVersion = { id: randomUUID(), documentId: document.id, contentHash, commit: i.commit, body: i.body, createdAt: now() };
+    this.run(
+      "INSERT INTO document_versions (id, document_id, content_hash, commit_sha, body, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      version.id,
+      version.documentId,
+      version.contentHash,
+      version.commit,
+      version.body,
+      version.createdAt,
+    );
+    return { document, version, changed: true };
+  }
+
+  getDocument(id: string): Document {
+    const r = this.one("SELECT * FROM documents WHERE id = ?", id);
+    if (!r) throw new Error(`Document not found: ${id}`);
+    return toDocument(r);
+  }
+
+  listDocuments(projectId: string): Array<Document & { latest: DocumentVersion; versions: number }> {
+    return this.all("SELECT * FROM documents WHERE project_id = ? ORDER BY rowid", projectId).flatMap((r) => {
+      const versions = this.documentVersions(r.id as string);
+      const latest = versions.at(-1);
+      return latest ? [{ ...toDocument(r), latest, versions: versions.length }] : [];
+    });
+  }
+
+  documentVersions(documentId: string): DocumentVersion[] {
+    return this.all("SELECT * FROM document_versions WHERE document_id = ? ORDER BY rowid", documentId).map((r) => ({
+      id: r.id as string,
+      documentId: r.document_id as string,
+      contentHash: r.content_hash as string,
+      commit: (r.commit_sha as string | null) ?? null,
+      body: r.body as string,
+      createdAt: r.created_at as string,
+    }));
+  }
+
+  /**
+   * The document's requirements as read from one version, matched by key. A key not seen before (or removed and
+   * now back) is added, a different text is changed, an active key missing from `next` is removed. Quote and line
+   * follow the version without an event.
+   */
+  applyRequirements(
+    documentId: string,
+    versionId: string,
+    next: Array<{ key: string; text: string; quote: string; line: number }>,
+  ): { added: Requirement[]; changed: Requirement[]; removed: Requirement[] } {
+    const doc = this.getDocument(documentId);
+    const current = new Map(
+      this.all("SELECT * FROM requirements WHERE document_id = ?", documentId).map((r) => [r.key as string, toRequirement(r)]),
+    );
+    const out = { added: [] as Requirement[], changed: [] as Requirement[], removed: [] as Requirement[] };
+    const at = now();
+    const event = (id: string, kind: RequirementEvent["kind"], text: string) =>
+      this.run(
+        "INSERT INTO requirement_events (requirement_id, kind, text, version_id, at) VALUES (?, ?, ?, ?, ?)",
+        id,
+        kind,
+        text,
+        versionId,
+        at,
+      );
+    const seen = new Set<string>();
+    this.db.exec("BEGIN");
+    try {
+      for (const n of next) {
+        if (seen.has(n.key)) continue;
+        seen.add(n.key);
+        const cur = current.get(n.key);
+        if (!cur) {
+          const r: Requirement = { id: randomUUID(), projectId: doc.projectId, documentId, ...n, status: "active", createdAt: at, updatedAt: at };
+          this.run(
+            `INSERT INTO requirements (id, project_id, document_id, key, text, quote, line, status, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
+            r.id,
+            r.projectId,
+            documentId,
+            r.key,
+            r.text,
+            r.quote,
+            r.line,
+            at,
+            at,
+          );
+          event(r.id, "added", r.text);
+          out.added.push(r);
+          continue;
+        }
+        const back = cur.status === "removed";
+        const changed = !back && cur.text !== n.text;
+        this.run(
+          "UPDATE requirements SET text = ?, quote = ?, line = ?, status = 'active', updated_at = ? WHERE id = ?",
+          n.text,
+          n.quote,
+          n.line,
+          back || changed ? at : cur.updatedAt,
+          cur.id,
+        );
+        const r: Requirement = { ...cur, ...n, status: "active", updatedAt: back || changed ? at : cur.updatedAt };
+        if (back) {
+          event(r.id, "added", r.text);
+          out.added.push(r);
+        } else if (changed) {
+          event(r.id, "changed", r.text);
+          out.changed.push(r);
+        }
+      }
+      for (const cur of current.values()) {
+        if (seen.has(cur.key) || cur.status === "removed") continue;
+        this.run("UPDATE requirements SET status = 'removed', updated_at = ? WHERE id = ?", at, cur.id);
+        event(cur.id, "removed", cur.text);
+        out.removed.push({ ...cur, status: "removed", updatedAt: at });
+      }
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+    return out;
+  }
+
+  getRequirement(id: string): Requirement {
+    const r = this.one("SELECT * FROM requirements WHERE id = ?", id);
+    if (!r) throw new Error(`Requirement not found: ${id}`);
+    return toRequirement(r);
+  }
+
+  listRequirements(projectId: string, opts: { status?: Requirement["status"] } = {}): Requirement[] {
+    return this.all(
+      "SELECT * FROM requirements WHERE project_id = ? AND (? IS NULL OR status = ?) ORDER BY rowid",
+      projectId,
+      opts.status ?? null,
+      opts.status ?? null,
+    ).map(toRequirement);
+  }
+
+  requirementEvents(requirementId: string): RequirementEvent[] {
+    return this.all("SELECT * FROM requirement_events WHERE requirement_id = ? ORDER BY seq", requirementId).map((r) => ({
+      requirementId: r.requirement_id as string,
+      kind: r.kind as RequirementEvent["kind"],
+      text: r.text as string,
+      versionId: r.version_id as string,
+      at: r.at as string,
+    }));
+  }
+
+  linkRequirement(requirementId: string, toType: RequirementLink["toType"], toId: string): void {
+    this.run(
+      "INSERT INTO requirement_links (requirement_id, to_type, to_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
+      requirementId,
+      toType,
+      toId,
+      now(),
+    );
+  }
+
+  requirementLinks(requirementId: string): RequirementLink[] {
+    return this.all("SELECT * FROM requirement_links WHERE requirement_id = ? ORDER BY rowid", requirementId).map(toLink);
+  }
+
+  /** Requirements linked to a criterion or a Linear issue. */
+  requirementsLinkedTo(toType: RequirementLink["toType"], toId: string): Requirement[] {
+    return this.all(
+      "SELECT r.* FROM requirements r JOIN requirement_links l ON l.requirement_id = r.id WHERE l.to_type = ? AND l.to_id = ? ORDER BY r.rowid",
+      toType,
+      toId,
+    ).map(toRequirement);
+  }
+
+  docSettings(projectId: string): DocSettings {
+    const r = this.one("SELECT * FROM project_settings WHERE project_id = ?", projectId);
+    return r
+      ? { include: JSON.parse(r.doc_include as string) as string[], exclude: JSON.parse(r.doc_exclude as string) as string[] }
+      : { include: [], exclude: [] };
+  }
+
+  setDocSettings(projectId: string, s: DocSettings): void {
+    this.run(
+      `INSERT INTO project_settings (project_id, doc_include, doc_exclude) VALUES (?, ?, ?)
+       ON CONFLICT (project_id) DO UPDATE SET doc_include = excluded.doc_include, doc_exclude = excluded.doc_exclude`,
+      projectId,
+      JSON.stringify(s.include),
+      JSON.stringify(s.exclude),
+    );
+  }
+
+  /** The comment Kryterea keeps on a ticket, pull request or commit, so it is edited in place, never repeated. */
+  externalPost(target: string, targetId: string): { commentId: string; bodyHash: string } | null {
+    const r = this.one("SELECT * FROM external_posts WHERE target = ? AND target_id = ?", target, targetId);
+    return r ? { commentId: r.comment_id as string, bodyHash: r.body_hash as string } : null;
+  }
+
+  saveExternalPost(target: string, targetId: string, commentId: string, bodyHash: string): void {
+    this.run(
+      `INSERT INTO external_posts (target, target_id, comment_id, body_hash) VALUES (?, ?, ?, ?)
+       ON CONFLICT (target, target_id) DO UPDATE SET comment_id = excluded.comment_id, body_hash = excluded.body_hash`,
+      target,
+      targetId,
+      commentId,
+      bodyHash,
+    );
   }
 
   linksFrom(from: LinkEnd): Array<{ rel: LinkRel; to: LinkEnd }> {

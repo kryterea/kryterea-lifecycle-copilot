@@ -133,4 +133,71 @@ CREATE TABLE IF NOT EXISTS checked_commits (
   project_id TEXT PRIMARY KEY REFERENCES projects(id),
   commit_sha TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id),
+  name TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('repo','upload')),
+  created_at TEXT NOT NULL,
+  UNIQUE (project_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS document_versions (
+  id TEXT PRIMARY KEY,
+  document_id TEXT NOT NULL REFERENCES documents(id),
+  content_hash TEXT NOT NULL,
+  commit_sha TEXT,
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS document_versions_document ON document_versions(document_id);
+
+CREATE TABLE IF NOT EXISTS requirements (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id),
+  document_id TEXT NOT NULL REFERENCES documents(id),
+  key TEXT NOT NULL,
+  text TEXT NOT NULL,
+  quote TEXT NOT NULL,
+  line INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('active','removed')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (document_id, key)
+);
+CREATE INDEX IF NOT EXISTS requirements_project ON requirements(project_id);
+
+CREATE TABLE IF NOT EXISTS requirement_events (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  requirement_id TEXT NOT NULL REFERENCES requirements(id),
+  kind TEXT NOT NULL CHECK (kind IN ('added','changed','removed')),
+  text TEXT NOT NULL,
+  version_id TEXT NOT NULL REFERENCES document_versions(id),
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS requirement_events_requirement ON requirement_events(requirement_id);
+
+CREATE TABLE IF NOT EXISTS requirement_links (
+  requirement_id TEXT NOT NULL REFERENCES requirements(id),
+  to_type TEXT NOT NULL CHECK (to_type IN ('criterion','linear_issue')),
+  to_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (requirement_id, to_type, to_id)
+);
+CREATE INDEX IF NOT EXISTS requirement_links_to ON requirement_links(to_type, to_id);
+
+CREATE TABLE IF NOT EXISTS project_settings (
+  project_id TEXT PRIMARY KEY REFERENCES projects(id),
+  doc_include TEXT NOT NULL,
+  doc_exclude TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS external_posts (
+  target TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  comment_id TEXT NOT NULL,
+  body_hash TEXT NOT NULL,
+  PRIMARY KEY (target, target_id)
+);
 `;
