@@ -48,7 +48,8 @@ const criteriaOf = (raw: RawCriterion[]) => raw.map((c) => ({ text: c.text, isFa
 export function baGate(questions: string[], answers: string[]): { state: GateState; reason: string } {
   if (questions.length === 0) return { state: "cleared", reason: "No open questions for the owner." };
   if (answers.length > 0) return { state: "cleared", reason: "The owner has answered the questions." };
-  return { state: "held", reason: `${questions.length} question(s) wait for the owner.` };
+  const n = questions.length;
+  return { state: "held", reason: n === 1 ? "1 question waits for the owner." : `${n} questions wait for the owner.` };
 }
 
 export async function understandApp(ctx: RoleContext): Promise<RoleResult> {

@@ -295,7 +295,7 @@ describe("HTTP API", () => {
     const runId = deps.record.startRun({ changeId: c.id, role: "ba", commit: "b".repeat(40) });
     deps.record.addRunCost(runId, 1.5, 10, 10);
     const { call } = setup({ budgetUsd: 70 });
-    expect((await call("GET", "/api/spend")).json).toEqual({ spentUsd: 1.5, budgetUsd: 70, model: "muse-spark-1.3", fake: false });
+    expect((await call("GET", "/api/spend")).json).toEqual({ spentUsd: 1.5, budgetUsd: 70, model: null, fake: false });
   });
 
   it("spend endpoint names the model and says when outputs are replayed fixtures", async () => {

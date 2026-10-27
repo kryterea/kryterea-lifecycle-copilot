@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import type { Change, ChangeKind, Project as ProjectT } from "@lifecycle/core";
-import { api, message, useJob } from "../api";
+import { api, message, safeHref, useJob } from "../api";
 import { STAGE_NAMES } from "../components/StageStrip";
 import { JobNote, useSpend } from "../components/SpendMeter";
 
@@ -25,10 +25,16 @@ export function Project({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", description: "", kind: "feature" as ChangeKind });
   const [saving, setSaving] = useState(false);
+  const kindSet = useRef(false);
   const { refresh: refreshSpend } = useSpend();
 
   const load = useCallback(() => {
-    api.project(id).then(setData, (e) => setError(message(e)));
+    api.project(id).then((d) => {
+      setData(d);
+      // On first load only: a project with no changes starts with understanding the app as built (the baseline).
+      if (!kindSet.current && d.changes.length === 0) setForm((f) => ({ ...f, kind: "understand" }));
+      kindSet.current = true;
+    }, (e) => setError(message(e)));
   }, [id]);
   useEffect(load, [load]);
 
@@ -68,9 +74,13 @@ export function Project({ id }: { id: string }) {
             {project.appUrl && (
               <span>
                 App{" "}
-                <a href={project.appUrl} target="_blank" rel="noreferrer">
-                  {project.appUrl}
-                </a>
+                {safeHref(project.appUrl) ? (
+                  <a href={safeHref(project.appUrl)!} target="_blank" rel="noreferrer">
+                    {project.appUrl}
+                  </a>
+                ) : (
+                  <code>{project.appUrl}</code>
+                )}
               </span>
             )}
           </div>

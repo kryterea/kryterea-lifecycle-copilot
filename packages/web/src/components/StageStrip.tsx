@@ -24,6 +24,7 @@ export function StageStrip({ stage, working, held }: { stage: StageId; working: 
         return (
           <li key={s} className={cls} aria-current={i === now ? "step" : undefined}>
             {STAGE_NAMES[s]}
+            <span className="sr-only">{i < now ? ", done" : i === now ? ", current stage" : ", upcoming"}</span>
             {i === now && working && <Working />}
           </li>
         );

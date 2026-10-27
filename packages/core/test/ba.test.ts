@@ -124,6 +124,11 @@ describe("baGate", () => {
     expect(baGate(["q"], ["a"]).state).toBe("cleared");
     expect(baGate([], []).state).toBe("cleared");
   });
+
+  it("words the held reason in the singular or plural", () => {
+    expect(baGate(["q"], []).reason).toBe("1 question waits for the owner.");
+    expect(baGate(["q", "r", "s"], []).reason).toBe("3 questions wait for the owner.");
+  });
 });
 
 describe("analyseImpact", () => {

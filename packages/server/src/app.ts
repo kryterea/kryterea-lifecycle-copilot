@@ -203,7 +203,7 @@ export interface AppOptions {
   /** Where job and request errors are logged (default console.error). */
   log?: Log;
   jobs?: Jobs;
-  /** The model name the server calls, shown by the panel (default muse-spark-1.3). */
+  /** The model name the server calls, shown by the panel. main.ts holds the default. */
   model?: string;
   /** True when model outputs are replayed fixtures (COPILOT_FAKE_MODEL=1). */
   fake?: boolean;
@@ -371,7 +371,7 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
   });
 
   app.get("/api/spend", (c) =>
-    c.json({ spentUsd: record.spentUsd(), budgetUsd, model: opts.model ?? "muse-spark-1.3", fake: opts.fake === true }),
+    c.json({ spentUsd: record.spentUsd(), budgetUsd, model: opts.model ?? null, fake: opts.fake === true }),
   );
 
   app.notFound((c) => c.json({ error: "Not found" }, 404));

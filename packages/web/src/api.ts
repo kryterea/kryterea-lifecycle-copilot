@@ -81,6 +81,16 @@ export const api = {
   spend: () => call<Spend>("GET", "/api/spend"),
 };
 
+/** The URL when it is http or https, else null: model or user text never becomes a javascript: link. */
+export function safeHref(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
 export const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**

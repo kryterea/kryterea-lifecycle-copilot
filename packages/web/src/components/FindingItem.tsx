@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FindingKind, FindingStatus, Trigger } from "@lifecycle/core";
-import { api, message, useActor, type FindingView } from "../api";
+import { api, message, safeHref, useActor, type FindingView } from "../api";
 import { Reasoned } from "./SpendMeter";
 
 const KIND: Record<FindingKind, string> = {
@@ -32,9 +32,11 @@ export function TriggerLine({ trigger }: { trigger: Trigger }) {
     );
   }
   if (trigger.type === "doc") return <blockquote>{trigger.quote}</blockquote>;
+  const href = safeHref(trigger.url);
   return (
     <p>
-      Seen on <a href={trigger.url}>{trigger.url}</a> <span className="muted small">({trigger.screenshotPath})</span>
+      Seen on {href ? <a href={href}>{trigger.url}</a> : <code>{trigger.url}</code>}{" "}
+      <span className="muted small">({trigger.screenshotPath})</span>
     </p>
   );
 }
@@ -109,7 +111,7 @@ export function FindingItem({ finding, onChanged }: { finding: FindingView; onCh
         </div>
         <div>
           <h4>Fix prompt for your coding agent</h4>
-          <p className="mono">{finding.fixPrompt}</p>
+          <p className="mono prompt">{finding.fixPrompt}</p>
           <div className="row" style={{ marginTop: 8 }}>
             <button type="button" className="quiet" onClick={copy}>
               {copied ? "Copied" : "Copy fix prompt"}
@@ -133,6 +135,7 @@ export function FindingItem({ finding, onChanged }: { finding: FindingView; onCh
               </button>
             ))}
           </div>
+          {!ready && !saving && <p className="hint">Add a reason and your name to record a decision.</p>}
           {error && (
             <p className="error" role="alert">
               {error}

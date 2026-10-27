@@ -72,6 +72,7 @@ h3 {
 
 h1 {
   font-size: 1.9rem;
+  overflow-wrap: anywhere;
   letter-spacing: -0.01em;
 }
 
@@ -333,7 +334,7 @@ textarea:focus,
 select:focus {
   border-color: var(--blue);
   outline: none;
-  box-shadow: 0 0 0 2px var(--blue-wash);
+  box-shadow: 0 0 0 2px var(--focus);
 }
 
 .hint {
@@ -481,8 +482,9 @@ button:disabled {
 }
 
 .next {
-  border-left: 3px solid var(--blue);
-  padding: 4px 0 4px 14px;
+  background: var(--blue-wash);
+  border-radius: 4px;
+  padding: 12px 14px;
   margin: 16px 0 0;
 }
 
@@ -652,6 +654,10 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.prompt {
+  white-space: pre-wrap;
+}
+
 .tags {
   display: flex;
   flex-wrap: wrap;
@@ -694,16 +700,22 @@ button:disabled {
 .note {
   font-size: 0.82rem;
   color: var(--muted);
-  border-left: 2px solid var(--rule);
-  padding-left: 8px;
+  font-style: italic;
 }
 
 blockquote {
   margin: 0;
-  padding-left: 10px;
-  border-left: 2px solid var(--rule);
   font-family: var(--serif);
   font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+blockquote::before {
+  content: "C";
+}
+
+blockquote::after {
+  content: "D";
 }
 
 .decide {
@@ -755,9 +767,7 @@ blockquote {
 }
 
 .summary {
-  font-size: 1.08rem;
-  border-left: 3px solid var(--cleared);
-  padding-left: 14px;
+  font-size: 1.12rem;
 }
 
 @media (max-width: 720px) {
@@ -810,11 +820,21 @@ blockquote {
 
 @media print {
   :root {
+    color-scheme: light;
     --paper: #fff;
     --sheet: #fff;
     --ink: #000;
     --muted: #333;
     --rule: #bbb;
+    --blue: #2c52c4;
+    --blue-wash: #e8eefc;
+    --cleared: #1d6b45;
+    --cleared-wash: #e5f3eb;
+    --held: #8f5300;
+    --held-wash: #fbf0dc;
+    --gap: #a93629;
+    --gap-wash: #fbe9e6;
+    --focus: #2c52c4;
   }
 
   .top,
@@ -831,4 +851,13 @@ blockquote {
     border: 0;
     padding: 0;
   }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

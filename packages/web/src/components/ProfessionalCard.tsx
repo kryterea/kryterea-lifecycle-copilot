@@ -38,8 +38,18 @@ export const EVIDENCE: Record<EvidenceState, string> = {
 const EV_CLASS: Record<EvidenceState, string> = { evidence_found: "ev is-found", gap: "ev is-gap", no_evidence: "ev is-none" };
 
 export function Stamp({ state }: { state: "held" | "cleared" | undefined }) {
-  if (state === "cleared") return <span className="stamp is-cleared">&#10003; Cleared</span>;
-  if (state === "held") return <span className="stamp is-held">&#9632; Held</span>;
+  if (state === "cleared")
+    return (
+      <span className="stamp is-cleared">
+        <span aria-hidden="true">&#10003;</span> Cleared
+      </span>
+    );
+  if (state === "held")
+    return (
+      <span className="stamp is-held">
+        <span aria-hidden="true">&#9632;</span> Held
+      </span>
+    );
   return <span className="stamp is-none">Not reviewed yet</span>;
 }
 

@@ -20,6 +20,8 @@ export function SpendProvider({ children }: { children: ReactNode }) {
 export const useSpend = () => useContext(SpendContext);
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
+/** The budget reads "$70" when whole, "$70.50" otherwise. */
+const budget = (n: number) => (Number.isInteger(n) ? `$${n}` : usd(n));
 
 export function SpendMeter() {
   const { spend } = useSpend();
@@ -37,7 +39,7 @@ export function SpendMeter() {
         <span className="meter-bar" aria-hidden="true">
           <i style={{ width: `${share * 100}%` }} />
         </span>
-        {out ? "Paused: copilot budget used" : `${usd(spend.spentUsd)} of ${usd(spend.budgetUsd)} copilot budget used`}
+        {out ? "Paused: copilot budget used" : `${usd(spend.spentUsd)} of ${budget(spend.budgetUsd)} copilot budget used`}
       </div>
     </div>
   );
