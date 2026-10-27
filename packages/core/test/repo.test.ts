@@ -11,7 +11,7 @@ import {
   syncRepo,
   verifyCodeTrigger,
 } from "../src/index.js";
-import { checkRepoUrl } from "../src/repo/repo.js";
+import { checkRepoUrl, safePath } from "../src/repo/repo.js";
 
 const root = mkdtempSync(join(tmpdir(), "lifecycle-repo-"));
 const origin = join(root, "origin");
@@ -169,6 +169,26 @@ describe("repo reader", () => {
       expect(files).not.toContain(bad);
     }
     expect(files.some((f) => f.startsWith(".git/"))).toBe(false);
+  });
+
+  it("keeps secret files out of the listing and out of evidence, but lists .env.example", async () => {
+    const d = mkdtempSync(join(tmpdir(), "lifecycle-secrets-"));
+    try {
+      const w = (rel: string) => {
+        mkdirSync(dirname(join(d, rel)), { recursive: true });
+        writeFileSync(join(d, rel), "SECRET=1\n");
+      };
+      for (const f of [".env", "config/.env.local", ".env.production", "certs/site.pem", "deploy.key", "id_rsa", ".npmrc", ".netrc", ".env.example", "src/app.ts"]) w(f);
+      const files = await listSourceFiles(d);
+      expect(files).toEqual([".env.example", "src/app.ts"]);
+      expect(safePath(d, ".env")).toBeNull();
+      expect(safePath(d, "config/.env.local")).toBeNull();
+      expect(readLines(d, ".env", 1, 1)).toBeNull();
+      expect(verifyCodeTrigger(d, { file: "certs/site.pem", line: 1 })).toBe(false);
+      expect(safePath(d, ".env.example")).not.toBeNull();
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
   });
 
   it("changedFiles reports a deleted file under deleted", async () => {

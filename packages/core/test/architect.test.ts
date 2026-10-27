@@ -158,6 +158,22 @@ describe("repoMaterial allowDotDirs", () => {
   });
 });
 
+describe("repoMaterial allowDotDirs cannot bring back .git", () => {
+  it("never shows anything under .git", async () => {
+    const g = mkdtempSync(join(tmpdir(), "lifecycle-architect-git-"));
+    try {
+      mkdirSync(join(g, ".git"));
+      writeFileSync(join(g, ".git", "HEAD"), "ref: refs/heads/GITMARKER\n");
+      writeFileSync(join(g, "app.ts"), "// ref\n");
+      const m = await repoMaterial(g, "ref", { maxFiles: 5, maxChars: 5000, allowDotDirs: [".git"] });
+      expect(m.text).not.toContain("GITMARKER");
+      expect(m.text).not.toContain(".git/");
+    } finally {
+      rmSync(g, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("architectGate", () => {
   it("is held while operations findings are open and cleared with none", () => {
     const held = architectGate(1);
@@ -168,19 +184,27 @@ describe("architectGate", () => {
   });
 });
 
-// The fixture must cite real files and lines of the demo app, or fake mode shows nothing.
+// The fixture is a saved real model output. Against the demo app and the real as_built it must keep its shape.
 const demo = join(__dirname, "..", "..", "..", "..", "demo-salon-bookings");
 describe.skipIf(!existsSync(join(demo, "server.js")))("fixture against the demo app", () => {
-  it("every fixture finding survives as an operations finding, and the copy is clean", async () => {
+  it("keeps four code triggers at their lines and one doc trigger quoting the as_built, with clean copy", async () => {
     const real = await loadPacks(join(__dirname, "..", "..", "..", "packs"));
-    const model = createFakeModel(join(__dirname, "..", "fixtures"));
-    const c = ctx(model, { packs: real, repo: { dir: demo, commit: COMMIT } });
-    const r = await reviewOperations(c, { flows: ["Create an account", "Book a slot and pay a deposit", "Logged in customer opens My bookings to see service, date, time, status and amount paid, and can cancel own booking"], dataCollected: ["Name, phone, email and password"], payments: ["Paystack deposit"], roles: ["Customer", "Admin"] });
-    const raw = JSON.parse(readFileSync(join(__dirname, "..", "fixtures", "architect.reviewOperations.json"), "utf8")).findings;
-    expect(r.findings.length).toBe(raw.length);
-    expect(r.findings.length).toBeGreaterThan(2);
-    expect(r.findings.length).toBeLessThanOrEqual(8);
-    expect(r.findings.some((f) => f.trigger.type === "code")).toBe(true);
+    const fixtures = join(__dirname, "..", "fixtures");
+    const asBuilt = JSON.parse(readFileSync(join(fixtures, "ba.understandApp.json"), "utf8")).asBuilt as { payments: string[] };
+    const c = ctx(createFakeModel(fixtures), { packs: real, repo: { dir: demo, commit: COMMIT } });
+    const r = await reviewOperations(c, asBuilt);
+    const raw = JSON.parse(readFileSync(join(fixtures, "architect.reviewOperations.json"), "utf8")).findings;
+    expect(raw).toHaveLength(5);
+    expect(r.findings).toHaveLength(5);
+    const code = r.findings.filter((f) => f.trigger.type === "code").map((f) => (f.trigger.type === "code" ? f.trigger.line : 0));
+    expect(code).toEqual([23, 129, 242, 15]);
+    for (const f of r.findings.filter((x) => x.trigger.type === "code")) {
+      expect(f.trigger).toMatchObject({ type: "code", file: "server.js" });
+    }
+    const doc = r.findings.filter((f) => f.trigger.type === "doc");
+    expect(doc).toHaveLength(1);
+    const quote = doc[0]!.trigger.type === "doc" ? doc[0]!.trigger.quote : "";
+    expect(asBuilt.payments.map((p) => "Payment: " + p)).toContain(quote);
     for (const f of r.findings) {
       expect(f.kind).toBe("operations");
       const text = `${f.title} ${f.plain} ${f.costIfIgnored} ${f.fixPrompt}`;

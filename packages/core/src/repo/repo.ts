@@ -11,6 +11,14 @@ const NO_EVIDENCE_DIRS = new Set([".git", "node_modules", "dist"]);
 const LOCKFILE = /(^|\/)(pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lockb?|[^/]*\.lock)$/i;
 const BINARY_EXT =
   /\.(png|jpe?g|gif|webp|bmp|ico|svg|avif|tiff?|woff2?|ttf|otf|eot|pdf|zip|gz|tgz|mp[34]|mov|wasm|exe|dll|so|dylib)$/i;
+// Secret files never reach a model prompt and can never be cited as evidence (.env.example and friends are fine).
+const ENV_FILE = /^\.env(\..+)?$/i;
+const ENV_TEMPLATE = /^\.env\.(example|sample|template)$/i;
+const SECRET_FILE = /^(id_rsa.*|\.npmrc|\.netrc|.*\.(pem|key))$/i;
+export const isSecretFile = (file: string): boolean => {
+  const name = basename(file.replaceAll("\\", "/"));
+  return (ENV_FILE.test(name) && !ENV_TEMPLATE.test(name)) || SECRET_FILE.test(name);
+};
 const COMMIT_ID = /^[0-9a-f]{7,40}$/i;
 
 const GIT_SHORT_MS = 30_000;
@@ -126,7 +134,7 @@ export async function listSourceFiles(dir: string): Promise<string[]> {
       const r = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) {
         if (!SKIP_DIRS.has(e.name)) await walk(r);
-      } else if (e.isFile() && !LOCKFILE.test(r) && !BINARY_EXT.test(r)) {
+      } else if (e.isFile() && !LOCKFILE.test(r) && !BINARY_EXT.test(r) && !isSecretFile(r)) {
         if ((await stat(join(dir, r))).size <= MAX_FILE_BYTES) out.push(r);
       }
     }
@@ -165,10 +173,10 @@ export function safePath(dir: string, file: string): string | null {
   const rel = relative(root, target);
   const inside = (r: string) => r !== "" && r !== ".." && !r.startsWith(".." + sep) && !isAbsolute(r);
   if (!inside(rel)) return null;
-  if (hasBlockedSegment(rel)) return null;
+  if (hasBlockedSegment(rel) || isSecretFile(rel)) return null;
   try {
     const real = relative(realpathSync(root), realpathSync(target));
-    return inside(real) && !hasBlockedSegment(real) ? target : null;
+    return inside(real) && !hasBlockedSegment(real) && !isSecretFile(real) ? target : null;
   } catch {
     return null;
   }
