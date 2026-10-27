@@ -1,0 +1,17 @@
+{
+  "name": "kryterea-lifecycle-copilot",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "packageManager": "pnpm@11.20.0",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "dev": "pnpm -r --parallel --if-present dev"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5",
+    "vitest": "^3.2"
+  }
+}
