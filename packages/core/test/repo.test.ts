@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -18,10 +18,12 @@ let c1 = "";
 let c2 = "";
 let c3 = "";
 
+const LOCAL = { allowLocal: true };
+
 function git(cwd: string, ...args: string[]): string {
   return execFileSync(
     "git",
-    ["-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", ...args],
+    ["-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "-c", "core.autocrlf=false", ...args],
     { cwd, encoding: "utf8" },
   ).trim();
 }
@@ -63,21 +65,67 @@ afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 describe("repo reader", () => {
   it("syncs a repo into the cache and re-syncs to a new commit", async () => {
+    const o = join(root, "sync-origin");
+    mkdirSync(o, { recursive: true });
+    git(o, "init", "-q");
+    writeFileSync(join(o, "old.ts"), "v1\n");
+    writeFileSync(join(o, "keep.ts"), "keep1\n");
+    git(o, "add", "-A");
+    git(o, "commit", "-q", "-m", "s1");
+    const s1 = git(o, "rev-parse", "HEAD");
     const cache = join(root, "cache");
-    git(origin, "checkout", "-q", c2);
-    const first = await syncRepo(origin, cache);
-    expect(first.commit).toBe(c2);
+    const first = await syncRepo(o, cache, undefined, LOCAL);
+    expect(first.commit).toBe(s1);
     expect(first.dir).not.toContain("\\");
-    git(origin, "checkout", "-q", "-");
-    const second = await syncRepo(origin, cache);
+    expect(existsSync(join(first.dir, "old.ts"))).toBe(true);
+
+    git(o, "mv", "old.ts", "renamed.ts");
+    writeFileSync(join(o, "keep.ts"), "keep2\n");
+    git(o, "add", "-A");
+    git(o, "commit", "-q", "-m", "s2");
+    const s2 = git(o, "rev-parse", "HEAD");
+    const second = await syncRepo(o, cache, undefined, LOCAL);
     expect(second.dir).toBe(first.dir);
-    expect(second.commit).toBe(c3);
+    expect(second.commit).toBe(s2);
+    expect(existsSync(join(second.dir, "renamed.ts"))).toBe(true);
+    expect(existsSync(join(second.dir, "old.ts"))).toBe(false);
+    expect(readFileSync(join(second.dir, "keep.ts"), "utf8").trim()).toBe("keep2");
     // full history is kept so changedFiles can diff old commits
-    expect((await changedFiles(second.dir, c1, c3)).changed.length).toBeGreaterThan(0);
+    expect((await changedFiles(second.dir, s1, s2)).deleted).toEqual(["old.ts"]);
   });
 
-  it("fails fast on a missing remote", async () => {
-    await expect(syncRepo(join(root, "nope"), join(root, "cache2"))).rejects.toThrow();
+  it("recovers when the cache dir exists without .git", async () => {
+    const cache = join(root, "cache-broken");
+    const first = await syncRepo(origin, cache, undefined, LOCAL);
+    rmSync(join(first.dir, ".git"), { recursive: true, force: true });
+    const again = await syncRepo(origin, cache, undefined, LOCAL);
+    expect(again.commit).toBe(c3);
+  });
+
+  it("fails fast on a missing remote and never leaks the token", async () => {
+    const err = await syncRepo(join(root, "nope"), join(root, "cache2"), "tok-secret", LOCAL).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    const msg = (err as Error).message;
+    for (const form of ["tok-secret", Buffer.from("x-access-token:tok-secret").toString("base64"), "x-access-token:tok-secret"]) {
+      expect(msg).not.toContain(form);
+    }
+  });
+
+  it("rejects unsafe repo URLs before running git", async () => {
+    const cache = join(root, "cache3");
+    for (const bad of [
+      "--upload-pack=touch pwned",
+      "https://user@github.com/a/b.git",
+      "https://user:pass@github.com/a/b.git",
+      "http://github.com/a/b.git",
+      "ssh://github.com/a/b.git",
+      origin, // a local path without allowLocal
+    ]) {
+      await expect(syncRepo(bad, cache)).rejects.toThrow(/repoUrl rejected/);
+    }
+    await expect(syncRepo("--upload-pack=touch pwned", cache, undefined, LOCAL)).rejects.toThrow(/repoUrl rejected/);
+    await expect(syncRepo("https://u:p@github.com/a/b.git", cache, undefined, LOCAL)).rejects.toThrow(/repoUrl rejected/);
+    expect(existsSync(join(cache))).toBe(false);
   });
 
   it("lists source files and skips node_modules and lockfiles", async () => {
@@ -94,6 +142,11 @@ describe("repo reader", () => {
     const r = await changedFiles(origin, c1, c2);
     expect(r.deleted).toEqual(["src/about.ts"]);
     expect(r.changed).toEqual([]);
+  });
+
+  it("changedFiles rejects anything that is not a commit id", async () => {
+    await expect(changedFiles(origin, "--output=x", c2)).rejects.toThrow(/commit ids/);
+    await expect(changedFiles(origin, c1, "HEAD")).rejects.toThrow(/commit ids/);
   });
 
   it("changedFiles lists a renamed file's old path as deleted and the new path as changed", async () => {
@@ -114,6 +167,18 @@ describe("repo reader", () => {
     expect(verifyCodeTrigger(origin, { file: "nope.ts", line: 1 })).toBe(false);
     expect(verifyCodeTrigger(origin, { file: "src/payment.ts", line: 99 })).toBe(false);
     expect(verifyCodeTrigger(origin, { file: "src/payment.ts", line: 0 })).toBe(false);
+  });
+
+  it("does not accept .git, node_modules or non-integer ranges as evidence, but allows ..foo", () => {
+    expect(readLines(origin, ".git/HEAD", 1, 1)).toBeNull();
+    expect(verifyCodeTrigger(origin, { file: ".git/HEAD", line: 1 })).toBe(false);
+    expect(verifyCodeTrigger(origin, { file: "src/../.git/HEAD", line: 1 })).toBe(false);
+    expect(verifyCodeTrigger(origin, { file: "node_modules/x/index.js", line: 1 })).toBe(false);
+    expect(readLines(origin, "src/payment.ts", 1, Number.NaN)).toBeNull();
+    expect(readLines(origin, "src/payment.ts", 1.5, 2)).toBeNull();
+    expect(readLines(origin, "big.ts", 1, 1)).toBeNull();
+    put("..foo.txt", "dotdot\n");
+    expect(readLines(origin, "..foo.txt", 1, 1)).toBe("dotdot");
   });
 
   it("rejects absolute paths and ../ traversal", () => {
