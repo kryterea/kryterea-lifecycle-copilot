@@ -35,3 +35,54 @@ export interface ModelResult<T> {
 export type Model = <T>(req: ModelRequest) => Promise<ModelResult<T>>;
 
 export type ModelFactory = (ledger: SpendLedger) => Model;
+
+export type RoleId = "ba" | "architect" | "qa" | "compliance" | "po";
+
+export type StageId =
+  | "intake"
+  | "analysis"
+  | "design_review"
+  | "build"
+  | "verification"
+  | "release"
+  | "acceptance"
+  | "operate";
+
+export type ChangeKind = "understand" | "feature" | "fix";
+
+export interface Project {
+  id: string;
+  name: string;
+  repoUrl: string;
+  appUrl: string | null;
+  createdAt: string;
+}
+
+export interface Change {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  kind: ChangeKind;
+  stage: StageId;
+  createdAt: string;
+}
+
+export interface Artifact {
+  id: string;
+  changeId: string;
+  role: RoleId;
+  stage: StageId;
+  kind: string;
+  body: unknown;
+  createdAt: string;
+}
+
+export interface Criterion {
+  id: string;
+  projectId: string;
+  changeId: string;
+  text: string;
+  isFailurePath: boolean;
+  createdAt: string;
+}
