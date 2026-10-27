@@ -1,0 +1,81 @@
+{
+  "findings": [
+    {
+      "title": "Check this: sign-up has no privacy notice",
+      "plain": "Check this: the sign-up form on the booking page collects a name, phone number, email and password, and nothing on the form links to a privacy policy or says what the details are used for. This is not legal advice. Confirm with a qualified adviser.",
+      "costIfIgnored": "Customers may ask why their details are held and get no answer, which can lead to complaints to the regulator and lost trust.",
+      "fixPrompt": "On the sign-up form in public/index.html, add a short notice above the Create account button that says what personal data is collected, why, who receives it (including the payment provider), how long it is kept, and how to contact the salon about it. Link to a privacy policy page.",
+      "citationId": "ndpa-privacy-notice",
+      "triggerType": "code",
+      "file": "public/index.html",
+      "line": 56,
+      "quote": null
+    },
+    {
+      "title": "Check this: phone number is required at sign-up",
+      "plain": "Check this: the register call refuses to create an account without a phone number, even though a booking needs only a name and an email to confirm. This is not legal advice. Confirm with a qualified adviser.",
+      "costIfIgnored": "Collecting more than the booking needs can draw questions from customers and from the regulator, and gives more data to protect.",
+      "fixPrompt": "In server.js, decide whether the phone number is needed to serve a booking. If it is not, make it optional in the /api/register handler and in the sign-up form. If it is, state the reason on the form.",
+      "citationId": "ndpa-data-minimisation",
+      "triggerType": "code",
+      "file": "server.js",
+      "line": 114,
+      "quote": null
+    },
+    {
+      "title": "Check this: no way for a customer to correct or delete their account",
+      "plain": "Check this: the app creates customer accounts in the users table, and there is no route for a customer to change their details or ask for the account to be deleted. This is not legal advice. Confirm with a qualified adviser.",
+      "costIfIgnored": "A customer who wants their data corrected or removed has no route except contacting the salon by hand, which can lead to complaints.",
+      "fixPrompt": "In server.js, add routes that let a signed-in customer update their name, email and phone and request deletion of their account. When an account is deleted, remove or anonymise the personal details on their bookings as well.",
+      "citationId": "ndpa-correction-erasure",
+      "triggerType": "code",
+      "file": "server.js",
+      "line": 26,
+      "quote": null
+    },
+    {
+      "title": "Check this: bookings and accounts are kept with no retention rule",
+      "plain": "Check this: past bookings stay in the bookings table, linked to the customer, and nothing in the app removes or anonymises old bookings or inactive accounts. This is not legal advice. Confirm with a qualified adviser.",
+      "costIfIgnored": "Old customer records pile up, which adds to what must be protected and can draw questions about why data is still held.",
+      "fixPrompt": "In server.js, add a scheduled clean-up that anonymises bookings older than a retention period you choose, and write that period in the privacy notice.",
+      "citationId": "ndpa-storage-limitation",
+      "triggerType": "code",
+      "file": "server.js",
+      "line": 41,
+      "quote": null
+    },
+    {
+      "title": "Check this: the default admin password is written to the server log",
+      "plain": "Check this: when the first admin account is created, the server prints the admin email and password to its console, and falls back to a well known password when none is set. This is not legal advice. Confirm with a qualified adviser.",
+      "costIfIgnored": "Anyone who can read the logs or guess the default could open the admin page and see every customer's phone number and email.",
+      "fixPrompt": "In server.js, stop printing the admin password and remove the built-in fallback password. Require ADMIN_PASSWORD to be set before the first admin account is created.",
+      "citationId": "ndpa-security-of-processing",
+      "triggerType": "code",
+      "file": "server.js",
+      "line": 73,
+      "quote": null
+    },
+    {
+      "title": "Check this: the booking page loads the Paystack script directly",
+      "plain": "Check this: the booking page loads the Paystack payment script from the provider's address. The payment standard asks that pages embedding a provider's payment form are protected from unwanted script changes. This is a standard, not law, and not legal advice. Confirm with a qualified adviser.",
+      "costIfIgnored": "If a script on the payment page were altered, customers' card details could be exposed and the payment provider could withdraw support.",
+      "fixPrompt": "In public/index.html, keep only the Paystack script on the booking page, add a Content-Security-Policy header in server.js that allows only your own scripts and js.paystack.co, and keep a list of every script the page loads.",
+      "citationId": "pci-hosted-payment-page",
+      "triggerType": "code",
+      "file": "public/index.html",
+      "line": 8,
+      "quote": null
+    },
+    {
+      "title": "Check this: no plan or logging for reporting a personal data incident",
+      "plain": "Check this: the app stores customer accounts, phone numbers and booking history, and nothing in the server records failed sign-ins or unusual access that would show a problem. This is not legal advice. Confirm with a qualified adviser.",
+      "costIfIgnored": "If customer data were exposed, the salon might not notice, and could not tell the regulator and customers in time.",
+      "fixPrompt": "In server.js, log failed sign-ins and admin page access with a date and time, and write a one page plan that names who decides whether to tell the regulator and customers, and how.",
+      "citationId": "ndpa-breach-notification",
+      "triggerType": "code",
+      "file": "server.js",
+      "line": 129,
+      "quote": null
+    }
+  ]
+}
