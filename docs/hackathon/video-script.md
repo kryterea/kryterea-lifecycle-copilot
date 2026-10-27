@@ -19,22 +19,22 @@ Diagram builds one piece at a time on a paper slide.
 | Time | Screen | Voice |
 |---|---|---|
 | 0:00 | "Meet Ada." Ada's illustration. | Meet Ada. She runs a two person AI-native agency in Lagos. |
-| 0:05 | Arrow from a client logo (fictional salon, "Glow Studio") to Ada. | A salon hires her to build online bookings with Paystack deposits. |
+| 0:05 | Arrow from a client logo (a fictional fintech startup; the founder picks a name and checks no real company uses it) to Ada. | A fintech startup hires her to build payment links for small businesses in Lagos, paid through Paystack. |
 | 0:10 | Ada to a terminal labelled "Coding agent on Muse Spark", then to a laptop showing the app. | Her coding agent writes the code in an afternoon. |
-| 0:15 | A grey question mark appears over the app, then the Kryterea symbol slides in beside it. | But nobody asked what the salon really needs, read the data protection law, or checked the work. That is the job Kryterea does. |
+| 0:15 | A grey question mark appears over the app, then the Kryterea symbol slides in beside it. | But this app moves money. Nobody asked what the business really needs, read the data protection law and the card rules, or checked the work. That is the job Kryterea does. |
 
 ## 0:20 to 1:50 One change, end to end
 
-Screen recording of the panel, fake mode off, real Muse Spark runs on `demo-salon-bookings`.
+Screen recording of the panel, fake mode off, real Muse Spark runs on `demo-merchant-payments`.
 
 | Time | Screen | Voice |
 |---|---|---|
-| 0:20 | Projects page. Tagline under the title. Add project with the repo URL. | Ada adds the salon's repo. Kryterea only reads it. |
+| 0:20 | Projects page. Tagline under the title. Add project with the repo URL. | Ada adds the client's repo. Kryterea only reads it. |
 | 0:28 | Baseline change. Run next step. The dark Instrument band names each professional as it works. | Five professionals review the app as it is built today, on Muse Spark. |
 | 0:40 | Analysis: the analyst's questions. Ada types two answers. | The business analyst asks what the code cannot answer. **[from the run]** |
-| 0:50 | Design review. Open one legal finding: "Check this", the NDPA section, the Law tag. | Compliance reads the Nigeria Data Protection Act against the code and cites the exact section. **[from the run]** |
+| 0:50 | Design review. Open one legal finding: "Check this", the NDPA section, the Law tag. | Compliance reads the Nigeria Data Protection Act and the card security rules against the code and cites the exact section. **[from the run]** |
 | 1:00 | One operations finding from the architect. | The architect asks what happens when it breaks. **[from the run]** |
-| 1:08 | New change: "Take a deposit before holding a slot". Run to Build. The hand-off block: project id and prompt, Copy. | Ada asks for a new feature. At Build, Kryterea hands her coding agent the project and the findings. |
+| 1:08 | New change: "Add monthly subscriptions". Run to Build. The hand-off block: project id and prompt, Copy. | The client wants businesses to charge customers every month. At Build, Kryterea hands Ada's coding agent the project and the findings. |
 | 1:15 | Cut to the coding agent's terminal (OpenCode on Muse Spark): `list_findings`, edits, `report_fix`, commit, `request_recheck`. | The agent works through the findings over MCP. |
 | 1:28 | Back in the panel: the finding shows "Fix reported". | The agent's word is not proof. The finding stays open. |
 | 1:33 | Re-check runs. The finding turns Fixed; QA marks each criterion Evidence found. | Kryterea checks the new commit. Only then does it count. |
