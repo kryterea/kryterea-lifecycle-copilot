@@ -19,6 +19,7 @@ Built during the event (update as tasks finish):
 - [x] HTTP API and push poller
 - [x] MCP server for coding agents
 - [x] Web work panel
+- [x] Web panel redesign (2026-10-27): the change screen as a stage Trail beside one stage at a time, icon buttons, shorter copy, phone and dark layouts; `packages/web/PRODUCT.md` and `packages/web/DESIGN.md` record the product and design decisions
 - [ ] Demo app (separate repo `demo-salon-bookings`), built by a coding agent running on Muse Spark from the prompts in its `PROMPTS.md`
 
 ## What is not ours, or not new
@@ -26,4 +27,6 @@ Built during the event (update as tasks finish):
 - Meta Model API (Muse Spark) for all reasoning.
 - The coding agent used on camera: OpenCode (open source), running on Muse Spark. Meta's own Muse Code does not run on native Windows, where this was built.
 - Open-source libraries listed in each `package.json`.
+- The panel's look follows the Kryterea platform's existing visual language so the two read as one family: its colour values, type scale, fonts (Geist, Source Serif 4, JetBrains Mono, loaded from Google Fonts), radii, shadows, motion timings, and the shapes of its stage Trail, status stamps, pill buttons and dark "Instrument" band. Those values and shapes were followed by eye and by number; every component, stylesheet and icon in `packages/web` was written fresh during the event, and no Kryterea code was copied.
+- The Impeccable design skill for Claude Code guided the redesign and its finish review.
 - Kryterea's private Business Analysis OS (BA OS) was used as pre-existing development tooling: a pre-mortem on the plan, drafting and verifying the NDPA obligation list against the official text, drawing the workflow diagram, independent review of the copilot's own output on the demo app, and editing prose. BA OS's own skills, playbooks, rubrics, templates and reports are not in this repository, and BA OS is not part of this entry. The things it helped produce during the event (the legal pack in `packs/legal/`, the README diagram and prose) were created during the build window and are part of the entry.
