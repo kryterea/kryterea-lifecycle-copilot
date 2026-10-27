@@ -13,7 +13,7 @@ Built during the event (update as tasks finish):
 - [x] Meta model adapter with spend guard
 - [x] The record: changes, findings, gates, evidence, acceptance
 - [x] Repo reader and file narrowing
-- [ ] Five professional packs and the verified NDPA 2023 legal pack
+- [x] Five professional packs and the verified NDPA 2023 legal pack
 - [ ] Business analyst, architect/SRE, QA, security and compliance, and product owner roles
 - [ ] Change workflow with targeted re-checks
 - [ ] HTTP API and push poller

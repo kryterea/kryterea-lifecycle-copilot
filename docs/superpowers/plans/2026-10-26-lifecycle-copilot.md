@@ -192,13 +192,13 @@ Skills: business-analysis-os:regulatory-compliance (draft obligations from the o
 **Interfaces:**
 - Produces: `interface LegalDuty { id: string; law: 'NDPA 2023'; section: string; title: string; duty: string; triggers: string[]; sourceUrl: string; verifiedOn: string }`; `interface Packs { role: Record<RoleId, string>; legal: LegalDuty[] }`; `loadPacks(dir: string): Promise<Packs>` which throws if any role file is missing or any legal entry lacks `section`, `sourceUrl` or `verifiedOn`.
 
-- [ ] **Step 1:** Download the official NDPA 2023 text (Nigeria Data Protection Commission site). Log the URL and retrieval date in `legal-sources.md`.
-- [ ] **Step 2:** With the regulatory-compliance skill, draft 8 to 12 duties that a small app with accounts, personal data and payments can trigger (for example: lawful basis and consent, purpose limitation, data minimisation, retention, data subject rights including erasure, security of processing, breach notification). Each entry quotes or closely paraphrases its section.
-- [ ] **Step 3:** Run the compliance-auditor agent on the draft against the official text. Fix or drop every entry it disputes. Set `verifiedOn`. Founder reviews the final list before it is used in the video.
-- [ ] **Step 4:** Write the five role packs fresh, about 300 to 600 words each: the role's duties at each stage it serves (spec section 6), what a finding must contain, the plain-language rule (write for someone looking at app behaviour), the banned words, and for compliance the rule "cite only pack entries by id". Card handling is cited as PCI DSS, labelled a standard, inside `compliance.md`.
-- [ ] **Step 5: Write failing tests:** `loads all five role packs`; `rejects a legal entry without sourceUrl`; `every shipped legal entry has a section and verifiedOn` (runs against the real `packs/`).
-- [ ] **Step 6:** Implement `loadPacks`. Run tests. Expected: PASS.
-- [ ] **Step 7:** Commit `feat: professional packs and verified NDPA legal pack`.
+- [x] **Step 1:** Download the official NDPA 2023 text (Nigeria Data Protection Commission site). Log the URL and retrieval date in `legal-sources.md`.
+- [x] **Step 2:** With the regulatory-compliance skill, draft 8 to 12 duties that a small app with accounts, personal data and payments can trigger (for example: lawful basis and consent, purpose limitation, data minimisation, retention, data subject rights including erasure, security of processing, breach notification). Each entry quotes or closely paraphrases its section.
+- [x] **Step 3:** Run the compliance-auditor agent on the draft against the official text. Fix or drop every entry it disputes. Set `verifiedOn`. Founder reviews the final list before it is used in the video.
+- [x] **Step 4:** Write the five role packs fresh, about 300 to 600 words each: the role's duties at each stage it serves (spec section 6), what a finding must contain, the plain-language rule (write for someone looking at app behaviour), the banned words, and for compliance the rule "cite only pack entries by id". Card handling is cited as PCI DSS, labelled a standard, inside `compliance.md`.
+- [x] **Step 5: Write failing tests:** `loads all five role packs`; `rejects a legal entry without sourceUrl`; `every shipped legal entry has a section and verifiedOn` (runs against the real `packs/`).
+- [x] **Step 6:** Implement `loadPacks`. Run tests. Expected: PASS.
+- [x] **Step 7:** Commit `feat: professional packs and verified NDPA legal pack`.
 
 ### Task 8: Business analyst role
 
