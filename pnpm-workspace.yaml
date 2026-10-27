@@ -2,3 +2,8 @@ packages:
   - "packages/*"
 allowBuilds:
   esbuild: true
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  - undici-types@6.21.0
+minimumReleaseAge: 1440
