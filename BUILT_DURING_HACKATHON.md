@@ -17,7 +17,7 @@ Built during the event (update as tasks finish):
 - [x] Business analyst, architect/SRE, QA, security and compliance, and product owner roles
 - [x] Change workflow with targeted re-checks
 - [x] HTTP API and push poller
-- [ ] MCP server for coding agents
+- [x] MCP server for coding agents
 - [ ] Web work panel
 - [ ] Demo app (separate repo `demo-salon-bookings`), built by a coding agent running on Muse Spark from the prompts in its `PROMPTS.md`
 

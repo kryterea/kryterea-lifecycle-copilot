@@ -343,11 +343,11 @@ Skills: mcp-server-dev:build-mcp-server (or mcp-builder), superpowers:test-drive
 **Interfaces:**
 - Produces tools (stdio), each a thin call to the HTTP API at `COPILOT_URL` (default `http://localhost:8787`): `list_findings {projectId, status?}`; `get_finding {findingId}` (returns plain text, trigger, fix prompt, criterion); `get_change {changeId}`; `report_fix {findingId, summary}` (sets status `fixed`, actor `coding-agent`); `request_recheck {projectId}`. Tool descriptions tell the agent: you are the builder; fix findings, then call `report_fix` and `request_recheck`.
 
-- [ ] **Step 1: Write failing tests:** `report_fix posts status fixed with actor coding-agent`; `get_finding returns the fix prompt`; `tools list contains exactly the five tools`.
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement with `@modelcontextprotocol/sdk`.
-- [ ] **Step 4:** Run. Expected: PASS. Then connect it to the coding agent proven in Task 0 and call `list_findings` by hand. Expected: findings listed in the agent chat.
-- [ ] **Step 5:** Commit `feat(mcp): MCP tools for coding agents`.
+- [x] **Step 1: Write failing tests:** `report_fix posts status fixed with actor coding-agent`; `get_finding returns the fix prompt`; `tools list contains exactly the five tools`.
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement with `@modelcontextprotocol/sdk`.
+- [x] **Step 4:** Run. Expected: PASS. Then connect it to the coding agent proven in Task 0 and call `list_findings` by hand. Expected: findings listed in the agent chat.
+- [x] **Step 5:** Commit `feat(mcp): MCP tools for coding agents`.
 
 ### Task 16: Web work panel
 
