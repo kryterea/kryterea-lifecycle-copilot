@@ -243,11 +243,11 @@ Skills: superpowers:test-driven-development.
 **Interfaces:**
 - Produces: `reviewOperations(ctx): Promise<RoleResult>` covering backups, rate limits, monitoring, behaviour at 10x users, support when something breaks; findings `kind: 'operations'`, code trigger where one exists, otherwise `doc` trigger quoting the as-built artifact. `architectGate(openOperationsFindings: number): {state, reason}`.
 
-- [ ] **Step 1: Write failing tests:** `operations findings carry kind operations`; `a code trigger to a missing file is converted to a doc trigger` (uses `verifyCodeTrigger`); `gate held while operations findings are open`.
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement. Narrow with query "env config deploy database backup rate limit log monitor error".
-- [ ] **Step 4:** Run. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): architect and SRE role`.
+- [x] **Step 1: Write failing tests:** `operations findings carry kind operations`; `a code trigger to a missing file is converted to a doc trigger` (uses `verifyCodeTrigger`); `gate held while operations findings are open`.
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement. Narrow with query "env config deploy database backup rate limit log monitor error".
+- [x] **Step 4:** Run. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): architect and SRE role`.
 
 ### Task 11: QA conformance role
 
