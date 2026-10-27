@@ -44,6 +44,11 @@ A stdio "echo" server built with `@modelcontextprotocol/sdk` (scratch folder out
 
 ## Pre-mortem
 
-Run with pre-existing private tooling (disclosed in `BUILT_DURING_HACKATHON.md`); its report stays outside the repo. Plan changes it led to are listed below.
+Run with pre-existing private tooling (disclosed in `BUILT_DURING_HACKATHON.md`); its report stays outside the repo. Plan changes it led to:
 
-<!-- filled in after the pre-mortem -->
+1. A real Muse Spark call on the demo repo closes each role task (8 to 11), and the first full run moves from 11-02 to 10-30. The demo app is finished by 10-28.
+2. The model adapter (Task 2) sends `reasoning_effort`, leaves reasoning headroom in every output cap, retries once with a doubled cap on empty content, and counts reasoning tokens in cost.
+3. Long actions return a run id and the panel polls it (Task 14); QA checks run 3 at a time; the panel labels Muse Spark's work and shows a working state.
+4. Public files name no private repositories or internal rules; the final scan covers both public repos' full history.
+5. Startup-track eligibility is a hard gate by 10-28, before the video script.
+6. A rough cut of the video on 11-01, and a database snapshot before each scene on recording day.
