@@ -38,7 +38,7 @@ interface RawLegalFinding extends RawFinding {
 export function complianceGate(openLegalFindings: number): { state: GateState; reason: string } {
   if (openLegalFindings > 0) {
     const n = openLegalFindings;
-    return { state: "held", reason: `${n} legal finding${n === 1 ? "" : "s"} to check before release. Fix each one or accept the risk with a reason.` };
+    return { state: "held", reason: `${n} legal finding${n === 1 ? "" : "s"} to check before release. Fix each one or accept the risk with a reason. Deferring does not count.` };
   }
   return { state: "cleared", reason: "No open legal findings." };
 }

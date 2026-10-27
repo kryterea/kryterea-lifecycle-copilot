@@ -268,6 +268,24 @@ describe("workflow", () => {
     expect(record.gates(c.id).compliance?.state).toBe("cleared");
   });
 
+  it("a deferred legal finding keeps the compliance gate held; accepting the risk with a reason clears it", async () => {
+    const { record, models, deps, change } = setup();
+    models.handlers["compliance.reviewCompliance"] = () => ({ findings: [legalFinding] });
+    const c = change("understand");
+    await advance(deps, c.id);
+    expect((await advance(deps, c.id)).held).toEqual(["compliance"]);
+
+    const [finding] = record.listFindings({ changeId: c.id });
+    record.setFindingStatus(finding!.id, "deferred", "Next quarter", "owner");
+    expect(await advance(deps, c.id)).toEqual({ stage: "release", held: ["compliance"], stoppedForBudget: false });
+    expect(record.gates(c.id).compliance?.state).toBe("held");
+
+    record.setFindingStatus(finding!.id, "accepted_risk", "Lawyer confirmed the consent wording", "owner");
+    await advance(deps, c.id);
+    expect(record.getChange(c.id).stage).toBe("acceptance");
+    expect(record.gates(c.id).compliance?.state).toBe("cleared");
+  });
+
   it("recheck re-verifies a criterion whose evidence file was deleted", async () => {
     const { record, models, deps, change, project, origin, crit } = setup();
     const c = change("understand");

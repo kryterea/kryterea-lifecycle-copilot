@@ -100,7 +100,11 @@ export function FindingItem({ finding, onChanged }: { finding: FindingView; onCh
         <Reasoned />
       </summary>
       <div className="body">
-        {finding.kind === "legal" && <p className="note">Not legal advice. A qualified lawyer should confirm before you rely on it.</p>}
+        {finding.kind === "legal" && (
+          <p className="note">
+            Not legal advice. A qualified lawyer should confirm before you rely on it. Deferring a legal finding keeps release held; fix it or accept the risk with a reason.
+          </p>
+        )}
         <div>
           <h4>What it costs you</h4>
           <p>{finding.costIfIgnored}</p>

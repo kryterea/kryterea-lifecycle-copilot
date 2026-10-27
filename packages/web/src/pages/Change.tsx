@@ -11,7 +11,7 @@ const NEXT: Record<StageId, string> = {
   design_review: "Compliance and the architect review the design before anything is built.",
   build: "Waiting for your coding agent to build this. Re-check once it has pushed.",
   verification: "QA checks every acceptance criterion against the code.",
-  release: "Release waits until every held gate clears. Fix, accept the risk of, or defer each open finding, then re-check.",
+  release: "Release waits until every held gate clears. Fix each open finding or accept its risk with a reason, then re-check. Operations findings can be deferred; a deferred legal finding still holds release.",
   acceptance: "The product owner accepts delivery once every other gate is cleared.",
   operate: "Delivered and accepted. The copilot keeps watching new pushes.",
 };

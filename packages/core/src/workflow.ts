@@ -72,6 +72,10 @@ function gate(record: CopilotRecord, changeId: string, role: RoleId, g: { state:
 const openOn = (record: CopilotRecord, changeId: string, kind: FindingKind) =>
   record.listFindings({ changeId, status: "open" }).filter((f) => f.kind === kind).length;
 
+/** Legal findings hold until fixed or accepted with a reason; deferring one does not clear the compliance gate. */
+const legalUnresolved = (record: CopilotRecord, changeId: string) =>
+  record.listFindings({ changeId }).filter((f) => f.kind === "legal" && (f.status === "open" || f.status === "deferred")).length;
+
 /** Ids of the changes linked `affects` to this criterion. */
 const affectedBy = (record: CopilotRecord, criterionId: string) =>
   record
@@ -160,7 +164,7 @@ async function verify(s: Session, change: Change, stage: StageId, criteria: Crit
  */
 function releaseHeld(record: CopilotRecord, c: Change): RoleId[] {
   const gates: Array<[RoleId, { state: GateState; reason: string }]> = [
-    ["compliance", complianceGate(openOn(record, c.id, "legal"))],
+    ["compliance", complianceGate(legalUnresolved(record, c.id))],
     ["architect", architectGate(openOn(record, c.id, "operations"))],
     ["qa", qaGate(latestChecks(record, criteriaOf(record, c)))],
   ];
@@ -203,7 +207,7 @@ const DISPATCH: Record<StageId, (s: Session, c: Change) => Promise<Outcome>> = {
     if (!record.gates(c.id).compliance) {
       await runRole(s, c, "compliance", async (ctx) => save(ctx, "compliance", "design_review", await reviewCompliance(ctx, asBuilt)));
     }
-    gate(record, c.id, "compliance", complianceGate(openOn(record, c.id, "legal")));
+    gate(record, c.id, "compliance", complianceGate(legalUnresolved(record, c.id)));
     if (!record.gates(c.id).architect) {
       await runRole(s, c, "architect", async (ctx) => save(ctx, "architect", "design_review", await reviewOperations(ctx, asBuilt)));
     }
