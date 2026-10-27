@@ -16,3 +16,6 @@ coverage/
 /graft/
 .ignore
 graft/
+
+# Impeccable review captures (local only)
+.impeccable/
