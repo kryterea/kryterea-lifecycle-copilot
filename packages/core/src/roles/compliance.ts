@@ -117,7 +117,7 @@ export async function reviewCompliance(ctx: RoleContext, asBuiltOrChange: unknow
       title: k.title.startsWith(PREFIX) ? k.title : PREFIX + k.title,
       plain: k.plain.startsWith(PREFIX) ? k.plain : PREFIX + k.plain,
     };
-    if (accusing(`${out.title} ${out.plain} ${out.fixPrompt}`)) {
+    if (accusing(`${out.title} ${out.plain} ${out.costIfIgnored} ${out.fixPrompt}`)) {
       console.warn(`compliance: dropped a finding that accuses the owner of a breach ("${k.title}")`);
       continue;
     }
