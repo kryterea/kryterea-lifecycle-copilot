@@ -495,7 +495,10 @@ export class CopilotRecord {
       status: r.status as RunStatus,
       costUsd: r.cost_usd as number,
     }));
-    return { change, criteria, findings, gates: this.gates(changeId), decisions, runs };
+    const latestSummary = this.listArtifacts(changeId).filter((a) => a.kind === "acceptance_summary").at(-1);
+    const body = latestSummary?.body as { summary?: unknown } | undefined;
+    const summary = typeof body?.summary === "string" ? body.summary : null;
+    return { change, criteria, findings, gates: this.gates(changeId), decisions, runs, summary };
   }
 }
 

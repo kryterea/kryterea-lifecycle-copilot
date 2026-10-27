@@ -148,6 +148,8 @@ export interface AcceptanceRecord {
   gates: GateMap;
   decisions: Array<{ findingId: string; status: FindingStatus; reason: string; actor: string; at: string }>;
   runs: Array<{ id: string; role: RoleId; commit: string; status: RunStatus; costUsd: number }>;
+  /** From the latest `acceptance_summary` artifact, null when none. */
+  summary: string | null;
 }
 
 export interface LegalDuty {

@@ -169,4 +169,14 @@ describe("runs, gates, links, acceptance", () => {
     });
     expect(ar.runs).toHaveLength(1);
   });
+
+  it("acceptanceRecord carries the latest acceptance_summary, null when none", () => {
+    const { record, change } = setup();
+    expect(record.acceptanceRecord(change.id).summary).toBeNull();
+    const add = (body: unknown) => record.addArtifact({ changeId: change.id, role: "po", stage: "acceptance", kind: "acceptance_summary", body });
+    add({ summary: "First." });
+    add({ summary: "Second." });
+    record.addArtifact({ changeId: change.id, role: "po", stage: "acceptance", kind: "acceptance", body: { actor: "a" } });
+    expect(record.acceptanceRecord(change.id).summary).toBe("Second.");
+  });
 });
