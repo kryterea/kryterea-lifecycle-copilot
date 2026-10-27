@@ -328,11 +328,11 @@ Skills: superpowers:test-driven-development.
 **Interfaces:**
 - Produces routes (JSON): `POST /api/projects {name, repoUrl, appUrl?}`; `GET /api/projects/:id`; `POST /api/projects/:id/changes {title, description, kind}`; `GET /api/changes/:id` (change, stage, gates, findings with status, criteria with latest state, questions); `POST /api/changes/:id/advance` (returns `{runId}` at once and runs in the background; `GET /api/runs/:id` returns `{state: 'running' | 'done' | 'stopped_budget' | 'error', error?}`, and the panel polls it; the same applies to `/recheck`); `POST /api/changes/:id/answers {answers: string[]}` (stored as artifact kind `answers`, read by BA at analysis); `POST /api/changes/:id/accept {actor}`; `POST /api/findings/:id/status {status, reason, actor}`; `POST /api/projects/:id/recheck {reason}`; `GET /api/projects/:id/findings?status=` (findings with status); `GET /api/findings/:id` (finding, status, history, and its criterion when `criterionId` is set); `GET /api/changes/:id/record` (AcceptanceRecord plus the acceptance summary); `GET /api/spend` (`{spentUsd, budgetUsd}`); static files from `packages/web/dist`. `POST /accept` records the founder's acceptance, then runs `poGate` and, if cleared, `acceptanceSummary`. `startPoller(deps: WorkflowDeps, intervalMs = 60_000, lsRemote: (repoUrl: string) => Promise<string> = gitLsRemote)` polls every project in the record and calls `recheck(deps, projectId, 'push')` for each whose head commit changed.
 
-- [ ] **Step 1: Write failing tests:** `advance returns a run id before the run finishes`; `creating a project then a change returns stage intake`; `status endpoint rejects an unknown status with 400`; `spend endpoint returns spentUsd and budgetUsd`; `get finding returns its criterion`; `poller calls recheck only for the project whose head changed` (fake `lsRemote`, two projects).
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement. `main.ts` reads env, opens `./data/copilot.db`, loads packs, builds `modelFor` from `createModel` (or `createFakeModel('packages/core/fixtures')` when `COPILOT_FAKE_MODEL=1`), starts the server on `PORT` (default 8787) and the poller.
-- [ ] **Step 4:** Run. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(server): HTTP API and push poller`.
+- [x] **Step 1: Write failing tests:** `advance returns a run id before the run finishes`; `creating a project then a change returns stage intake`; `status endpoint rejects an unknown status with 400`; `spend endpoint returns spentUsd and budgetUsd`; `get finding returns its criterion`; `poller calls recheck only for the project whose head changed` (fake `lsRemote`, two projects).
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement. `main.ts` reads env, opens `./data/copilot.db`, loads packs, builds `modelFor` from `createModel` (or `createFakeModel('packages/core/fixtures')` when `COPILOT_FAKE_MODEL=1`), starts the server on `PORT` (default 8787) and the poller.
+- [x] **Step 4:** Run. Expected: PASS.
+- [x] **Step 5:** Commit `feat(server): HTTP API and push poller`.
 
 ### Task 15: MCP server for coding agents
 
