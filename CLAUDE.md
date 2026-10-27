@@ -10,7 +10,7 @@ Design: `docs/superpowers/specs/2026-10-26-lifecycle-copilot-design.md`. Plan: `
 
 ## Hard rules
 
-1. New work only. Every file here is written during the build window. Never copy anything from Kryterea's private product, marketing or document repos, or BA OS (private). BA OS may be used as a tool. Its own text (skills, playbooks, rubrics, templates, its reports) never enters this repo; work it helps produce during the event (the verified legal pack, the workflow diagram, README prose) may, and is disclosed in `BUILT_DURING_HACKATHON.md`.
+1. Only demo work built in the window. Prior Kryterea work may be reused where it helps (founder decision 2026-10-27), but each reused piece is listed in `BUILT_DURING_HACKATHON.md` under "What is not ours, or not new" and never shown as a new feature. Copy files only, never repo history, and never anything holding a secret; kryterea-app itself stays private. BA OS may be used as a tool. Its own text (skills, playbooks, rubrics, templates, its reports) never enters this repo; work it helps produce during the event (the verified legal pack, the workflow diagram, README prose) may, and is disclosed in `BUILT_DURING_HACKATHON.md`.
 2. This repo is public. No secrets in git; keys only in `.env` (ignored). `HANDOFF.md` is internal and gitignored; never commit it.
 3. No score, rubric, grade, rating, pass or fail language in product copy, README or video. Evidence: "Evidence found", "Gap", "No evidence". Gates: "Held", "Cleared".
 4. No em dashes, en dashes or spaced hyphens as sentence dashes, anywhere.
