@@ -73,4 +73,15 @@ describe("record: projects, changes, artifacts, criteria", () => {
     expect(second.getProject(project.id)).toEqual(project);
     second.close();
   });
+  it("closes runs left running by a restart", () => {
+    const record = CopilotRecord.open(":memory:");
+    const project = record.createProject({ name: "Runs", repoUrl: "r" });
+    const change = record.createChange({ projectId: project.id, title: "T", description: "D", kind: "feature" });
+    const done = record.startRun({ changeId: change.id, role: "ba", commit: "a" });
+    record.finishRun(done, "done");
+    record.startRun({ changeId: change.id, role: "qa", commit: "a" });
+    expect(record.closeInterruptedRuns()).toBe(1);
+    expect(record.acceptanceRecord(change.id).runs.map((r) => r.status)).toEqual(["done", "failed"]);
+    expect(record.closeInterruptedRuns()).toBe(0);
+  });
 });

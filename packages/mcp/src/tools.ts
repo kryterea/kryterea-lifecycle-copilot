@@ -152,7 +152,8 @@ function triggerText(t: Json | undefined): string {
   return "none";
 }
 
-const findingLine = (f: Json) => `${line(f.id, 100)} | ${line(f.status, 50)} | ${kindLabel(f.kind)} | ${line(f.title, 200)}`;
+const findingLine = (f: Json) =>
+  `${line(f.id, 100)} | ${line(f.status, 50)}${f.fixReported ? " (fix reported, waiting on re-check)" : ""} | ${kindLabel(f.kind)} | ${line(f.title, 200)}`;
 
 export function buildTools(options: ApiOptions = {}): Tool[] {
   const call = makeApi(options);
@@ -162,9 +163,9 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
     tool(
       "list_findings",
       "List the review findings the copilot has raised on a project. You are the builder: the copilot's professional roles review your work and never edit code. " +
-        "The projectId is shown in the copilot panel header. Ask for status open first, then work through the open findings one at a time: " +
+        "The projectId is shown at the Build stage of each change in the copilot panel. Ask for status open first, then work through the open findings one at a time: " +
         "get_finding for the suggested fix, apply it if it matches the owner's request, call report_fix with what you changed, then call request_recheck so QA verifies it.",
-      { projectId: id("Project id, shown in the copilot panel header"), status: z.enum(STATUSES).optional().describe("Only findings in this status") },
+      { projectId: id("Project id, shown at the Build stage in the copilot panel"), status: z.enum(STATUSES).optional().describe("Only findings in this status") },
       async ({ projectId, status }) => {
         const q = status ? `?status=${status}` : "";
         const { findings } = await api("GET", `/api/projects/${seg(projectId)}/findings${q}`, undefined, "findings");
@@ -178,7 +179,7 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
       "get_finding",
       "Get one finding in full: what is wrong in plain words, where it was found, the acceptance criterion it relates to, and a suggested fix as a separate item. " +
         "You are the builder, so you change the code; the copilot reviews but never edits code. Apply the suggested fix if it matches the owner's request, " +
-        "then call report_fix with what you changed, then request_recheck so QA verifies it. A fix only counts once the re-check finds evidence.",
+        "then call report_fix with what you changed, then request_recheck. The finding stays open until the re-check confirms the fix.",
       { findingId: id("Finding id, from list_findings") },
       async ({ findingId }) => {
         const r = await api("GET", `/api/findings/${seg(findingId)}`, undefined, "finding");
@@ -225,11 +226,11 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
     tool(
       "report_fix",
       "Tell the copilot you fixed a finding. You are the builder: do this after you changed the code, with a short summary of what you changed and where. " +
-        "This marks the finding fixed in the record. Then call request_recheck so QA verifies it. A fix only counts once the re-check finds evidence.",
+        "The finding stays open, and its gate stays held, until a re-check confirms the fix. Commit, then call request_recheck.",
       { findingId: id("Finding id"), summary: z.string().trim().min(1).max(2000).describe("What you changed and where, up to 2,000 characters") },
       async ({ findingId, summary }) => {
-        await api("POST", `/api/findings/${seg(findingId)}/status`, { status: "fixed", reason: summary, actor: "coding-agent" });
-        return [`Recorded finding ${line(findingId, 100)} as fixed. Now call request_recheck so QA verifies it. A fix only counts once the re-check finds evidence.`];
+        await api("POST", `/api/findings/${seg(findingId)}/fix-report`, { summary });
+        return [`Recorded your fix for finding ${line(findingId, 100)}. It stays open until a re-check confirms it: commit, then call request_recheck.`];
       },
     ),
 
@@ -237,8 +238,8 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
       "request_recheck",
       "Ask the copilot to check the project again against the latest commit, so QA can verify the fixes you reported. " +
         "You are the builder: commit your changes first, then call this once after your report_fix calls. " +
-        "The projectId is shown in the copilot panel header. The check runs in the background; call list_findings with status open in a minute to see what remains.",
-      { projectId: id("Project id, shown in the copilot panel header") },
+        "The projectId is shown at the Build stage of each change in the copilot panel. The check runs in the background; call list_findings with status open in a minute to see what remains.",
+      { projectId: id("Project id, shown at the Build stage in the copilot panel") },
       async ({ projectId }) => {
         const r = await call("POST", `/api/projects/${seg(projectId)}/recheck`, { reason: "mcp" });
         if (r.status === 409) return [RECHECK_BUSY];

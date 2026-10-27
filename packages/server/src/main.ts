@@ -68,6 +68,10 @@ const deps = {
   ...(env.GITHUB_TOKEN ? { githubToken: env.GITHUB_TOKEN } : {}),
 };
 
+// Jobs live in memory, so a run marked running from before this start was cut off and will never finish.
+const interrupted = deps.record.closeInterruptedRuns();
+if (interrupted) console.log(`Closed ${interrupted} run(s) interrupted by the last restart.`);
+
 const port = num("PORT", 8787);
 const hostname = env.HOST || "127.0.0.1";
 const apiToken = env.COPILOT_API_TOKEN || undefined;

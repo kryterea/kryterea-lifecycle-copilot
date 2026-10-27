@@ -264,6 +264,61 @@ describe("HTTP API", () => {
     expect((await call("GET", `/api/changes/${c.id}/record`)).json).toMatchObject({ change: { id: c.id }, summary: null });
   });
 
+  it("a fix report leaves the finding open with the report attached, and only an open finding takes one", async () => {
+    const { p, c, finding } = seedFinding();
+    const { call } = setup();
+    expect((await call("POST", `/api/findings/${finding.id}/fix-report`, { summary: "" })).status).toBe(400);
+    const r = await call("POST", `/api/findings/${finding.id}/fix-report`, { summary: "Deposit taken on retry" });
+    expect(r.status).toBe(201);
+    expect(r.json).toMatchObject({ status: "open", fixReported: { summary: "Deposit taken on retry" } });
+    const view = await call("GET", `/api/changes/${c.id}`);
+    expect(view.json.findings[0].fixReported.summary).toBe("Deposit taken on retry");
+    expect((await call("GET", `/api/projects/${p.id}/findings?status=open`)).json.findings[0].fixReported).not.toBeNull();
+    deps.record.setFindingStatus(finding.id, "deferred", "Later", "Ada");
+    expect((await call("POST", `/api/findings/${finding.id}/fix-report`, { summary: "x" })).status).toBe(409);
+  });
+
+  it("withdraw ends a change: it is marked in the views and refuses advance and a second withdraw", async () => {
+    const { p, c } = seedChange();
+    const advanceFn = vi.fn();
+    const { call } = setup({ advanceFn });
+    expect((await call("POST", `/api/changes/${c.id}/withdraw`, { reason: "Dropped" })).status).toBe(400);
+    expect((await call("POST", `/api/changes/${c.id}/withdraw`, { reason: "Dropped", actor: "Ada" })).status).toBe(201);
+    expect((await call("GET", `/api/changes/${c.id}`)).json.withdrawn).toEqual({ reason: "Dropped", actor: "Ada" });
+    expect((await call("GET", `/api/projects/${p.id}`)).json.changes[0].withdrawn).toBe(true);
+    expect((await call("POST", `/api/changes/${c.id}/advance`)).status).toBe(409);
+    expect((await call("POST", `/api/changes/${c.id}/withdraw`, { reason: "Again", actor: "Ada" })).status).toBe(409);
+    expect(advanceFn).not.toHaveBeenCalled();
+  });
+
+  it("reanalyse sends a change with no criteria back to analysis, and refuses one that has criteria", async () => {
+    const { c } = seedChange();
+    const advanceFn = vi.fn(async () => ({ stage: "analysis" as const, held: [], stoppedForBudget: false }));
+    const { call } = setup({ advanceFn });
+    expect((await call("POST", `/api/changes/${c.id}/reanalyse`)).status).toBe(409);
+    deps.record.setStage(c.id, "release");
+    expect((await call("POST", `/api/changes/${c.id}/reanalyse`)).status).toBe(202);
+    expect(deps.record.getChange(c.id).stage).toBe("analysis");
+    expect(advanceFn).toHaveBeenCalledWith(deps, c.id);
+
+    const { c: other } = seedFinding();
+    deps.record.setStage(other.id, "release");
+    expect((await call("POST", `/api/changes/${other.id}/reanalyse`)).status).toBe(409);
+  });
+
+  it("fix-change opens a fix change from a delivered change with open findings, and both views link it", async () => {
+    const { c, finding } = seedFinding();
+    const { call } = setup();
+    expect((await call("POST", `/api/changes/${c.id}/fix-change`)).status).toBe(409);
+    deps.record.setStage(c.id, "operate");
+    const r = await call("POST", `/api/changes/${c.id}/fix-change`);
+    expect(r.status).toBe(201);
+    expect(r.json).toMatchObject({ kind: "fix", stage: "intake" });
+    const view = (await call("GET", `/api/changes/${c.id}`)).json;
+    expect(view.fixChanges).toEqual([{ id: r.json.id, title: r.json.title, stage: "intake", withdrawn: false, findingIds: [finding.id] }]);
+    expect((await call("GET", `/api/changes/${r.json.id}`)).json.follows).toEqual({ id: c.id, title: "Deposits", stage: "operate" });
+  });
+
   it("status endpoint rejects an unknown status with 400", async () => {
     const { finding } = seedFinding();
     const { call } = setup();

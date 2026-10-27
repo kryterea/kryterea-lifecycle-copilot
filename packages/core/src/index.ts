@@ -13,5 +13,5 @@ export { verifyCriteria, qaGate } from "./roles/qa.js";
 export { poGate, acceptanceSummary } from "./roles/po.js";
 export { systemPrompt, checkTriggers, repoMaterial, defang } from "./roles/context.js";
 export type { RoleContext, RoleResult, RoleFinding } from "./roles/context.js";
-export { STAGES, accepted, advance, recheck } from "./workflow.js";
+export { STAGES, accepted, advance, criteriaOf, openFixChange, openQuestions, recheck, withdrawal } from "./workflow.js";
 export type { WorkflowDeps } from "./workflow.js";

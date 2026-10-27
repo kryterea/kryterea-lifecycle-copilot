@@ -6,7 +6,11 @@ import {
   accepted,
   advance,
   checkRepoUrl,
+  criteriaOf,
+  openFixChange,
+  openQuestions,
   recheck,
+  withdrawal,
   type ChangeKind,
   type FindingStatus,
   type RunStatus,
@@ -242,6 +246,19 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
   };
   const startAdvance = (projectId: string, changeId: string) =>
     jobs.start("advance", changeId, `${projectId}/${changeId}`, () => advanceFn(deps, changeId));
+  const notBusy = (projectId: string, changeId: string) => {
+    const running = jobs.busy(`${projectId}/${changeId}`);
+    if (running) throw new HttpError(409, "A job is already running for this item", { jobId: running });
+  };
+  const notWithdrawn = (changeId: string) => {
+    if (withdrawal(record, changeId)) throw new HttpError(409, "This change was withdrawn");
+  };
+  /** A finding with the coding agent's fix report, while that report still waits on a re-check. */
+  const withFixReport = <F extends { id: string }>(f: F) => ({ ...f, fixReported: record.pendingFixReport(f.id) });
+  const linkedChange = (id: string) => {
+    const c = record.getChange(id);
+    return { id: c.id, title: c.title, stage: c.stage };
+  };
 
   app.get("/api/projects", (c) => c.json({ projects: record.listProjects() }));
 
@@ -261,7 +278,7 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
 
   app.get("/api/projects/:id", (c) => {
     const project = getProject(c.req.param("id"));
-    return c.json({ project, changes: record.listChanges(project.id) });
+    return c.json({ project, changes: record.listChanges(project.id).map((x) => ({ ...x, withdrawn: withdrawal(record, x.id) !== null })) });
   });
 
   app.post("/api/projects/:id/changes", async (c) => {
@@ -280,7 +297,7 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
     const project = getProject(c.req.param("id"));
     const s = c.req.query("status");
     const status = s === undefined || s === "" ? undefined : oneOf(s, FINDING_STATUSES, "status");
-    return c.json({ findings: record.listFindings({ projectId: project.id, ...(status ? { status } : {}) }) });
+    return c.json({ findings: record.listFindings({ projectId: project.id, ...(status ? { status } : {}) }).map(withFixReport) });
   });
 
   app.post("/api/projects/:id/recheck", async (c) => {
@@ -294,25 +311,33 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
   app.get("/api/changes/:id", (c) => {
     const change = getChange(c.req.param("id"));
     const r = record.acceptanceRecord(change.id);
-    const questions = record.listArtifacts(change.id).filter((a) => a.kind === "questions").at(-1)?.body as
-      | { questions?: string[] }
-      | undefined;
+    const artifacts = record.listArtifacts(change.id);
+    const ids = (kind: string) => artifacts.filter((a) => a.kind === kind).map((a) => (a.body as { changeId: string }).changeId);
     // The latest run of each role, so the panel can show who has checked this change and who is working now.
     const runs = Object.values(Object.fromEntries(r.runs.map((x) => [x.role, x])));
     // Legal findings carry the law or standard they cite, so the panel can tell a law from an industry standard.
     const findings = r.findings.map((f) => {
       const duty = f.citationId ? deps.packs.legal.find((d) => d.id === f.citationId) : undefined;
-      return duty ? { ...f, law: duty.law, section: duty.section } : f;
+      return withFixReport(duty ? { ...f, law: duty.law, section: duty.section } : f);
     });
+    // Fix changes opened from this one after delivery, with the findings each carries. A withdrawn one carries nothing.
+    const fixChanges = ids("fix_change").map((id) => ({
+      ...linkedChange(id),
+      withdrawn: withdrawal(record, id) !== null,
+      findingIds: record.listFindings({ changeId: id }).map((f) => f.id),
+    }));
     return c.json({
       change: r.change,
       stage: r.change.stage,
       gates: r.gates,
       findings,
       criteria: r.criteria,
-      questions: questions?.questions ?? [],
+      questions: openQuestions(record, change.id),
       accepted: accepted(record, change.id),
       runs,
+      withdrawn: withdrawal(record, change.id),
+      follows: ids("follows").map(linkedChange)[0] ?? null,
+      fixChanges,
     });
   });
 
@@ -320,6 +345,7 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
 
   app.post("/api/changes/:id/advance", (c) => {
     const change = getChange(c.req.param("id"));
+    notWithdrawn(change.id);
     return c.json({ jobId: started(startAdvance(change.projectId, change.id)) }, 202);
   });
 
@@ -342,10 +368,53 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
     const actor = text(b, "actor", 100);
     if (change.stage !== "acceptance") throw new HttpError(409, "This change is not waiting for acceptance");
     // Checked before writing, so a refused accept leaves no acceptance behind.
-    const running = jobs.busy(`${change.projectId}/${change.id}`);
-    if (running) throw new HttpError(409, "A job is already running for this item", { jobId: running });
+    notWithdrawn(change.id);
+    notBusy(change.projectId, change.id);
     record.addArtifact({ changeId: change.id, role: "po", stage: "acceptance", kind: "acceptance", body: { actor } });
     return c.json({ jobId: started(startAdvance(change.projectId, change.id)) }, 202);
+  });
+
+  // The end for work that will not ship: the change stops where it is, with the reason in the record.
+  app.post("/api/changes/:id/withdraw", async (c) => {
+    const change = getChange(c.req.param("id"));
+    const b = await readBody(c);
+    const reason = text(b, "reason", 1000);
+    const actor = text(b, "actor", 100);
+    if (change.stage === "operate") throw new HttpError(409, "A delivered change cannot be withdrawn");
+    notWithdrawn(change.id);
+    notBusy(change.projectId, change.id);
+    record.addArtifact({ changeId: change.id, role: "po", stage: change.stage, kind: "withdrawn", body: { reason, actor } });
+    return c.json({ withdrawn: { reason, actor } }, 201);
+  });
+
+  // QA cannot clear a change with no acceptance criteria; this sends it back to the analyst to write them.
+  app.post("/api/changes/:id/reanalyse", (c) => {
+    const change = getChange(c.req.param("id"));
+    notWithdrawn(change.id);
+    if (!["verification", "release", "acceptance"].includes(change.stage) || criteriaOf(record, change).length) {
+      throw new HttpError(409, "Only a change past build with no acceptance criteria goes back to analysis");
+    }
+    notBusy(change.projectId, change.id);
+    record.setStage(change.id, "analysis");
+    return c.json({ jobId: started(startAdvance(change.projectId, change.id)) }, 202);
+  });
+
+  app.post("/api/changes/:id/fix-change", (c) => {
+    const change = getChange(c.req.param("id"));
+    if (change.stage !== "operate") throw new HttpError(409, "Only a delivered change opens a fix change");
+    if (!record.listFindings({ changeId: change.id, status: "open" }).length) throw new HttpError(409, "This change has no open findings to carry");
+    return c.json(openFixChange(record, change.id), 201);
+  });
+
+  // The coding agent's word is not proof: the finding stays open, and holding its gate, until a re-check agrees.
+  app.post("/api/findings/:id/fix-report", async (c) => {
+    const finding = getFinding(c.req.param("id"));
+    const b = await readBody(c);
+    const summary = text(b, "summary", 2000);
+    if (finding.status !== "open") throw new HttpError(409, "Only an open finding takes a fix report");
+    const change = record.getChange(finding.changeId);
+    record.addArtifact({ changeId: change.id, role: finding.role, stage: change.stage, kind: "fix_report", body: { findingId: finding.id, summary } });
+    return c.json(withFixReport(finding), 201);
   });
 
   app.get("/api/findings/:id", (c) => {

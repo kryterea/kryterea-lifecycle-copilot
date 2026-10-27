@@ -62,6 +62,16 @@ const stay = (held: RoleId[] = []): Outcome => ({ next: false, held });
 const latestBody = <T>(record: CopilotRecord, changeId: string, kind: string): T | undefined =>
   record.listArtifacts(changeId).filter((a) => a.kind === kind).at(-1)?.body as T | undefined;
 
+/** The latest questions, unless answers were saved after them. A later round of questions is open again. */
+export function openQuestions(record: CopilotRecord, changeId: string): string[] {
+  const last = record.listArtifacts(changeId).filter((a) => a.kind === "questions" || a.kind === "answers").at(-1);
+  return last?.kind === "questions" ? ((last.body as { questions?: string[] }).questions ?? []) : [];
+}
+
+/** Why and by whom a change was withdrawn, or null. A withdrawn change never moves again. */
+export const withdrawal = (record: CopilotRecord, changeId: string) =>
+  latestBody<{ reason: string; actor: string }>(record, changeId, "withdrawn") ?? null;
+
 /** Records the gate only when it differs from the current one. True when cleared. */
 function gate(record: CopilotRecord, changeId: string, role: RoleId, g: { state: GateState; reason: string }): boolean {
   const cur = record.gates(changeId)[role];
@@ -84,7 +94,7 @@ const affectedBy = (record: CopilotRecord, criterionId: string) =>
     .map((l) => l.from.id);
 
 /** The change's own criteria plus those it affects. */
-const criteriaOf = (record: CopilotRecord, change: Change): Criterion[] =>
+export const criteriaOf = (record: CopilotRecord, change: Change): Criterion[] =>
   record.listCriteria(change.projectId).filter((k) => k.changeId === change.id || affectedBy(record, k.id).includes(change.id));
 
 const latestChecks = (record: CopilotRecord, criteria: Criterion[]): Check[] =>
@@ -192,7 +202,8 @@ const DISPATCH: Record<StageId, (s: Session, c: Change) => Promise<Outcome>> = {
   analysis: async (s, c) => {
     const { record } = s.deps;
     const questions = latestBody<{ questions?: string[] }>(record, c.id, "questions")?.questions ?? [];
-    const answers = latestBody<{ answers?: string[] }>(record, c.id, "answers")?.answers ?? [];
+    // Answers count only when saved after the latest questions.
+    const answers = openQuestions(record, c.id).length ? [] : (latestBody<{ answers?: string[] }>(record, c.id, "answers")?.answers ?? []);
     if (!gate(record, c.id, "ba", baGate(questions, answers))) return stay(["ba"]);
     await runRole(s, c, "ba", async (ctx) => save(ctx, "ba", "analysis", await analyseChange(ctx)));
     return NEXT;
@@ -281,7 +292,47 @@ export async function advance(
   deps: WorkflowDeps,
   changeId: string,
 ): Promise<{ stage: StageId; held: RoleId[]; stoppedForBudget: boolean }> {
-  return advanceIn(session(deps, deps.record.getChange(changeId).projectId), changeId);
+  const change = deps.record.getChange(changeId);
+  if (withdrawal(deps.record, changeId)) return { stage: change.stage, held: [], stoppedForBudget: false };
+  return advanceIn(session(deps, change.projectId), changeId);
+}
+
+/**
+ * Findings raised after delivery land on a change that is already done. This opens a fix change that carries
+ * them through the stages again: the findings and their criteria are linked to it, and each change names the
+ * other, so the record reads both ways.
+ */
+export function openFixChange(record: CopilotRecord, changeId: string): Change {
+  const c = record.getChange(changeId);
+  if (c.stage !== "operate") throw new Error("Only a delivered change opens a fix change");
+  const open = record.listFindings({ changeId, status: "open" });
+  if (!open.length) throw new Error("This change has no open findings to carry");
+  const fix = record.createChange({
+    projectId: c.projectId,
+    title: `Fix after delivery: ${c.title}`.slice(0, 200),
+    description: [`Findings raised after "${c.title}" was delivered:`, ...open.map((f) => `- ${f.title}: ${f.plain}`)].join("\n"),
+    kind: "fix",
+  });
+  for (const f of open) {
+    record.link({ type: "finding", id: f.id }, "raised_on", { type: "change", id: fix.id });
+    if (f.criterionId) record.link({ type: "change", id: fix.id }, "affects", { type: "criterion", id: f.criterionId });
+  }
+  record.addArtifact({ changeId: c.id, role: "po", stage: "operate", kind: "fix_change", body: { changeId: fix.id } });
+  record.addArtifact({ changeId: fix.id, role: "po", stage: "intake", kind: "follows", body: { changeId: c.id } });
+  return fix;
+}
+
+/**
+ * A reported fix is confirmed when the reviewer who raised the finding looked again and did not raise it. A code
+ * finding also needs its file among the reviewed ones. Findings tied to a criterion are left to QA's evidence.
+ */
+function confirmReportedFixes(record: CopilotRecord, projectId: string, commit: string, reviewed: string[] | undefined): void {
+  for (const f of record.listFindings({ projectId, status: "open" })) {
+    if (f.criterionId || (f.role !== "compliance" && f.role !== "architect")) continue;
+    if (reviewed && f.trigger.type === "code" && !reviewed.includes(f.trigger.file)) continue;
+    const report = record.pendingFixReport(f.id);
+    if (report) record.setFindingStatus(f.id, "fixed", `Not raised again on re-check at ${commit.slice(0, 7)}. Reported fix: ${report.summary}`, f.role);
+  }
 }
 
 /**
@@ -299,7 +350,8 @@ export async function recheck(
 ): Promise<{ runIds: string[]; stoppedForBudget: boolean }> {
   const { record } = deps;
   const s = session(deps, projectId);
-  const changes = record.listChanges(projectId);
+  // Withdrawn changes are left alone: nothing is charged to them and they never move again.
+  const changes = record.listChanges(projectId).filter((c) => !withdrawal(record, c.id));
   const newest = changes.at(-1);
   if (!newest) return { runIds: [], stoppedForBudget: false };
   const repo = await s.repo();
@@ -337,6 +389,7 @@ export async function recheck(
       const only = diff?.changed;
       await runRole(s, newest, "compliance", async (ctx) => save(ctx, "compliance", "operate", await reviewCompliance(ctx, asBuilt, only)));
       await runRole(s, newest, "architect", async (ctx) => save(ctx, "architect", "operate", await reviewOperations(ctx, asBuilt, only)));
+      confirmReportedFixes(record, projectId, repo.commit, only);
     }
     if (toVerify.length) await verify(s, newest, "operate", toVerify);
     for (const c of changes) {

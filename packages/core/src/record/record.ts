@@ -389,6 +389,26 @@ export class CopilotRecord {
     }
   }
 
+  /** A run still marked running when the server starts was cut off by a restart; it can never finish. */
+  closeInterruptedRuns(): number {
+    return this.run("UPDATE runs SET status = 'failed', finished_at = ? WHERE status = 'running'", now());
+  }
+
+  /**
+   * The coding agent's latest fix report for a finding, while it still waits on a re-check: nothing has been
+   * raised again or decided on the finding since. Ties count as waiting (same millisecond in fast tests).
+   */
+  pendingFixReport(findingId: string): { summary: string; at: string } | null {
+    // ponytail: scans every fix report; index on the finding id if reports ever run into thousands.
+    const report = this.all("SELECT body, created_at FROM artifacts WHERE kind = 'fix_report' ORDER BY rowid DESC")
+      .map((r) => ({ ...(JSON.parse(r.body as string) as { findingId?: string; summary?: string }), at: r.created_at as string }))
+      .find((r) => r.findingId === findingId);
+    if (!report) return null;
+    const lastStatus = this.findingHistory(findingId).at(-1)?.at ?? "";
+    const lastEvidence = this.findingEvidence(findingId).at(-1)?.at ?? "";
+    return report.at >= lastStatus && report.at >= lastEvidence ? { summary: report.summary ?? "", at: report.at } : null;
+  }
+
   /** Writes at once, so a running run counts toward spentUsd. */
   addRunCost(runId: string, costUsd: number, inputTokens: number, outputTokens: number): void {
     const changed = this.run(

@@ -68,7 +68,7 @@ describe("mcp tools", () => {
     }
     const all = list.map((t) => t.description).join(" ");
     expect(all).toMatch(/builder/);
-    expect(all).toMatch(/panel header/);
+    expect(all).toMatch(/Build stage/);
     expect(all).toMatch(/report_fix/);
     expect(all).toMatch(/request_recheck/);
   });
@@ -95,14 +95,15 @@ describe("mcp tools", () => {
     await client.close();
   });
 
-  it("report_fix posts status fixed with actor coding-agent", async () => {
-    const t = tools([[200, { id: "f1", status: "fixed", history: [] }]]);
+  it("report_fix files a fix report and leaves the finding open for the re-check", async () => {
+    const t = tools([[201, { id: "f1", status: "open", fixReported: { summary: "Showed the decline reason.", at: "x" } }]]);
     const out = await t.run("report_fix", { findingId: "f1", summary: "Showed the decline reason." });
     expect(t.calls[0]).toMatchObject({
-      url: "http://localhost:8787/api/findings/f1/status",
+      url: "http://localhost:8787/api/findings/f1/fix-report",
       method: "POST",
-      body: { status: "fixed", reason: "Showed the decline reason.", actor: "coding-agent" },
+      body: { summary: "Showed the decline reason." },
     });
+    expect(out).toMatch(/stays open until a re-check confirms it/);
     expect(out).toMatch(/request_recheck/);
   });
 

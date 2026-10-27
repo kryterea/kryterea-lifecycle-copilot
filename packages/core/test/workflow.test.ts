@@ -9,7 +9,10 @@ import {
   SYSTEM_ACTOR,
   STAGES,
   advance,
+  openFixChange,
+  openQuestions,
   recheck,
+  withdrawal,
   type Change,
   type Model,
   type ModelFactory,
@@ -516,6 +519,81 @@ describe("workflow", () => {
       ["fixed", "qa", "Evidence found on re-check"],
     ]);
     expect(record.getChange(c.id).stage).toBe("acceptance");
+  });
+
+  it("a reported fix keeps the finding open until a re-check does not raise it again", async () => {
+    const { record, models, deps, change, project, origin } = setup();
+    models.handlers["compliance.reviewCompliance"] = () => ({ findings: [legalFinding] });
+    const c = change("understand");
+    await advance(deps, c.id);
+    expect((await advance(deps, c.id)).held).toEqual(["compliance"]);
+    const [finding] = record.listFindings({ changeId: c.id });
+    record.addArtifact({ changeId: c.id, role: "compliance", stage: "release", kind: "fix_report", body: { findingId: finding!.id, summary: "Asked consent" } });
+    expect(record.pendingFixReport(finding!.id)?.summary).toBe("Asked consent");
+    expect(record.findingStatus(finding!.id)).toBe("open");
+
+    // Raised again: the report no longer stands and the finding stays open.
+    origin.put("src/privacy.js", "export const consent = 'maybe';\n");
+    origin.commit("half fix");
+    await recheck(deps, project.id, "push");
+    expect(record.findingStatus(finding!.id)).toBe("open");
+    expect(record.pendingFixReport(finding!.id)).toBeNull();
+
+    record.addArtifact({ changeId: c.id, role: "compliance", stage: "release", kind: "fix_report", body: { findingId: finding!.id, summary: "Asked consent properly" } });
+    models.handlers["compliance.reviewCompliance"] = () => ({ findings: [] });
+    origin.put("src/privacy.js", "export const consent = true;\n");
+    origin.commit("ask consent");
+    await recheck(deps, project.id, "push");
+    expect(record.findingStatus(finding!.id)).toBe("fixed");
+    expect(record.findingHistory(finding!.id).at(-1)).toMatchObject({ actor: "compliance" });
+    expect(record.getChange(c.id).stage).toBe("acceptance");
+  });
+
+  it("questions asked after the answers are open again and hold the BA gate", async () => {
+    const { record, deps, change } = setup();
+    const c = change("feature", "Deposits");
+    record.addArtifact({ changeId: c.id, role: "ba", stage: "intake", kind: "questions", body: { questions: ["How much?"] } });
+    record.addArtifact({ changeId: c.id, role: "ba", stage: "analysis", kind: "answers", body: { answers: ["Ten percent"] } });
+    expect(openQuestions(record, c.id)).toEqual([]);
+    record.addArtifact({ changeId: c.id, role: "ba", stage: "analysis", kind: "questions", body: { questions: ["Refundable?"] } });
+    expect(openQuestions(record, c.id)).toEqual(["Refundable?"]);
+    record.setStage(c.id, "analysis");
+    expect((await advance(deps, c.id)).held).toEqual(["ba"]);
+  });
+
+  it("a withdrawn change never moves and a recheck leaves it alone", async () => {
+    const { record, models, deps, change, project } = setup();
+    const c = change("feature", "Deposits");
+    record.addArtifact({ changeId: c.id, role: "po", stage: "intake", kind: "withdrawn", body: { reason: "Dropped", actor: "Ada" } });
+    expect(withdrawal(record, c.id)).toEqual({ reason: "Dropped", actor: "Ada" });
+    expect(await advance(deps, c.id)).toEqual({ stage: "intake", held: [], stoppedForBudget: false });
+    expect(await recheck(deps, project.id, "manual")).toEqual({ runIds: [], stoppedForBudget: false });
+    expect(models.calls).toHaveLength(0);
+  });
+
+  it("a fix change carries findings raised after delivery and holds until they are settled", async () => {
+    const { record, deps, change } = setup();
+    const c = change("understand");
+    for (let i = 0; i < 8 && record.getChange(c.id).stage !== "acceptance"; i++) await advance(deps, c.id);
+    record.addArtifact({ changeId: c.id, role: "po", stage: "acceptance", kind: "acceptance", body: { actor: "Ada" } });
+    await advance(deps, c.id);
+    expect(record.getChange(c.id).stage).toBe("operate");
+    expect(() => openFixChange(record, c.id)).toThrow(/no open findings/);
+
+    const run = record.startRun({ changeId: c.id, role: "compliance", commit: "abc" });
+    const { finding } = record.addFinding({
+      projectId: c.projectId, changeId: c.id, runId: run, role: "compliance", stage: "operate", kind: "legal",
+      title: legalFinding.title, plain: legalFinding.plain, costIfIgnored: legalFinding.costIfIgnored,
+      fixPrompt: legalFinding.fixPrompt, trigger: { type: "doc", quote: QUOTE }, citationId: "ndpa-consent",
+    });
+    const fix = openFixChange(record, c.id);
+    expect(fix.kind).toBe("fix");
+    expect(record.listFindings({ changeId: fix.id }).map((f) => f.id)).toEqual([finding.id]);
+    expect(record.listArtifacts(fix.id).find((a) => a.kind === "follows")?.body).toEqual({ changeId: c.id });
+    expect(record.listArtifacts(c.id).find((a) => a.kind === "fix_change")?.body).toEqual({ changeId: fix.id });
+
+    record.setStage(fix.id, "release");
+    expect((await advance(deps, fix.id)).held).toContain("compliance");
   });
 
   it("acceptance waits without the artifact and clears with it; costs reach the record only through the ledger", async () => {
