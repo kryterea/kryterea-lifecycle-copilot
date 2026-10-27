@@ -14,7 +14,7 @@ Built during the event (update as tasks finish):
 - [x] The record: changes, findings, gates, evidence, acceptance
 - [x] Repo reader and file narrowing
 - [x] Five professional packs and the verified NDPA 2023 legal pack
-- [ ] Business analyst, architect/SRE, QA, security and compliance, and product owner roles
+- [x] Business analyst, architect/SRE, QA, security and compliance, and product owner roles
 - [ ] Change workflow with targeted re-checks
 - [ ] HTTP API and push poller
 - [ ] MCP server for coding agents

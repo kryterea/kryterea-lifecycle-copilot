@@ -273,11 +273,11 @@ Skills: superpowers:test-driven-development.
 **Interfaces:**
 - Produces: `poGate(gates: Partial<Record<RoleId, {state: GateState}>>, accepted: boolean): {state, reason}` (cleared only when ba, architect, qa and compliance gates are all `cleared` and `accepted` is true; reason names every gate still held). `acceptanceSummary(rec: AcceptanceRecord, model: Model): Promise<string>` (request name `po.acceptanceSummary`; plain-language summary, at most 200 words; one model call, made inside a `po` run; stored as artifact kind `acceptance_summary` and included in the record read-out). The PO's decisions log needs no model: it is the finding status history plus gate records, already in `AcceptanceRecord`.
 
-- [ ] **Step 1: Write failing tests:** `po gate held while compliance is held, reason names compliance`; `po gate cleared when all four cleared and accepted`.
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Run. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): product owner gate and acceptance summary`.
+- [x] **Step 1: Write failing tests:** `po gate held while compliance is held, reason names compliance`; `po gate cleared when all four cleared and accepted`.
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Run. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): product owner gate and acceptance summary`.
 
 ### Task 13: Workflow engine
 
