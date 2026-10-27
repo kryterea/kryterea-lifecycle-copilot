@@ -6,6 +6,7 @@ import { complianceGate, reviewCompliance } from "./roles/compliance.js";
 import type { RoleContext, RoleResult } from "./roles/context.js";
 import { acceptanceSummary, poGate } from "./roles/po.js";
 import { qaGate, verifyCriteria } from "./roles/qa.js";
+import { exploreFlow, type OpenPage } from "./roles/qa-browser.js";
 import {
   BudgetExceededError,
   type Change,
@@ -31,6 +32,10 @@ export interface WorkflowDeps {
   githubToken?: string;
   /** Local paths and file:// repos. Tests and local demo use only. */
   allowLocalRepos?: boolean;
+  /** A browser for QA to try criteria in the project's running app (its appUrl). Without one, QA reads code only. */
+  openPage?: OpenPage;
+  /** Where QA's screenshots of the running app are saved. */
+  screensDir?: string;
 }
 
 type Repo = { dir: string; commit: string };
@@ -158,13 +163,38 @@ async function verify(s: Session, change: Change, stage: StageId, criteria: Crit
   const { record } = s.deps;
   await runRole(s, change, "qa", async (ctx) => {
     const r = await verifyCriteria(ctx, criteria);
-    for (const c of r.checks) record.recordCheck(c);
-    save(ctx, "qa", stage, { artifacts: [], criteria: [], findings: r.findings, questions: [], affectedCriterionIds: [] });
-    const found = new Set(r.checks.filter((c) => c.state === "evidence_found").map((c) => c.criterionId));
+    const checks = [...r.checks];
+    const findings = [...r.findings];
+    let stopped = r.stopped === "budget";
+    // The running app, when there is one: QA tries each criterion the code alone did not show working. What it
+    // sees there is recorded after the code check, so it is the latest word. An app that is down changes nothing.
+    const { openPage, screensDir } = s.deps;
+    const appUrl = s.project.appUrl;
+    if (!stopped && openPage && appUrl) {
+      for (const k of criteria) {
+        const code = r.checks.find((c) => c.criterionId === k.id);
+        if (!code || code.state === "evidence_found") continue;
+        try {
+          const seen = await exploreFlow(ctx, k, appUrl, openPage, screensDir);
+          if (seen.check.state === "no_evidence") continue;
+          checks.push(seen.check);
+          if (seen.finding) findings.push(seen.finding);
+        } catch (e) {
+          if (e instanceof BudgetExceededError) {
+            stopped = true;
+            break;
+          }
+          console.warn(`qa: could not try "${k.text.slice(0, 60)}" in the running app: ${String(e)}`);
+        }
+      }
+    }
+    for (const c of checks) record.recordCheck(c);
+    save(ctx, "qa", stage, { artifacts: [], criteria: [], findings, questions: [], affectedCriterionIds: [] });
+    const found = new Set(checks.filter((c) => c.state === "evidence_found").map((c) => c.criterionId));
     for (const f of record.listFindings({ projectId: change.projectId, status: "open" })) {
       if (f.criterionId && found.has(f.criterionId)) record.setFindingStatus(f.id, "fixed", "Evidence found on re-check", "qa");
     }
-    if (r.stopped) throw new BudgetExceededError("Copilot budget used during verification");
+    if (stopped) throw new BudgetExceededError("Copilot budget used during verification");
   });
 }
 

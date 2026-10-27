@@ -10,6 +10,8 @@ export { understandApp, analyseChange, analyseImpact, baGate } from "./roles/ba.
 export { reviewCompliance, complianceGate } from "./roles/compliance.js";
 export { reviewOperations, architectGate } from "./roles/architect.js";
 export { verifyCriteria, qaGate } from "./roles/qa.js";
+export { exploreFlow, MAX_STEPS } from "./roles/qa-browser.js";
+export type { AppPage, OpenPage, PageAction } from "./roles/qa-browser.js";
 export { poGate, acceptanceSummary } from "./roles/po.js";
 export { systemPrompt, checkTriggers, repoMaterial, defang } from "./roles/context.js";
 export type { RoleContext, RoleResult, RoleFinding } from "./roles/context.js";

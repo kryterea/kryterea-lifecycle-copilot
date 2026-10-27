@@ -22,6 +22,7 @@ Built during the event (update as tasks finish):
 - [x] Web panel redesign (2026-10-27): the change screen as a stage Trail beside one stage at a time, icon buttons, shorter copy, phone and dark layouts; `packages/web/PRODUCT.md` and `packages/web/DESIGN.md` record the product and design decisions
 - [x] Every process has an end (2026-10-27): fix reports wait on a re-check, fix changes carry findings raised after delivery, withdraw with a reason, back to analysis when no criteria were written, later rounds of analyst questions, reopen a settled finding, interrupted runs closed on start, and the Build stage hand-off for the coding agent
 - [x] README
+- [x] QA in the running app (2026-10-27): QA tries criteria in the app with a headless browser (Playwright), choosing each step with Muse Spark and judging from screenshots; opt in with `COPILOT_QA_BROWSER=1`
 - [ ] Demo app (separate repo `demo-salon-bookings`), built by a coding agent running on Muse Spark from the prompts in its `PROMPTS.md`
 
 ## What is not ours, or not new

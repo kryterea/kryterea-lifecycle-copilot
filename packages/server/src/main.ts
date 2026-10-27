@@ -6,6 +6,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { CopilotRecord, createFakeModel, createModel, loadPacks, type ModelFactory } from "@lifecycle/core";
 import { Jobs, createApp, isLoopback } from "./app.js";
 import { startPoller } from "./poller.js";
+import { playwrightBrowser } from "./browser.js";
 
 /** The repo root is the nearest folder up from this file with pnpm-workspace.yaml (works from src and dist). */
 function repoRoot(): string {
@@ -68,6 +69,15 @@ const deps = {
   ...(env.GITHUB_TOKEN ? { githubToken: env.GITHUB_TOKEN } : {}),
 };
 
+// Opt in: QA also tries criteria in a project's running app (its app URL). Each criterion tried costs up to nine
+// model calls, some with screenshots.
+const browser = env.COPILOT_QA_BROWSER === "1" ? await playwrightBrowser() : null;
+const liveDeps = browser ? { ...deps, openPage: browser.open, screensDir: join(dataDir, "screens") } : deps;
+if (browser) {
+  console.log("QA will also use each project's running app when it has an app URL.");
+  process.once("exit", () => void browser.close());
+}
+
 // Jobs live in memory, so a run marked running from before this start was cut off and will never finish.
 const interrupted = deps.record.closeInterruptedRuns();
 if (interrupted) console.log(`Closed ${interrupted} run(s) interrupted by the last restart.`);
@@ -81,11 +91,11 @@ if (!isLoopback(hostname) && !apiToken) {
 }
 
 const jobs = new Jobs();
-const app = createApp(deps, { budgetUsd, jobs, port, host: hostname, apiToken, model: modelName, fake });
+const app = createApp(liveDeps, { budgetUsd, jobs, port, host: hostname, apiToken, model: modelName, fake });
 const webDir = join(root, "packages", "web", "dist", "app");
 if (existsSync(webDir)) app.get("*", serveStatic({ root: webDir }));
 
 serve({ fetch: app.fetch, port, hostname }, (info) => {
   console.log(`Copilot server on http://${hostname}:${info.port}${fake ? " (fake model)" : ""}`);
 });
-startPoller(deps, Math.max(1000, num("COPILOT_POLL_MS", 60_000)), undefined, undefined, jobs);
+startPoller(liveDeps, Math.max(1000, num("COPILOT_POLL_MS", 60_000)), undefined, undefined, jobs);

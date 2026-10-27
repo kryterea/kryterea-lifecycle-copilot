@@ -377,11 +377,11 @@ Only if Task 0 Step 4 showed image input works and Tasks 0 to 16 are done by the
 
 **Interfaces:** `exploreFlow(ctx, criterion: Criterion, appUrl: string): Promise<{check: Check; screenshots: string[]}>`: Playwright opens `appUrl`, the model picks the next action from the page's accessibility snapshot (at most 8 steps), screenshots go to the model for the final judgement; triggers are `{type:'screen'}`. Test accounts come only from the demo app's seed file.
 
-- [ ] **Step 1:** Failing test `stops after 8 steps and returns no_evidence` with a fake model and a static local page.
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Run. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): QA explores the running app (stretch)`.
+- [x] **Step 1:** Failing test `stops after 8 steps and returns no_evidence` with a fake model and a static local page.
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Run. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): QA explores the running app (stretch)`.
 
 ### Task 18: Demo app, first real run, video script
 
@@ -400,9 +400,9 @@ Skills: business-analysis-os agents `requirements-verifier` and `traceability-au
 
 Skills: business-analysis-os:technical-writer then business-analysis-os:natural-prose-editor (README), security-review (before the final public push), superpowers:finishing-a-development-branch, superpowers:verification-before-completion.
 
-- [ ] **Step 1:** README: what it is (positioning line), the three audiences, the workflow diagram from Task 13, how to run locally with your own Meta key, the MCP setup for any MCP-capable agent, the roadmap ("professional packs can be swapped for Kryterea's private packs"), and a "Built during the hackathon" section linking `BUILT_DURING_HACKATHON.md`.
-- [ ] **Step 2:** `BUILT_DURING_HACKATHON.md`: build window, first commit hash and date, everything built during the event, external pieces (open-source libraries, Meta Model API, Cline or OpenCode), and the disclosure that Kryterea's private BA OS was used as development tooling, none of its content is in the repo, and it is not part of the entry.
-- [ ] **Step 3:** Run the security-review skill and a secret scan (`git log -p | grep -iE "key|token|secret"` reviewed by hand) on both public repos, plus a scan for private names (Kryterea's private repo names, internal rule names) across the full history of both. Expected: no secrets. Confirm `.env` and `data/*.db` are ignored.
+- [x] **Step 1:** README: what it is (positioning line), the three audiences, the workflow diagram from Task 13, how to run locally with your own Meta key, the MCP setup for any MCP-capable agent, the roadmap ("professional packs can be swapped for Kryterea's private packs"), and a "Built during the hackathon" section linking `BUILT_DURING_HACKATHON.md`.
+- [x] **Step 2:** `BUILT_DURING_HACKATHON.md`: build window, first commit hash and date, everything built during the event, external pieces (open-source libraries, Meta Model API, Cline or OpenCode), and the disclosure that Kryterea's private BA OS was used as development tooling, none of its content is in the repo, and it is not part of the entry.
+- [x] **Step 3:** Run the security-review skill and a secret scan (`git log -p | grep -iE "key|token|secret"` reviewed by hand) on both public repos, plus a scan for private names (Kryterea's private repo names, internal rule names) across the full history of both. Expected: no secrets. Confirm `.env` and `data/*.db` are ignored.
 - [ ] **Step 4:** CI green on the final commit.
 - [ ] **Step 5:** Founder records the 3-minute video from the script (screen capture of the panel, the coding agent and the demo app). Upload as unlisted YouTube or Loom; check it plays logged out.
 - [ ] **Step 6:** Founder submits at https://cerebralvalley.ai/e/meta-ai-developer-hackathon/hackathon/submit by midday ET on 2026-11-04: Startup track, public repo URL, video link, every team member added, the prior-work call-out inside the Project Description (the form has no field for it): a hackathon spin-off of Kryterea built from scratch because the existing platform cannot be entered, new work starting at the first commit `dc447bb`. The only bonus field is the X post link for most viral. Claude prepares the text for each form field in `docs/hackathon/submission.md`; the founder submits.

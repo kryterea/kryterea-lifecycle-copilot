@@ -53,6 +53,10 @@ pnpm dev
 
 The API runs on http://localhost:8787 and the panel on http://localhost:5173. Add a project with a public GitHub repo URL, open a Baseline change, and press Run next step.
 
+### QA in the running app (optional)
+
+Give the project an app URL and set `COPILOT_QA_BROWSER=1`. For each acceptance criterion the code alone does not show working, QA then opens the app in a headless browser, takes up to eight steps by reading the page the way a screen reader does, and judges the result from screenshots with Muse Spark. It stays on the app's own address and types only made-up test details. Needs Chromium once: `npx playwright install chromium`. Each criterion tried costs up to nine model calls, so it is off by default.
+
 ## Connect your coding agent
 
 The copilot speaks MCP. Build it once (`pnpm -r build`), then add it to your agent. For Claude Code:

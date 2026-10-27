@@ -613,6 +613,29 @@ describe("workflow", () => {
     expect((await advance(deps, fix.id)).held).toContain("compliance");
   });
 
+  it("QA tries a criterion the code did not show in the running app, and what it sees is the latest check", async () => {
+    const { record, models, deps, origin } = setup();
+    const project = record.createProject({ name: "Live", repoUrl: origin.dir, appUrl: "http://localhost:3000" });
+    models.qa["CRIT-BOOK"] = { state: "no_evidence", evidence: [], note: "Unclear from code.", title: null, plain: null, costIfIgnored: null, fixPrompt: null };
+    models.handlers["qa.exploreStep"] = () => ({ kind: "done", role: null, name: null, value: null, reason: "Seen enough." });
+    models.handlers["qa.judgeFlow"] = () => ({ state: "evidence_found", note: "The booking is confirmed.", title: null, plain: null, costIfIgnored: null, fixPrompt: null });
+    const page = {
+      goto: async () => {},
+      snapshot: async () => '- button "Book"',
+      act: async () => {},
+      screenshot: async () => new Uint8Array([1]),
+      url: () => "http://localhost:3000/",
+      close: async () => {},
+    };
+    const live = { ...deps, openPage: async () => page };
+    const c = record.createChange({ projectId: project.id, title: "Understand the app", description: DESCRIPTION, kind: "understand" });
+    await advance(live, c.id);
+    const latest = (marker: string) => record.latestCheck(record.listCriteria(project.id).find((k) => k.text.startsWith(marker))!.id);
+    expect(latest("CRIT-BOOK")).toMatchObject({ state: "evidence_found", evidence: [{ type: "screen", url: "http://localhost:3000/" }] });
+    expect(latest("CRIT-CANCEL")?.evidence[0]).toMatchObject({ type: "code" });
+    expect(models.names().filter((n) => n === "qa.exploreStep")).toHaveLength(1);
+  });
+
   it("acceptance waits without the artifact and clears with it; costs reach the record only through the ledger", async () => {
     const { record, models, deps, change } = setup();
     const c = change("understand");
