@@ -50,7 +50,7 @@ packs/ba.md, architect.md, qa.md, compliance.md, po.md   fresh professional pack
 packs/legal/ndpa-2023.json                    verified legal pack
 packages/core/src/types.ts                    shared types
 packages/core/src/model.ts                    Meta adapter + ledger use
-packages/core/src/record/schema.sql           tables
+packages/core/src/record/schema.ts            tables (SQL as a string export)
 packages/core/src/record/record.ts            CopilotRecord class
 packages/core/src/repo/repo.ts                git sync, file listing, evidence checks
 packages/core/src/repo/narrow.ts              cheap file narrowing
@@ -464,3 +464,10 @@ A conflict scan of Tasks 2 to 19 against the spec and the day-1 API facts found 
 
 - **[T18]** Step 4 reads "Record whether release held and what cleared it" (no presumed outcome). Step 4b tells the user before the run that their code is sent to the Meta API.
 - **[T19]** The README also states that BA OS was used as pre-existing tooling, none of its content is in the repo, and it is not part of what is judged.
+
+### From the record review (Tasks 3 to 5)
+
+- **[T13]** `addFinding` already writes the `raised_on` link (new and duplicate findings); T13 does not need to. Automated status changes pass `SYSTEM_ACTOR` (`copilot`) so they never show as human decisions in the acceptance read-out; a test asserts it.
+- **[T13]** Costs reach the record only through `ledgerFor(record, runId)` (the model adapter calls `ledger.add`); never call `addRunCost` with `ModelResult.costUsd` as well.
+- **[T13]** The recheck diff baseline is the commit of the last done QA run for the project (not any role's run), so a later BA or PO run cannot hide changed files from re-verification. Add an optional role filter to `lastRunCommit(projectId, role?)`.
+- **[T13]** Do not wrap record calls in an outer `BEGIN`; the record opens its own transactions.
