@@ -170,7 +170,40 @@ export async function changedFiles(
   return { changed, deleted };
 }
 
-const hasBlockedSegment = (rel: string) => rel.split(sep).some((seg) => NO_EVIDENCE_DIRS.has(seg.toLowerCase()));
+/**
+ * Changed line ranges on the new side, from `git diff -U0`. A pure deletion covers the lines either side of where
+ * it was; a deleted file covers every line.
+ */
+export async function diffHunks(dir: string, from: string, to: string): Promise<Array<{ file: string; start: number; end: number }>> {
+  if (!COMMIT_ID.test(from) || !COMMIT_ID.test(to)) throw new Error("diffHunks: from and to must be commit ids");
+  const raw = await git(["diff", "-U0", "--no-renames", "--no-color", from, to, "--"], { cwd: dir });
+  const out: Array<{ file: string; start: number; end: number }> = [];
+  let oldFile = "";
+  let file: string | null = null;
+  for (const line of raw.split("\n")) {
+    if (line.startsWith("--- ")) oldFile = line.slice(4).replace(/^a\//, "");
+    else if (line.startsWith("+++ ")) {
+      file = line === "+++ /dev/null" ? null : line.slice(4).replace(/^b\//, "");
+      if (file === null) out.push({ file: oldFile, start: 1, end: Number.MAX_SAFE_INTEGER });
+    } else if (file && line.startsWith("@@")) {
+      const m = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+      if (!m) continue;
+      const start = Number(m[1]);
+      const count = m[2] === undefined ? 1 : Number(m[2]);
+      out.push(count === 0 ? { file, start, end: start + 1 } : { file, start, end: start + count - 1 });
+    }
+  }
+  return out;
+}
+
+/** Subjects of the commits after `from` up to `to`, oldest first. */
+export async function commitMessages(dir: string, from: string, to: string): Promise<string[]> {
+  if (!COMMIT_ID.test(from) || !COMMIT_ID.test(to)) throw new Error("commitMessages: from and to must be commit ids");
+  const raw = await git(["log", "--reverse", "--format=%s", `${from}..${to}`], { cwd: dir });
+  return raw.split("\n").filter((l) => l.trim() !== "");
+}
+
+const hasBlockedSegment =(rel: string) => rel.split(sep).some((seg) => NO_EVIDENCE_DIRS.has(seg.toLowerCase()));
 
 /**
  * Absolute path of a citable file inside dir, or null if the path is absolute, escapes dir

@@ -392,6 +392,11 @@ export class CopilotRecord {
     return this.all(sql, ...params).map((r) => ({ ...toFinding(r), status: r.status as FindingStatus }));
   }
 
+  /** Order of the finding's latest status event among all status events. */
+  lastStatusSeq(findingId: string): number {
+    return Number(this.one("SELECT MAX(seq) AS seq FROM finding_status_events WHERE finding_id = ?", findingId)?.seq ?? 0);
+  }
+
   findingHistory(findingId: string): Array<{ status: FindingStatus; reason: string; actor: string; at: string }> {
     return this.all("SELECT * FROM finding_status_events WHERE finding_id = ? ORDER BY seq", findingId).map((r) => ({
       status: r.status as FindingStatus,
@@ -548,6 +553,42 @@ export class CopilotRecord {
       evidence: JSON.parse(r.evidence as string) as Trigger[],
       note: r.note as string,
     };
+  }
+
+  /** When the criterion's latest check was made, and at which commit. */
+  latestCheckInfo(criterionId: string): { at: string; commit: string } | null {
+    const r = this.one(
+      "SELECT c.at, r.commit_sha FROM checks c JOIN runs r ON r.id = c.run_id WHERE c.criterion_id = ? ORDER BY c.seq DESC LIMIT 1",
+      criterionId,
+    );
+    return r ? { at: r.at as string, commit: r.commit_sha as string } : null;
+  }
+
+  /** Full commit ids of the project's runs that start with `sha` (a short or full id). */
+  runCommits(projectId: string, sha: string): string[] {
+    return this.all(
+      `SELECT DISTINCT r.commit_sha FROM runs r JOIN changes c ON c.id = r.change_id
+       WHERE c.project_id = ? AND substr(r.commit_sha, 1, length(?)) = ?`,
+      projectId,
+      sha,
+      sha,
+    ).map((r) => r.commit_sha as string);
+  }
+
+  /** Every check made by a run at one commit, oldest first. */
+  checksAt(projectId: string, commit: string): Check[] {
+    return this.all(
+      `SELECT k.* FROM checks k JOIN runs r ON r.id = k.run_id JOIN changes c ON c.id = r.change_id
+       WHERE c.project_id = ? AND r.commit_sha = ? ORDER BY k.seq`,
+      projectId,
+      commit,
+    ).map((r) => ({
+      criterionId: r.criterion_id as string,
+      runId: r.run_id as string,
+      state: r.state as EvidenceState,
+      evidence: JSON.parse(r.evidence as string) as Trigger[],
+      note: r.note as string,
+    }));
   }
 
   linksTo(to: LinkEnd): Array<{ from: LinkEnd; rel: LinkRel }> {

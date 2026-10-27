@@ -5,6 +5,8 @@ import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   changedFiles,
+  commitMessages,
+  diffHunks,
   listSourceFiles,
   narrowFiles,
   readLines,
@@ -263,5 +265,31 @@ describe("repo reader", () => {
     expect(out[0]).toBe("src/payment.ts");
     expect(out.indexOf("src/payment.ts")).toBeLessThan(out.indexOf("src/about.ts"));
     expect(await narrowFiles("failed payment", origin, files, 1)).toEqual(["src/payment.ts"]);
+  });
+});
+
+describe("diffHunks and commitMessages", () => {
+  it("gives new-side line ranges per file, and the line a deletion was removed before", async () => {
+    const d = mkdtempSync(join(tmpdir(), "lifecycle-hunks-"));
+    git(d, "init", "-q");
+    writeFileSync(join(d, "a.js"), "1\n2\n3\n4\n5\n6\n");
+    writeFileSync(join(d, "gone.js"), "x\n");
+    git(d, "add", "-A");
+    git(d, "commit", "-q", "-m", "one");
+    const from = git(d, "rev-parse", "HEAD");
+    writeFileSync(join(d, "a.js"), "1\nTWO\n3\n5\n6\n7\n");
+    rmSync(join(d, "gone.js"));
+    git(d, "add", "-A");
+    git(d, "commit", "-q", "-m", "PAY-3 change a and drop gone");
+    const to = git(d, "rev-parse", "HEAD");
+    expect(await diffHunks(d, from, to)).toEqual([
+      { file: "a.js", start: 2, end: 2 },
+      { file: "a.js", start: 3, end: 4 },
+      { file: "a.js", start: 6, end: 6 },
+      { file: "gone.js", start: 1, end: Number.MAX_SAFE_INTEGER },
+    ]);
+    expect(await commitMessages(d, from, to)).toEqual(["PAY-3 change a and drop gone"]);
+    await expect(diffHunks(d, "nope", to)).rejects.toThrow();
+    rmSync(d, { recursive: true, force: true });
   });
 });

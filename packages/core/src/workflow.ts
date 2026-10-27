@@ -1,6 +1,7 @@
 import { discoverDocuments } from "./docs/discover.js";
 import { findingFingerprint, ledgerFor, type CopilotRecord } from "./record/record.js";
-import { changedFiles, listSourceFiles, readLines, syncRepo } from "./repo/repo.js";
+import { changedFiles, diffHunks, listSourceFiles, readLines, syncRepo } from "./repo/repo.js";
+import { applyDrift } from "./drift.js";
 import { architectGate, reviewOperations } from "./roles/architect.js";
 import { analyseChange, analyseImpact, baGate, understandApp } from "./roles/ba.js";
 import { reviewDocuments, undocumentedFlows } from "./roles/ba-docs.js";
@@ -553,7 +554,8 @@ export async function recheck(
 
   try {
     // Document findings land on the newest change still in progress, else on the newest delivered one.
-    await syncDocs(s, changes.filter((c) => c.stage !== "operate").at(-1) ?? newest);
+    const target = changes.filter((c) => c.stage !== "operate").at(-1) ?? newest;
+    await syncDocs(s, target);
     // Unknown diff (no baseline, or it is unreachable): review all files, so moving the baseline never skips code.
     if (!diff || diff.changed.length) {
       const asBuilt = asBuiltFor(record, newest, true);
@@ -573,6 +575,22 @@ export async function recheck(
       confirmReportedFixes(record, projectId, repo.commit, shown);
     }
     if (toVerify.length) await verify(s, newest, "operate", toVerify);
+    // Drift: deterministic rules over the record and the diff, no model call. An unknown diff has no hunks.
+    const hunks = diff && base && base !== repo.commit ? await diffHunks(repo.dir, base, repo.commit).catch(() => []) : [];
+    // A drift run is recorded only when a rule raises a finding.
+    let driftRun: string | undefined;
+    applyDrift(record, projectId, record.getChange(target.id), {
+      hunks,
+      commit: repo.commit,
+      runId: () => {
+        if (!driftRun) {
+          driftRun = record.startRun({ changeId: target.id, role: "ba", commit: repo.commit });
+          s.runIds.push(driftRun);
+        }
+        return driftRun;
+      },
+    });
+    if (driftRun) record.finishRun(driftRun, "done");
     for (const c of changes) {
       if (c.stage === "build") record.setStage(c.id, "verification");
       if (c.stage === "build" || c.stage === "release" || c.stage === "acceptance") {

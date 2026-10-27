@@ -759,6 +759,22 @@ describe("workflow", () => {
       expect(record.findingHistory(gap!.id).at(-1)!.reason).toMatch(/^Not raised again on re-read at [0-9a-f]{7}$/);
     });
 
+    it("a push that rewords a requirement raises drift on recheck", async () => {
+      const { record, models, deps, change, project, origin } = withPrd();
+      const c = change("understand");
+      await advance(deps, c.id);
+      models.handlers["ba.reviewDocuments"] = () => ({
+        requirements: [{ document: "docs/PRD.md", key: "FR-1", text: "Customers book and pay for a slot online.", quote: "FR-1: Customers book and pay for a slot online.", line: 3 }],
+        gaps: [],
+      });
+      await new Promise((r) => setTimeout(r, 5));
+      origin.put("docs/PRD.md", PRD.replace("FR-1: Customers book a slot online.", "FR-1: Customers book and pay for a slot online."));
+      origin.commit("reword FR-1");
+      await recheck(deps, project.id, "push");
+      const titles = record.listFindings({ projectId: project.id, status: "open" }).map((f) => f.title);
+      expect(titles).toContain("Requirement FR-1 changed but its criteria did not");
+    });
+
     it("runs the undocumented check when the baseline has documents", async () => {
       const { record, models, deps, change, project } = withPrd();
       models.handlers["ba.undocumentedFlows"] = (req) => {
