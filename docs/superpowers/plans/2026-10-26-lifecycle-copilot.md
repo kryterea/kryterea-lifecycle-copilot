@@ -104,7 +104,7 @@ Skills: superpowers:test-driven-development.
 **Interfaces:**
 - Produces: `type JsonSchema = Record<string, unknown>`; `class BudgetExceededError extends Error`; `interface SpendLedger { spentUsd(): number; add(costUsd: number, inputTokens: number, outputTokens: number): void }`; `interface ModelRequest { name: string /* e.g. 'ba.understandApp', names the fixture */; system: string; user: string; schema: JsonSchema; maxOutputTokens: number; reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high' /* default 'low' */; images?: string[] /* data URLs */ }`; `interface ModelResult<T> { data: T; usage: { input: number; output: number }; costUsd: number }`; `type Model = <T>(req: ModelRequest) => Promise<ModelResult<T>>`; `type ModelFactory = (ledger: SpendLedger) => Model`; `function createModel(opts: { baseUrl: string; apiKey: string; model: string; priceInPerM: number; priceOutPerM: number; budgetUsd: number; ledger: SpendLedger; fetchImpl?: typeof fetch }): Model`; `function createFakeModel(fixturesDir: string): Model` (returns `fixtures/<req.name>.json` with zero cost; throws naming the missing fixture). The ledger is added to immediately after every call, so spend inside a running run is counted. Each role task adds the fixtures for its own request names.
 
-- [ ] **Step 1: Write failing tests** in `model.test.ts` with a fake `fetchImpl`:
+- [x] **Step 1: Write failing tests** in `model.test.ts` with a fake `fetchImpl`:
   - `costs a call from usage`: usage `{prompt_tokens: 1_000_000, completion_tokens: 100_000}` gives `costUsd === 1.25 + 0.425` and the ledger total rises by that amount.
   - `refuses before sending when the worst case exceeds budget`: ledger at 69.99, budget 70, `maxOutputTokens: 10_000`; expect `BudgetExceededError` and the fake fetch called 0 times. Worst case = estimated input tokens (characters / 4) at input price plus `maxOutputTokens` at output price.
   - `rejects output that does not match the schema`: fake returns `{"wrong":1}` for schema requiring `ok`; expect an error whose message contains `schema`.
@@ -113,10 +113,10 @@ Skills: superpowers:test-driven-development.
   - `cost counts reasoning tokens`: usage with `completion_tokens: 1000` of which `completion_tokens_details.reasoning_tokens: 900` costs 1000 output tokens (Muse Spark bills reasoning as output; Task 0).
   - `empty content retries once with double the cap`: first response `content: null` with `completion_tokens` equal to the cap, second returns valid JSON; expect success, 2 calls, the second with `max_completion_tokens` doubled. Two empty replies throw an error containing `empty`.
   - `sends reasoning_effort`: request body has `reasoning_effort: "low"` by default and the request's value when set.
-- [ ] **Step 2:** Run `pnpm vitest run packages/core/test/model.test.ts`. Expected: FAIL, `createModel` not defined.
-- [ ] **Step 3:** Implement `createModel` in `model.ts`: POST `${baseUrl}/chat/completions` with `response_format: {type: "json_schema", json_schema: {name: "out", schema, strict: true}}`, `reasoning_effort`, and `max_completion_tokens: maxOutputTokens` (which includes reasoning tokens, so every role sets caps with reasoning headroom: at least 4,000), validate with a small hand-written required-keys and type check (no new dependency), images as `image_url` content parts. The budget pre-check uses the doubled cap when retrying.
-- [ ] **Step 4:** Run the tests. Expected: 8 passed.
-- [ ] **Step 5:** Commit `feat(core): Meta model adapter with spend guard`.
+- [x] **Step 2:** Run `pnpm vitest run packages/core/test/model.test.ts`. Expected: FAIL, `createModel` not defined.
+- [x] **Step 3:** Implement `createModel` in `model.ts`: POST `${baseUrl}/chat/completions` with `response_format: {type: "json_schema", json_schema: {name: "out", schema, strict: true}}`, `reasoning_effort`, and `max_completion_tokens: maxOutputTokens` (which includes reasoning tokens, so every role sets caps with reasoning headroom: at least 4,000), validate with a small hand-written required-keys and type check (no new dependency), images as `image_url` content parts. The budget pre-check uses the doubled cap when retrying.
+- [x] **Step 4:** Run the tests. Expected: 8 passed.
+- [x] **Step 5:** Commit `feat(core): Meta model adapter with spend guard`.
 
 ### Task 3: Record, part 1: projects, changes, artifacts, criteria
 
@@ -128,11 +128,11 @@ Skills: superpowers:test-driven-development.
 - Produces types: `RoleId = 'ba'|'architect'|'qa'|'compliance'|'po'`; `StageId = 'intake'|'analysis'|'design_review'|'build'|'verification'|'release'|'acceptance'|'operate'`; `ChangeKind = 'understand'|'feature'|'fix'`; `Project {id, name, repoUrl, appUrl: string|null, createdAt}`; `Change {id, projectId, title, description, kind, stage: StageId, createdAt}`; `Artifact {id, changeId, role, stage, kind: string, body: unknown, createdAt}`; `Criterion {id, projectId, changeId, text, isFailurePath: boolean, createdAt}`.
 - Produces: `class CopilotRecord { static open(path: string): CopilotRecord; createProject(i: {name, repoUrl, appUrl?}): Project; getProject(id): Project; createChange(i: {projectId, title, description, kind}): Change; getChange(id): Change; listChanges(projectId): Change[]; setStage(changeId, stage: StageId): void; addArtifact(i: Omit<Artifact,'id'|'createdAt'>): Artifact; listArtifacts(changeId): Artifact[]; addCriterion(i: Omit<Criterion,'id'|'createdAt'>): Criterion; listCriteria(projectId): Criterion[] }`. Ids are `crypto.randomUUID()`. Bodies stored as JSON text. WAL mode on open.
 
-- [ ] **Step 1: Write failing tests:** `creates and reads back a project and change` (new change starts at stage `intake`); `setStage moves a change`; `criteria are listed per project across changes` (two changes, three criteria, `listCriteria` returns 3); `reopening the same file keeps data` (open, write, close, open, read).
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement with `DatabaseSync` from `node:sqlite`; `schema.sql` run on open with `CREATE TABLE IF NOT EXISTS`.
-- [ ] **Step 4:** Run. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): record for projects, changes, artifacts, criteria`.
+- [x] **Step 1: Write failing tests:** `creates and reads back a project and change` (new change starts at stage `intake`); `setStage moves a change`; `criteria are listed per project across changes` (two changes, three criteria, `listCriteria` returns 3); `reopening the same file keeps data` (open, write, close, open, read).
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement with `DatabaseSync` from `node:sqlite`; `schema.sql` run on open with `CREATE TABLE IF NOT EXISTS`.
+- [x] **Step 4:** Run. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): record for projects, changes, artifacts, criteria`.
 
 ### Task 4: Record, part 2: immutable findings, status events, dedupe
 
@@ -145,11 +145,11 @@ Skills: superpowers:test-driven-development.
 - Produces: `CopilotRecord.addFinding(i: FindingInput): {finding: Finding; isNew: boolean}`; `CopilotRecord.setFindingStatus(findingId, status: FindingStatus, reason: string, actor: string): void`; `CopilotRecord.findingStatus(findingId): FindingStatus`; `CopilotRecord.listFindings(filter: {projectId?: string; changeId?: string; status?: FindingStatus}): Array<Finding & {status: FindingStatus}>`; `CopilotRecord.findingHistory(findingId): Array<{status, reason, actor, at}>`.
 - Fingerprint: sha256 of `projectId|role|kind|normalised title` (lowercase, collapse whitespace). On a duplicate, add a row to `finding_evidence` with the new trigger and runId, and if the existing status is `fixed`, set it back to `open` with reason "Raised again".
 
-- [ ] **Step 1: Write failing tests:** `new finding starts open`; `findings have no update path` (assert `CopilotRecord.prototype` has no method named `updateFinding`); `duplicate title in same project returns existing finding with isNew false`; `a fixed finding raised again reopens with reason "Raised again"`; `history lists every status change in order`.
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement. Findings table has no UPDATE statements anywhere in `record.ts`.
-- [ ] **Step 4:** Run. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): immutable findings with status history and dedupe`.
+- [x] **Step 1: Write failing tests:** `new finding starts open`; `findings have no update path` (assert `CopilotRecord.prototype` has no method named `updateFinding`); `duplicate title in same project returns existing finding with isNew false`; `a fixed finding raised again reopens with reason "Raised again"`; `history lists every status change in order`.
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement. Findings table has no UPDATE statements anywhere in `record.ts`.
+- [x] **Step 4:** Run. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): immutable findings with status history and dedupe`.
 
 ### Task 5: Record, part 3: runs, gates, links, acceptance read-out
 
@@ -161,11 +161,11 @@ Skills: superpowers:test-driven-development.
 - Produces types: `GateState = 'held'|'cleared'`; `EvidenceState = 'evidence_found'|'gap'|'no_evidence'`; `RunStatus = 'running'|'done'|'stopped_budget'|'failed'`; `Check {criterionId, runId, state: EvidenceState, evidence: Trigger[], note: string}`; `AcceptanceRecord {change: Change; criteria: Array<Criterion & {latest: EvidenceState|null}>; findings: Array<Finding & {status}>; gates: Partial<Record<RoleId, {state: GateState; reason: string; at: string}>>; decisions: Array<{findingId, status, reason, actor, at}>; runs: Array<{id, role, commit, status, costUsd}>}`.
 - Produces: `CopilotRecord.startRun(i: {changeId, role, commit}): string`; `CopilotRecord.finishRun(runId, i: {status: RunStatus; inputTokens: number; outputTokens: number; costUsd: number}): void`; `CopilotRecord.addRunCost(runId: string, costUsd: number, inputTokens: number, outputTokens: number): void` (writes immediately, so a running run counts); `CopilotRecord.spentUsd(): number` (sum of all run costs, running or finished); `function ledgerFor(record: CopilotRecord, runId: string): SpendLedger` (exported from `record.ts`; `add` calls `addRunCost`); every model call happens inside a run, including the PO summary; `CopilotRecord.recordGate(changeId, role, state, reason): void`; `CopilotRecord.gates(changeId)`; `CopilotRecord.recordCheck(c: Check): void`; `CopilotRecord.latestCheck(criterionId): Check|null`; `CopilotRecord.link(from: {type: string; id: string}, rel: 'affects'|'satisfies'|'verifies'|'raised_on', to: {type: string; id: string}): void`; `CopilotRecord.linksTo(to): Array<{from, rel}>`; `CopilotRecord.acceptanceRecord(changeId): AcceptanceRecord`.
 
-- [ ] **Step 1: Write failing tests:** `spentUsd counts a running run's costs immediately`; `latest gate state wins`; `latestCheck returns the newest check`; `acceptanceRecord lists criteria with latest state, open findings, gates and decisions`.
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Run. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): runs, gates, links and acceptance record`.
+- [x] **Step 1: Write failing tests:** `spentUsd counts a running run's costs immediately`; `latest gate state wins`; `latestCheck returns the newest check`; `acceptanceRecord lists criteria with latest state, open findings, gates and decisions`.
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Run. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): runs, gates, links and acceptance record`.
 
 ### Task 6: Repo reader and file narrowing
 
@@ -177,11 +177,11 @@ Skills: superpowers:test-driven-development.
 - Produces: `syncRepo(repoUrl: string, cacheDir: string, token?: string): Promise<{dir: string; commit: string}>` (shallow clone first time, `fetch` + `reset --hard origin/HEAD` after); `listSourceFiles(dir): Promise<string[]>` (relative paths; excludes `node_modules`, `.git`, `dist`, `build`, `.next`, lockfiles, images, fonts, files over 200 KB); `changedFiles(dir, from: string, to: string): Promise<{changed: string[]; deleted: string[]}>`; `readLines(dir, file, start, end): string|null`; `verifyCodeTrigger(dir, t: {file, line}): boolean`; `narrowFiles(query: string, dir: string, files: string[], limit = 12): Promise<string[]>`.
 - `narrowFiles` is deterministic and makes no model call: score each file by count of query keywords (lowercased words of 4+ letters, minus a stopword list) in its path (weight 3) and content (weight 1); return the top `limit`.
 
-- [ ] **Step 1: Write failing tests:** `lists source files and skips node_modules and lockfiles`; `changedFiles reports a deleted file under deleted`; `verifyCodeTrigger is false for a missing file and for a line past the end`; `narrowFiles ranks payment.ts above about.ts for "failed payment order status"`.
-- [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement with `node:child_process` `execFile('git', ...)` and `node:fs/promises`.
-- [ ] **Step 4:** Run. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): repo reader and file narrowing`.
+- [x] **Step 1: Write failing tests:** `lists source files and skips node_modules and lockfiles`; `changedFiles reports a deleted file under deleted`; `verifyCodeTrigger is false for a missing file and for a line past the end`; `narrowFiles ranks payment.ts above about.ts for "failed payment order status"`.
+- [x] **Step 2:** Run. Expected: FAIL.
+- [x] **Step 3:** Implement with `node:child_process` `execFile('git', ...)` and `node:fs/promises`.
+- [x] **Step 4:** Run. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): repo reader and file narrowing`.
 
 ### Task 7: Professional packs and the verified NDPA legal pack
 

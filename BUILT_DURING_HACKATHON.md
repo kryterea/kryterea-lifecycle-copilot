@@ -10,9 +10,9 @@ Everything in this repository was written during the build window. The first com
 
 Built during the event (update as tasks finish):
 
-- [ ] Meta model adapter with spend guard
-- [ ] The record: changes, findings, gates, evidence, acceptance
-- [ ] Repo reader and file narrowing
+- [x] Meta model adapter with spend guard
+- [x] The record: changes, findings, gates, evidence, acceptance
+- [x] Repo reader and file narrowing
 - [ ] Five professional packs and the verified NDPA 2023 legal pack
 - [ ] Business analyst, architect/SRE, QA, security and compliance, and product owner roles
 - [ ] Change workflow with targeted re-checks
