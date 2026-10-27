@@ -34,6 +34,7 @@ if (existsSync(join(root, ".env"))) process.loadEnvFile(join(root, ".env"));
 const env = process.env;
 
 const fake = env.COPILOT_FAKE_MODEL === "1";
+const modelName = env.META_MODEL || "muse-spark-1.3";
 const budgetUsd = num("COPILOT_BUDGET_USD", 70);
 let modelFor: ModelFactory;
 if (fake) {
@@ -48,7 +49,7 @@ if (fake) {
   const options = {
     baseUrl: env.META_API_BASE_URL || "https://api.meta.ai/v1",
     apiKey,
-    model: env.META_MODEL || "muse-spark-1.3",
+    model: modelName,
     priceInPerM: num("PRICE_IN_PER_M", 1.25),
     priceOutPerM: num("PRICE_OUT_PER_M", 4.25),
     budgetUsd,
@@ -76,7 +77,7 @@ if (!isLoopback(hostname) && !apiToken) {
 }
 
 const jobs = new Jobs();
-const app = createApp(deps, { budgetUsd, jobs, port, host: hostname, apiToken });
+const app = createApp(deps, { budgetUsd, jobs, port, host: hostname, apiToken, model: modelName, fake });
 const webDir = join(root, "packages", "web", "dist", "app");
 if (existsSync(webDir)) app.get("*", serveStatic({ root: webDir }));
 

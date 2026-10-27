@@ -295,7 +295,27 @@ describe("HTTP API", () => {
     const runId = deps.record.startRun({ changeId: c.id, role: "ba", commit: "b".repeat(40) });
     deps.record.addRunCost(runId, 1.5, 10, 10);
     const { call } = setup({ budgetUsd: 70 });
-    expect((await call("GET", "/api/spend")).json).toEqual({ spentUsd: 1.5, budgetUsd: 70 });
+    expect((await call("GET", "/api/spend")).json).toEqual({ spentUsd: 1.5, budgetUsd: 70, model: "muse-spark-1.3", fake: false });
+  });
+
+  it("spend endpoint names the model and says when outputs are replayed fixtures", async () => {
+    const { call } = setup({ model: "muse-spark-9", fake: true });
+    expect((await call("GET", "/api/spend")).json).toMatchObject({ model: "muse-spark-9", fake: true });
+  });
+
+  it("change endpoint lists the latest run of each role", async () => {
+    const { c } = seedChange();
+    const first = deps.record.startRun({ changeId: c.id, role: "ba", commit: "a".repeat(40) });
+    deps.record.finishRun(first, "done");
+    const qa = deps.record.startRun({ changeId: c.id, role: "qa", commit: "a".repeat(40) });
+    const second = deps.record.startRun({ changeId: c.id, role: "ba", commit: "b".repeat(40) });
+    const { call } = setup();
+    const runs = (await call("GET", `/api/changes/${c.id}`)).json.runs;
+    expect(runs.map((r: { id: string; role: string; status: string }) => [r.role, r.id, r.status])).toEqual([
+      ["ba", second, "running"],
+      ["qa", qa, "running"],
+    ]);
+    expect(runs[0].commit).toBe("b".repeat(40));
   });
 });
 

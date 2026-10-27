@@ -203,6 +203,10 @@ export interface AppOptions {
   /** Where job and request errors are logged (default console.error). */
   log?: Log;
   jobs?: Jobs;
+  /** The model name the server calls, shown by the panel (default muse-spark-1.3). */
+  model?: string;
+  /** True when model outputs are replayed fixtures (COPILOT_FAKE_MODEL=1). */
+  fake?: boolean;
   /** Injectable for tests. */
   advanceFn?: typeof advance;
   recheckFn?: typeof recheck;
@@ -293,6 +297,8 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
     const questions = record.listArtifacts(change.id).filter((a) => a.kind === "questions").at(-1)?.body as
       | { questions?: string[] }
       | undefined;
+    // The latest run of each role, so the panel can show who has checked this change and who is working now.
+    const runs = Object.values(Object.fromEntries(r.runs.map((x) => [x.role, x])));
     return c.json({
       change: r.change,
       stage: r.change.stage,
@@ -301,6 +307,7 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
       criteria: r.criteria,
       questions: questions?.questions ?? [],
       accepted: accepted(record, change.id),
+      runs,
     });
   });
 
@@ -358,7 +365,9 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
     return c.json(job.error ? { state: job.state, error: job.error } : { state: job.state });
   });
 
-  app.get("/api/spend", (c) => c.json({ spentUsd: record.spentUsd(), budgetUsd }));
+  app.get("/api/spend", (c) =>
+    c.json({ spentUsd: record.spentUsd(), budgetUsd, model: opts.model ?? "muse-spark-1.3", fake: opts.fake === true }),
+  );
 
   app.notFound((c) => c.json({ error: "Not found" }, 404));
 
