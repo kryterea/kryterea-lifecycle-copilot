@@ -9,5 +9,6 @@ export { loadPacks } from "./packs.js";
 export { understandApp, analyseChange, analyseImpact, baGate } from "./roles/ba.js";
 export { reviewCompliance, complianceGate } from "./roles/compliance.js";
 export { reviewOperations, architectGate } from "./roles/architect.js";
+export { verifyCriteria, qaGate } from "./roles/qa.js";
 export { systemPrompt, checkTriggers, repoMaterial } from "./roles/context.js";
 export type { RoleContext, RoleResult, RoleFinding } from "./roles/context.js";

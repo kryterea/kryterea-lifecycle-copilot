@@ -1,0 +1,9 @@
+{
+  "state": "evidence_found",
+  "evidence": [{ "file": "server.js", "line": 157 }],
+  "note": "A signed-in customer can send a booking. The app checks the service, the date and the time slot before it saves anything.",
+  "title": null,
+  "plain": null,
+  "costIfIgnored": null,
+  "fixPrompt": null
+}
