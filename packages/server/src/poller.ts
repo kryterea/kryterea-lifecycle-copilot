@@ -10,16 +10,26 @@ export const gitLsRemote: LsRemote = (repoUrl, deps) =>
 /**
  * One pass over every project. A project is rechecked when its remote head differs from the commit the last
  * recheck covered (or, before any, the last done QA run). No baseline yet, or a job running in the project:
- * skipped. One project's error never stops the others.
+ * skipped. One project's error never stops the others. `tried` holds the head each project's last recheck was
+ * started for: a recheck that did not finish leaves the baseline behind, so without it a recheck that keeps
+ * throwing would be paid for again on every pass. The next push (a new head) tries again.
  */
-export async function pollOnce(deps: WorkflowDeps, lsRemote: LsRemote, recheckFn: typeof recheck, jobs: Jobs): Promise<void> {
+export async function pollOnce(
+  deps: WorkflowDeps,
+  lsRemote: LsRemote,
+  recheckFn: typeof recheck,
+  jobs: Jobs,
+  tried = new Map<string, string>(),
+): Promise<void> {
   const { record } = deps;
   for (const p of record.listProjects()) {
     try {
       const base = record.checkedCommit(p.id) ?? record.lastRunCommit(p.id, "qa");
       if (!base || jobs.busy(p.id)) continue;
       const head = await lsRemote(p.repoUrl, deps);
-      if (head !== base) jobs.start("recheck", p.id, p.id, () => recheckFn(deps, p.id, "push"), "push");
+      if (head === base || head === tried.get(p.id)) continue;
+      tried.set(p.id, head);
+      jobs.start("recheck", p.id, p.id, () => recheckFn(deps, p.id, "push"), "push");
     } catch (e) {
       console.error(`poller: project ${p.id} skipped:`, e instanceof Error ? e.message : e);
     }
@@ -34,10 +44,11 @@ export function startPoller(
   recheckFn: typeof recheck = recheck,
   jobs: Jobs = new Jobs(),
 ): () => void {
+  const tried = new Map<string, string>();
   let stopped = false;
   let timer: NodeJS.Timeout | undefined;
   const tick = async () => {
-    await pollOnce(deps, lsRemote, recheckFn, jobs).catch((e: unknown) => console.error("poller: pass failed:", e));
+    await pollOnce(deps, lsRemote, recheckFn, jobs, tried).catch((e: unknown) => console.error("poller: pass failed:", e));
     if (!stopped) schedule();
   };
   const schedule = () => {

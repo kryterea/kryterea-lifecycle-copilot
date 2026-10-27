@@ -1,7 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import {
+  BudgetExceededError,
   accepted,
   advance,
   checkRepoUrl,
@@ -37,6 +38,8 @@ export class Jobs {
   private readonly jobs = new Map<string, Job>();
   private readonly locks = new Map<string, string>();
 
+  constructor(private readonly log: Log = console.error) {}
+
   get(id: string): Job | undefined {
     return this.jobs.get(id);
   }
@@ -69,9 +72,13 @@ export class Jobs {
           job.state = r.stoppedForBudget ? "stopped_budget" : "done";
         },
         (e: unknown) => {
+          if (e instanceof BudgetExceededError) {
+            job.state = "stopped_budget";
+            return;
+          }
           job.state = "failed";
-          job.error = shortError(e);
-          console.error(`job ${job.id} (${kind} ${targetId}) failed:`, e);
+          job.error = JOB_ERROR;
+          this.log(`job ${job.id} (${kind} ${targetId}) failed:`, e);
         },
       )
       .finally(() => {
@@ -82,12 +89,14 @@ export class Jobs {
   }
 }
 
-/** First line of the message only: no stack, capped. */
-const shortError = (e: unknown) => (e instanceof Error ? e.message : "Job failed").split("\n")[0]!.slice(0, 300) || "Job failed";
+/** Shown to the user; the real error (which can hold paths and git output) stays in the server log. */
+const JOB_ERROR = "The job stopped with an error. The server log has the details.";
+
+export type Log = (message: string, error?: unknown) => void;
 
 class HttpError extends Error {
   constructor(
-    readonly status: 400 | 404 | 409,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 415,
     message: string,
     readonly extra: Record<string, unknown> = {},
   ) {
@@ -136,8 +145,63 @@ function found<T>(get: () => T): T {
   }
 }
 
+const LOOPBACK = ["localhost", "127.0.0.1", "[::1]"];
+
+/** The host as it appears in a URL (IPv6 in brackets), lower case. */
+const urlHost = (h: string) => {
+  const host = h.toLowerCase();
+  return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+};
+
+export const isLoopback = (host: string) => LOOPBACK.includes(urlHost(host));
+
+const digest = (s: string) => createHash("sha256").update(s).digest();
+
+/**
+ * The API has no accounts, so it trusts only the local machine. The Host must be loopback (or the configured
+ * host) on our port, which stops DNS rebinding. An Origin, when sent, must be that same origin, and writes must
+ * be JSON, which a cross-site page cannot send without a preflight we never answer (no CORS headers at all).
+ * With an API token set, every request also needs it.
+ */
+function requestGuard(o: { port: number; host?: string; apiToken?: string }) {
+  const hosts = new Set(LOOPBACK);
+  if (o.host) hosts.add(urlHost(o.host));
+  const sameOrigin = (u: URL) => hosts.has(u.hostname) && Number(u.port || (u.protocol === "https:" ? 443 : 80)) === o.port;
+  return async (c: Context, next: () => Promise<void>) => {
+    if (!sameOrigin(new URL(c.req.url))) throw new HttpError(403, "This API only answers requests made to this machine");
+    const origin = c.req.header("origin");
+    if (origin !== undefined) {
+      let u: URL | undefined;
+      try {
+        u = new URL(origin);
+      } catch {
+        u = undefined;
+      }
+      if (!u || u.protocol !== "http:" || !sameOrigin(u)) throw new HttpError(403, "Cross-site requests are not allowed");
+    }
+    if (o.apiToken) {
+      const auth = c.req.header("authorization") ?? "";
+      const given = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+      if (!timingSafeEqual(digest(given), digest(o.apiToken))) throw new HttpError(401, "A valid API token is required");
+    }
+    const write = ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method);
+    if (write && !/^application\/json\s*(;|$)/i.test(c.req.header("content-type") ?? "")) {
+      throw new HttpError(415, "Send the request as application/json");
+    }
+    await next();
+  };
+}
+
 export interface AppOptions {
   budgetUsd?: number;
+  /** The port the server listens on (default 8787). Requests to another port are refused. */
+  port?: number;
+  /** The configured listen host, accepted in the Host header besides loopback. */
+  host?: string;
+  /** When set, every /api request needs `Authorization: Bearer <token>`. */
+  apiToken?: string;
+  /** Where job and request errors are logged (default console.error). */
+  log?: Log;
   jobs?: Jobs;
   /** Injectable for tests. */
   advanceFn?: typeof advance;
@@ -146,16 +210,18 @@ export interface AppOptions {
 
 export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
   const { record } = deps;
-  const jobs = opts.jobs ?? new Jobs();
+  const log = opts.log ?? console.error;
+  const jobs = opts.jobs ?? new Jobs(log);
   const advanceFn = opts.advanceFn ?? advance;
   const recheckFn = opts.recheckFn ?? recheck;
   const budgetUsd = opts.budgetUsd ?? 70;
   const app = new Hono();
 
+  app.use("/api/*", requestGuard({ port: opts.port ?? 8787, host: opts.host, apiToken: opts.apiToken }));
   app.use("/api/*", bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json({ error: "Body is larger than 64 KB" }, 413) }));
   app.onError((err, c) => {
     if (err instanceof HttpError) return c.json({ error: err.message, ...err.extra }, err.status);
-    console.error(`${c.req.method} ${c.req.path} failed:`, err);
+    log(`${c.req.method} ${c.req.path} failed:`, err);
     return c.json({ error: "Internal error" }, 500);
   });
 
@@ -262,6 +328,7 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
     const change = getChange(c.req.param("id"));
     const b = await readBody(c);
     const actor = text(b, "actor", 100);
+    if (change.stage !== "acceptance") throw new HttpError(409, "This change is not waiting for acceptance");
     // Checked before writing, so a refused accept leaves no acceptance behind.
     const running = jobs.busy(`${change.projectId}/${change.id}`);
     if (running) throw new HttpError(409, "A job is already running for this item", { jobId: running });

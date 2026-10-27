@@ -43,17 +43,21 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+const BASE = "http://127.0.0.1:8787";
+
 function setup(opts: AppOptions = {}) {
-  const app = createApp(deps, opts);
-  const call = async (method: string, path: string, body?: unknown) => {
-    const res = await app.request(path, {
+  const log = vi.fn();
+  const app = createApp(deps, { log, ...opts });
+  /** Same-origin JSON requests, as the panel sends them. `headers` overrides or adds. */
+  const call = async (method: string, path: string, body?: unknown, headers: Record<string, string> = {}, base = BASE) => {
+    const res = await app.request(`${base}${path}`, {
       method,
-      headers: body === undefined ? {} : { "content-type": "application/json" },
+      headers: { ...(method === "GET" ? {} : { "content-type": "application/json" }), ...headers },
       body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
     });
     return { status: res.status, json: (await res.json()) as any };
   };
-  return { app, call };
+  return { app, call, log };
 }
 
 function seedChange() {
@@ -165,7 +169,7 @@ describe("HTTP API", () => {
   it("a second advance for the same change while one runs returns 409 with the running job id", async () => {
     const { c } = seedChange();
     const run = deferred<never>();
-    const { call } = setup({ advanceFn: () => run.promise });
+    const { call, log } = setup({ advanceFn: () => run.promise });
     const first = await call("POST", `/api/changes/${c.id}/advance`);
     const second = await call("POST", `/api/changes/${c.id}/advance`);
     expect(second.status).toBe(409);
@@ -174,11 +178,26 @@ describe("HTTP API", () => {
     const re = await call("POST", `/api/projects/${c.projectId}/recheck`, {});
     expect(re.status).toBe(409);
 
-    run.reject(new Error("model said no\n    at secret/stack.ts:1"));
-    await vi.waitFor(async () =>
-      expect((await call("GET", `/api/jobs/${first.json.jobId}`)).json).toEqual({ state: "failed", error: "model said no" }),
-    );
-    expect((await call("POST", `/api/changes/${c.id}/advance`)).status).toBe(202);
+    run.reject(new Error("git fetch failed: C:/secret/path\n    at secret/stack.ts:1"));
+    await vi.waitFor(async () => expect((await call("GET", `/api/jobs/${first.json.jobId}`)).json.state).toBe("failed"));
+    const { error } = (await call("GET", `/api/jobs/${first.json.jobId}`)).json;
+    expect(error).toBe("The job stopped with an error. The server log has the details.");
+    expect(error).not.toMatch(/fail|secret/i);
+    expect(log).toHaveBeenCalledTimes(1);
+  });
+
+  it("a recheck running blocks an advance in the same project, and a refused accept stores nothing", async () => {
+    const { p, c } = seedChange();
+    deps.record.setStage(c.id, "acceptance");
+    const run = deferred<{ runIds: string[]; stoppedForBudget: boolean }>();
+    const { call } = setup({ recheckFn: () => run.promise });
+    const re = await call("POST", `/api/projects/${p.id}/recheck`, {});
+    expect(re.status).toBe(202);
+    expect((await call("POST", `/api/changes/${c.id}/advance`)).json.jobId).toBe(re.json.jobId);
+    const acc = await call("POST", `/api/changes/${c.id}/accept`, { actor: "founder" });
+    expect(acc.status).toBe(409);
+    expect(deps.record.listArtifacts(c.id).filter((a) => a.kind === "acceptance")).toEqual([]);
+    run.resolve({ runIds: [], stoppedForBudget: false });
   });
 
   it("a budget stop shows as stopped_budget", async () => {
@@ -188,7 +207,7 @@ describe("HTTP API", () => {
     await vi.waitFor(async () => expect((await call("GET", `/api/jobs/${r.json.jobId}`)).json.state).toBe("stopped_budget"));
   });
 
-  it("recheck runs as a job with the given reason", async () => {
+  it("recheck runs as a job with the given reason, and a budget error escaping it is stopped_budget", async () => {
     const { p } = seedChange();
     const recheckFn = vi.fn(async () => {
       throw new BudgetExceededError("used");
@@ -197,7 +216,7 @@ describe("HTTP API", () => {
     const r = await call("POST", `/api/projects/${p.id}/recheck`, { reason: "mcp" });
     expect(r.status).toBe(202);
     expect(recheckFn).toHaveBeenCalledWith(deps, p.id, "mcp");
-    await vi.waitFor(async () => expect((await call("GET", `/api/jobs/${r.json.jobId}`)).json.state).toBe("failed"));
+    await vi.waitFor(async () => expect((await call("GET", `/api/jobs/${r.json.jobId}`)).json).toEqual({ state: "stopped_budget" }));
     expect((await call("POST", `/api/projects/${p.id}/recheck`, { reason: "push" })).status).toBe(400);
   });
 
@@ -214,6 +233,14 @@ describe("HTTP API", () => {
     expect(answers).toMatchObject({ role: "ba", stage: "analysis", body: { answers: ["Deposit is 20%"] } });
 
     expect((await call("GET", `/api/changes/${c.id}`)).json.accepted).toBe(false);
+    // Not waiting for acceptance yet: refused, nothing stored, nothing started.
+    const early = await call("POST", `/api/changes/${c.id}/accept`, { actor: "founder" });
+    expect(early.status).toBe(409);
+    expect(early.json.error).toMatch(/not waiting for acceptance/);
+    expect(deps.record.listArtifacts(c.id).filter((a) => a.kind === "acceptance")).toEqual([]);
+    expect(advanceFn).not.toHaveBeenCalled();
+
+    deps.record.setStage(c.id, "acceptance");
     expect((await call("POST", `/api/changes/${c.id}/accept`, {})).status).toBe(400);
     const r = await call("POST", `/api/changes/${c.id}/accept`, { actor: "founder" });
     expect(r.status).toBe(202);
@@ -272,6 +299,56 @@ describe("HTTP API", () => {
   });
 });
 
+describe("local-only request guard", () => {
+  const NEW = { name: "Salon", repoUrl: REPO };
+
+  it("a text/plain POST gets 415, so a cross-site form cannot write", async () => {
+    const { call } = setup();
+    const r = await call("POST", "/api/projects", JSON.stringify(NEW), { "content-type": "text/plain" });
+    expect(r.status).toBe(415);
+    expect((await call("POST", "/api/projects", JSON.stringify(NEW), { "content-type": "" })).status).toBe(415);
+    expect(deps.record.listProjects()).toEqual([]);
+  });
+
+  it("a foreign Host or the wrong port gets 403 (DNS rebinding)", async () => {
+    const { call } = setup();
+    expect((await call("GET", "/api/projects", undefined, {}, "http://evil.example:8787")).status).toBe(403);
+    expect((await call("GET", "/api/projects", undefined, {}, "http://127.0.0.1:9999")).status).toBe(403);
+    expect((await call("POST", "/api/projects", NEW, {}, "http://evil.example:8787")).status).toBe(403);
+    expect(deps.record.listProjects()).toEqual([]);
+  });
+
+  it("a foreign Origin gets 403 and no CORS header is ever sent", async () => {
+    const { call, app } = setup();
+    for (const origin of ["http://evil.example", "http://evil.example:8787", "null", "https://127.0.0.1:8787", "http://127.0.0.1:3000"]) {
+      expect((await call("POST", "/api/projects", NEW, { origin })).status, origin).toBe(403);
+    }
+    expect(deps.record.listProjects()).toEqual([]);
+    const res = await app.request(`${BASE}/api/projects`, { headers: { origin: "http://evil.example" } });
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it("same-origin requests work on every loopback name, and on a configured host", async () => {
+    const { call } = setup();
+    expect((await call("POST", "/api/projects", NEW, { origin: BASE })).status).toBe(201);
+    for (const base of ["http://localhost:8787", "http://[::1]:8787"]) {
+      expect((await call("GET", "/api/projects", undefined, { origin: base }, base)).status, base).toBe(200);
+    }
+    const lan = setup({ host: "192.168.1.20", port: 9000 });
+    expect((await lan.call("GET", "/api/projects", undefined, {}, "http://192.168.1.20:9000")).status).toBe(200);
+    expect((await lan.call("GET", "/api/projects", undefined, {}, BASE)).status).toBe(403);
+  });
+
+  it("with an API token set, every request needs the bearer token", async () => {
+    const { call } = setup({ apiToken: "test-token-123" });
+    expect((await call("GET", "/api/projects")).status).toBe(401);
+    expect((await call("GET", "/api/projects", undefined, { authorization: "Bearer wrong" })).status).toBe(401);
+    expect((await call("GET", "/api/projects", undefined, { authorization: "test-token-123" })).status).toBe(401);
+    expect((await call("GET", "/api/projects", undefined, { authorization: "Bearer test-token-123" })).status).toBe(200);
+    expect((await call("POST", "/api/projects", NEW, { authorization: "Bearer test-token-123" })).status).toBe(201);
+  });
+});
+
 describe("push poller", () => {
   const A = "a".repeat(40);
   const B = "b".repeat(40);
@@ -294,6 +371,27 @@ describe("push poller", () => {
     expect(recheckFn).toHaveBeenCalledWith(deps, changed.id, "push");
     // No baseline yet: skipped without asking the remote.
     expect(lsRemote).not.toHaveBeenCalledWith(fresh.repoUrl, deps);
+  });
+
+  it("a recheck that throws is not retried until the remote head moves", async () => {
+    const { changed } = projects();
+    let head = B;
+    const lsRemote = async (url: string) => (url.includes("changed") ? head : A);
+    const recheckFn = vi.fn(async () => {
+      throw new Error("schema mismatch");
+    });
+    const jobs = new Jobs(() => {});
+    const tried = new Map<string, string>();
+    await pollOnce(deps, lsRemote, recheckFn, jobs, tried);
+    await vi.waitFor(() => expect(jobs.busy(changed.id)).toBeUndefined());
+    expect(recheckFn).toHaveBeenCalledTimes(1);
+
+    await pollOnce(deps, lsRemote, recheckFn, jobs, tried);
+    expect(recheckFn).toHaveBeenCalledTimes(1);
+
+    head = "c".repeat(40);
+    await pollOnce(deps, lsRemote, recheckFn, jobs, tried);
+    expect(recheckFn).toHaveBeenCalledTimes(2);
   });
 
   it("poller survives one project's lsRemote throwing and skips a project whose recheck is running", async () => {

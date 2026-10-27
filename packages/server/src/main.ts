@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { CopilotRecord, createFakeModel, createModel, loadPacks, type ModelFactory } from "@lifecycle/core";
-import { Jobs, createApp } from "./app.js";
+import { Jobs, createApp, isLoopback } from "./app.js";
 import { startPoller } from "./poller.js";
 
 /** The repo root is the nearest folder up from this file with pnpm-workspace.yaml (works from src and dist). */
@@ -67,13 +67,19 @@ const deps = {
   ...(env.GITHUB_TOKEN ? { githubToken: env.GITHUB_TOKEN } : {}),
 };
 
+const port = num("PORT", 8787);
+const hostname = env.HOST || "127.0.0.1";
+const apiToken = env.COPILOT_API_TOKEN || undefined;
+if (!isLoopback(hostname) && !apiToken) {
+  console.error("HOST is not a loopback address, so COPILOT_API_TOKEN must be set. The API has no other protection.");
+  process.exit(1);
+}
+
 const jobs = new Jobs();
-const app = createApp(deps, { budgetUsd, jobs });
+const app = createApp(deps, { budgetUsd, jobs, port, host: hostname, apiToken });
 const webDir = join(root, "packages", "web", "dist", "app");
 if (existsSync(webDir)) app.get("*", serveStatic({ root: webDir }));
 
-const port = num("PORT", 8787);
-const hostname = env.HOST || "127.0.0.1";
 serve({ fetch: app.fetch, port, hostname }, (info) => {
   console.log(`Copilot server on http://${hostname}:${info.port}${fake ? " (fake model)" : ""}`);
 });
