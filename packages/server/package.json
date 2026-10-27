@@ -2,5 +2,15 @@
   "name": "@lifecycle/server",
   "private": true,
   "type": "module",
-  "version": "0.0.0"
+  "version": "0.0.0",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/src/main.js",
+    "dev": "tsc -b && node dist/src/main.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.5",
+    "@lifecycle/core": "workspace:*",
+    "hono": "4.13.14"
+  }
 }

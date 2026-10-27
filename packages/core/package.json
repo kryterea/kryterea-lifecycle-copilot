@@ -2,5 +2,11 @@
   "name": "@lifecycle/core",
   "private": true,
   "type": "module",
-  "version": "0.0.0"
+  "version": "0.0.0",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  }
 }
