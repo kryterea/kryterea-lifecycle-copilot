@@ -19,7 +19,7 @@ export function Start({ id }: { id: string }) {
     setError(null);
     try {
       const r = await api.check(id, problem.trim());
-      location.hash = `#/changes/${encodeURIComponent(r.changeId)}/assessment`;
+      location.hash = `#/changes/${encodeURIComponent(r.changeId)}/assessment/${encodeURIComponent(r.jobId)}`;
     } catch (err) {
       setError(message(err));
       setBusy(false);

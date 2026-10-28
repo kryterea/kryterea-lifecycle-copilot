@@ -274,7 +274,7 @@ function Proposal({ view, index, byId, actor, onDecided }: { view: ChangeView; i
 }
 
 /** A check's result: her problem answered first, what else was found, and the changes written for her. */
-export function Assessment({ id }: { id: string }) {
+export function Assessment({ id, jobId }: { id: string; jobId?: string }) {
   const professions = useLoad(() => api.professions(), "professions");
   const [view, setView] = useState<ChangeView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -302,6 +302,10 @@ export function Assessment({ id }: { id: string }) {
   );
   useEffect(() => void load(), [load]);
   const job = useJob(load);
+  // From Start the check's job id rides in the URL, so polling follows the real job through the repo sync.
+  useEffect(() => {
+    if (jobId) void job.start(() => Promise.resolve(jobId));
+  }, [jobId]);
 
   // Reached from Start without a job id, so the view is polled while a run is running. A short grace covers the
   // repo sync before the first run and the moment between two runs.
@@ -351,7 +355,7 @@ export function Assessment({ id }: { id: string }) {
   const rows = rest.filter((f) => !hidden.has(f.id));
   const n = rows.length;
   const busy = running || starting;
-  const stopped = !running && view.runs.some((r) => r.status === "failed" || r.status === "stopped_budget");
+  const stopped = !running && (job.job?.state === "failed" || view.runs.some((r) => r.status === "failed" || r.status === "stopped_budget"));
   const nameField = askName && (
     <input aria-label="Your name" placeholder="Your name" value={name} onChange={(e) => setNameDraft(e.target.value)} maxLength={100} autoComplete="name" className="assess-name" />
   );
