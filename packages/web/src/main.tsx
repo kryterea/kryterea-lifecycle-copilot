@@ -10,6 +10,7 @@ import { Project, type Section } from "./pages/Project";
 import { Projects } from "./pages/Projects";
 import { Record } from "./pages/Record";
 import { Requirement } from "./pages/Requirement";
+import { Start } from "./pages/Start";
 import { Templates } from "./pages/Templates";
 import { Welcome } from "./pages/Welcome";
 import { api } from "./api";
@@ -66,6 +67,8 @@ function Page({ hash }: { hash: string }) {
   if (m) return <Compare key={m[1]} projectId={d(m[1]!)} from={m[2] && d(m[2])} to={m[3] && d(m[3])} />;
   m = /^#\/requirements\/([^/]+)$/.exec(hash);
   if (m) return <Requirement key={m[1]} id={d(m[1]!)} />;
+  m = /^#\/projects\/([^/]+)\/start$/.exec(hash);
+  if (m) return <Start key={m[1]} id={d(m[1]!)} />;
   m = /^#\/projects\/([^/]+)(?:\/(needs-you|documents|trace|connections))?$/.exec(hash);
   if (m) return <Project key={m[1]} id={d(m[1]!)} section={(m[2] as Section | undefined) ?? "changes"} />;
   m = /^#\/changes\/([^/]+)(\/record)?$/.exec(hash);

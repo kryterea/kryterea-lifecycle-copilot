@@ -1965,3 +1965,37 @@ tbody tr + tr td {
     border-color: #000 !important;
   }
 }
+
+/* Start: what was read, then the problem and who looks */
+
+.start-block {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.form .start-block {
+  margin-bottom: 0;
+}
+.start-block h2 {
+  font-size: var(--t-section);
+}
+.rows li > .item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+}
+.start-path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.start-auto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--brand);
+}
+.start-auto strong {
+  color: var(--ink);
+}
