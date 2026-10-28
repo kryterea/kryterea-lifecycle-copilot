@@ -11,6 +11,7 @@ import {
   openFixChange,
   openItems,
   openQuestions,
+  questionOptions,
   PROFESSIONS,
   recheck,
   compareCommits,
@@ -370,6 +371,7 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
       criteria,
       documentsRead,
       questions: openQuestions(record, change.id),
+      questionOptions: questionOptions(record, change.id),
       accepted: accepted(record, change.id),
       runs,
       withdrawn: withdrawal(record, change.id),
@@ -395,7 +397,14 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
       if (typeof a !== "string" || !a.trim() || a.length > 2000) throw bad(`answers[${i}] must be non-empty text of at most 2000 characters`);
       return a;
     });
-    const artifact = record.addArtifact({ changeId: change.id, role: "ba", stage: "analysis", kind: "answers", body: { answers: list } });
+    const assumed = b.assumed;
+    if (assumed !== undefined && (!Array.isArray(assumed) || assumed.length !== list.length || assumed.some((x) => typeof x !== "boolean"))) {
+      throw bad("assumed must be a list of true or false, one for each answer");
+    }
+    const actor = b.actor;
+    if (actor !== undefined && (typeof actor !== "string" || !actor.trim() || actor.length > 100)) throw bad("actor must be non-empty text of at most 100 characters");
+    const body = { answers: list, ...(assumed !== undefined && { assumed }), ...(actor !== undefined && { actor }) };
+    const artifact = record.addArtifact({ changeId: change.id, role: "ba", stage: "analysis", kind: "answers", body });
     return c.json(artifact, 201);
   });
 

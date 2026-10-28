@@ -20,7 +20,7 @@ export type { AppPage, OpenPage, PageAction } from "./roles/qa-browser.js";
 export { poGate, acceptanceSummary } from "./roles/po.js";
 export { systemPrompt, checkTriggers, repoMaterial, defang, documentsBlock, quoteNear } from "./roles/context.js";
 export type { RoleContext, RoleResult, RoleFinding } from "./roles/context.js";
-export { STAGES, accepted, advance, criteriaOf, openFixChange, openQuestions, recheck, syncDocuments, withdrawal } from "./workflow.js";
+export { STAGES, accepted, advance, criteriaOf, openFixChange, openQuestions, questionOptions, recheck, syncDocuments, withdrawal } from "./workflow.js";
 export type { WorkflowDeps } from "./workflow.js";
 export { applyDrift, driftRule, DRIFT_TITLES } from "./drift.js";
 export { openItems } from "./open-items.js";

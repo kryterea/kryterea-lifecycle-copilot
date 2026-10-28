@@ -76,6 +76,23 @@ export function openQuestions(record: CopilotRecord, changeId: string): string[]
   return last?.kind === "questions" ? ((last.body as { questions?: string[] }).questions ?? []) : [];
 }
 
+/** The answers on offer for each open question, null where the question was stored without any. */
+export function questionOptions(record: CopilotRecord, changeId: string): Array<{ options: string[]; defaultIndex: number } | null> {
+  const questions = openQuestions(record, changeId);
+  const body = latestBody<{ options?: string[][]; defaults?: number[] }>(record, changeId, "questions");
+  return questions.map((_, i) => {
+    const options = body?.options?.[i];
+    return options ? { options, defaultIndex: body?.defaults?.[i] ?? 0 } : null;
+  });
+}
+
+/** The BA gate from the latest questions. Answers count only when saved after them. */
+function questionsGate(record: CopilotRecord, changeId: string): { state: GateState; reason: string } {
+  const questions = latestBody<{ questions?: string[] }>(record, changeId, "questions")?.questions ?? [];
+  const answers = openQuestions(record, changeId).length ? [] : (latestBody<{ answers?: string[] }>(record, changeId, "answers")?.answers ?? []);
+  return baGate(questions, answers);
+}
+
 /** Why and by whom a change was withdrawn, or null. A withdrawn change never moves again. */
 export const withdrawal = (record: CopilotRecord, changeId: string) =>
   latestBody<{ reason: string; actor: string }>(record, changeId, "withdrawn") ?? null;
@@ -154,7 +171,11 @@ function save(ctx: RoleContext, role: RoleId, stage: StageId, r: RoleResult): vo
   const { record, change } = ctx;
   const from = { type: "change", id: change.id };
   for (const a of r.artifacts) record.addArtifact({ changeId: change.id, role, stage, kind: a.kind, body: a.body });
-  if (r.questions.length) record.addArtifact({ changeId: change.id, role, stage, kind: "questions", body: { questions: r.questions } });
+  if (r.questions.length) {
+    const o = r.questionOptions;
+    const body = o ? { questions: r.questions, options: o.map((x) => x.options), defaults: o.map((x) => x.defaultIndex) } : { questions: r.questions };
+    record.addArtifact({ changeId: change.id, role, stage, kind: "questions", body });
+  }
   const requirements = r.criteria.length ? record.listRequirements(change.projectId, { status: "active" }) : [];
   for (const c of r.criteria) {
     const k = record.addCriterion({ projectId: change.projectId, changeId: change.id, text: c.text, isFailurePath: c.isFailurePath });
@@ -357,8 +378,10 @@ async function verify(s: Session, change: Change, stage: StageId, criteria: Crit
 function releaseHeld(record: CopilotRecord, c: Change): RoleId[] {
   const ba = record.gates(c.id).ba;
   const docs = docGate(record, c.id);
+  // An understand run does not pause for its questions, so answers saved later clear the gate here.
+  const baNow = c.kind === "understand" ? (docs.state === "held" ? docs : questionsGate(record, c.id)) : docs.state === "held" || ba?.state !== "cleared" ? docs : ba;
   const gates: Array<[RoleId, { state: GateState; reason: string }]> = [
-    ["ba", docs.state === "held" || ba?.state !== "cleared" ? docs : ba],
+    ["ba", baNow],
     ["compliance", complianceGate(legalUnresolved(record, c.id))],
     ["architect", architectGate(openOn(record, c.id, "operations"))],
     ["qa", qaGate(latestChecks(record, criteriaOf(record, c)))],
@@ -393,14 +416,12 @@ const DISPATCH: Record<StageId, (s: Session, c: Change) => Promise<Outcome>> = {
     return NEXT;
   },
 
-  // The BA gate is checked first; analyseChange runs only once it clears.
+  // The BA gate is checked first; analyseChange runs only once it clears. An understand run records the gate
+  // and goes on, because its questions have a safe default; release is where the gate holds.
   analysis: async (s, c) => {
     const { record } = s.deps;
-    const questions = latestBody<{ questions?: string[] }>(record, c.id, "questions")?.questions ?? [];
-    // Answers count only when saved after the latest questions.
-    const answers = openQuestions(record, c.id).length ? [] : (latestBody<{ answers?: string[] }>(record, c.id, "answers")?.answers ?? []);
-    const asked = baGate(questions, answers);
-    if (!gate(record, c.id, "ba", asked)) return stay(["ba"]);
+    const asked = questionsGate(record, c.id);
+    if (!gate(record, c.id, "ba", asked) && c.kind !== "understand") return stay(["ba"]);
     await runRole(s, c, "ba", async (ctx) => save(ctx, "ba", "analysis", await analyseChange(ctx)));
     // Document gaps hold the gate as other findings hold theirs: recorded here, holding at release.
     const docs = docGate(record, c.id);

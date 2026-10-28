@@ -36,6 +36,8 @@ export interface RoleResult {
   criteria: Array<{ text: string; isFailurePath: boolean; requirementKeys?: string[] }>;
   findings: RoleFinding[];
   questions: string[];
+  /** Plain answers to pick from, one entry per question (same length as `questions`), with the safe one named. */
+  questionOptions?: Array<{ options: string[]; defaultIndex: number }>;
   affectedCriterionIds: string[];
   /** Reviews only: each file the model was shown, with the last line it saw. Confirms reported fixes. */
   shown?: Map<string, number>;

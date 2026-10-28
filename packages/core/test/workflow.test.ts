@@ -11,6 +11,7 @@ import {
   advance,
   openFixChange,
   openQuestions,
+  questionOptions,
   recheck,
   withdrawal,
   type Change,
@@ -197,22 +198,47 @@ describe("workflow", () => {
 
   it("analysis does not move on while BA questions are unanswered", async () => {
     const { record, models, deps, change } = setup();
-    const base = models.handlers["ba.understandApp"]!;
-    models.handlers["ba.understandApp"] = (req) => ({ ...(base(req) as object), questions: ["Is the booking list meant to be admin only?"] });
-    const c = change("understand");
+    const c = change("feature", "Deposits");
+    record.addArtifact({ changeId: c.id, role: "ba", stage: "intake", kind: "questions", body: { questions: ["Is the booking list meant to be admin only?"] } });
+    record.setStage(c.id, "analysis");
     expect(await advance(deps, c.id)).toEqual({ stage: "analysis", held: ["ba"], stoppedForBudget: false });
     expect(await advance(deps, c.id)).toEqual({ stage: "analysis", held: ["ba"], stoppedForBudget: false });
-    expect(models.names()).toEqual(["ba.understandApp"]);
+    expect(models.names()).toEqual([]);
     expect(record.gates(c.id).ba?.state).toBe("held");
-    const q = record.listArtifacts(c.id).find((a) => a.kind === "questions");
-    expect(q?.body).toEqual({ questions: ["Is the booking list meant to be admin only?"] });
 
     record.addArtifact({ changeId: c.id, role: "ba", stage: "analysis", kind: "answers", body: { answers: ["Yes, admin only."] } });
-    const r = await advance(deps, c.id);
-    expect(r.stage).toBe("acceptance");
+    await advance(deps, c.id);
     const analyse = models.calls.find((x) => x.name === "ba.analyseChange");
     expect(analyse?.user).toContain("Yes, admin only.");
     expect(record.gates(c.id).ba?.state).toBe("cleared");
+  });
+
+  it("an understand change moves past analysis with questions open", async () => {
+    const { record, models, deps, change } = setup();
+    const base = models.handlers["ba.understandApp"]!;
+    models.handlers["ba.understandApp"] = (req) => ({
+      ...(base(req) as object),
+      questions: [{ question: "Can anyone see the booking list?", options: ["Only the owner", "Anyone"], defaultIndex: 0 }],
+    });
+    const c = change("understand");
+    expect(await advance(deps, c.id)).toEqual({ stage: "release", held: ["ba"], stoppedForBudget: false });
+    expect(models.names()).toContain("ba.analyseChange");
+    expect(openQuestions(record, c.id)).toEqual(["Can anyone see the booking list?"]);
+    expect(questionOptions(record, c.id)).toEqual([{ options: ["Only the owner", "Anyone"], defaultIndex: 0 }]);
+    expect(record.gates(c.id).ba?.state).toBe("held");
+
+    // Answers saved after the run clear the BA gate on the next advance.
+    record.addArtifact({ changeId: c.id, role: "ba", stage: "analysis", kind: "answers", body: { answers: ["Only the owner"] } });
+    const r = await advance(deps, c.id);
+    expect(r.held).not.toContain("ba");
+    expect(record.gates(c.id).ba?.state).toBe("cleared");
+  });
+
+  it("questionOptions reads old questions artifacts as null", () => {
+    const { record, change } = setup();
+    const c = change("feature", "Deposits");
+    record.addArtifact({ changeId: c.id, role: "ba", stage: "intake", kind: "questions", body: { questions: ["Q"] } });
+    expect(questionOptions(record, c.id)).toEqual([null]);
   });
 
   it("design review records a held compliance gate but still moves on", async () => {

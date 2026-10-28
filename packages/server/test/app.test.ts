@@ -227,6 +227,15 @@ describe("HTTP API", () => {
     expect((await call("POST", `/api/projects/${p.id}/recheck`, { reason: "push" })).status).toBe(400);
   });
 
+  it("answers keep the assumed flag and the actor", async () => {
+    const { c } = seedChange();
+    const { call } = setup();
+    const body = { answers: ["B"], assumed: [true], actor: "Ada" };
+    expect((await call("POST", `/api/changes/${c.id}/answers`, { answers: ["B"], assumed: [true, false] })).status).toBe(400);
+    expect((await call("POST", `/api/changes/${c.id}/answers`, body)).status).toBe(201);
+    expect(deps.record.listArtifacts(c.id).find((a) => a.kind === "answers")?.body).toEqual(body);
+  });
+
   it("answers are stored for the BA and accept records the acceptance, then advances", async () => {
     const { c } = seedChange();
     const advanceFn = vi.fn(async () => ({ stage: "operate" as const, held: [], stoppedForBudget: false }));

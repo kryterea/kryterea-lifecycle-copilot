@@ -78,13 +78,33 @@ const finding = (over: Record<string, unknown> = {}) => ({
 const asBuilt = { flows: ["Book a slot"], dataCollected: ["Name"], payments: ["Paystack"], roles: ["Admin"] };
 
 describe("understandApp", () => {
+  it("keeps options and a safe default for each question", async () => {
+    const model = stub({
+      "ba.understandApp": () => ({
+        asBuilt,
+        questions: [
+          { question: "Q", options: ["A", "B"], defaultIndex: 1 },
+          { question: "Bad", options: ["only"], defaultIndex: 0 },
+          { question: "Out", options: ["A", "B", "C"], defaultIndex: 9 },
+        ],
+        findings: [],
+      }),
+    });
+    const r = await understandApp(ctx(model));
+    expect(r.questions).toEqual(["Q", "Out"]);
+    expect(r.questionOptions).toEqual([
+      { options: ["A", "B"], defaultIndex: 1 },
+      { options: ["A", "B", "C"], defaultIndex: 2 },
+    ]);
+  });
+
   it("returns questions and an as_built artifact, and no criteria", async () => {
     const seen: ModelRequest[] = [];
     const model = stub(
       {
         "ba.understandApp": () => ({
           asBuilt,
-          questions: ["q1", "q2", "q3", "q4"],
+          questions: ["q1", "q2", "q3", "q4"].map((question) => ({ question, options: ["A", "B"], defaultIndex: 0 })),
           findings: [finding(), finding({ title: "Bad cite", file: "src/missing.ts" }), finding({ title: "Bad line", line: 99 })],
         }),
       },
@@ -93,6 +113,7 @@ describe("understandApp", () => {
     const r = await understandApp(ctx(model));
     expect(r.criteria).toEqual([]);
     expect(r.questions).toEqual(["q1", "q2", "q3"]);
+    expect(r.questionOptions).toHaveLength(3);
     expect(r.artifacts).toEqual([{ kind: "as_built", body: asBuilt }]);
     expect(r.findings.map((f) => f.title)).toEqual(["A finding"]);
     expect(r.findings[0]!.kind).toBe("failure_path");

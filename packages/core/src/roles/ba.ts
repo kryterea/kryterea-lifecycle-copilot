@@ -59,28 +59,31 @@ export async function understandApp(ctx: RoleContext): Promise<RoleResult> {
   const mat = await repoMaterial(ctx.repo.dir, UNDERSTAND_QUERY, { maxFiles: 40, maxChars: 60_000 });
   const { data } = await ctx.model<{
     asBuilt: { flows: string[]; dataCollected: string[]; payments: string[]; roles: string[] };
-    questions: string[];
+    questions: Array<{ question: string; options: string[]; defaultIndex: number }>;
     findings: RawFinding[];
   }>({
     name: "ba.understandApp",
     system: systemPrompt(
       ctx.packs.role.ba,
-      `Task: understand an existing app from its code. Describe what it does today: the flows a person can go through, the data it collects, how payments work, and who can do what. Then ask the owner 2 to 3 short questions to confirm intent, each starting from an observation. Then list failure-path findings: places where a step can fail, repeat or be reversed and the app does the wrong thing. Every finding needs a code trigger: set triggerType to "code" with the file and line exactly as numbered in the material, and set quote to null. Never cite a file or line that is not in the material. Do not write acceptance criteria.`,
+      `Task: understand an existing app from its code. Describe what it does today: the flows a person can go through, the data it collects, how payments work, and who can do what. Then ask the owner 2 to 3 short questions to confirm intent. The owner is not a professional, so write each question in plain words, start it from something you saw in the code, and give it 2 or 3 short answers to pick from. Set defaultIndex to the safe answer: the one that protects customers and money. Then list failure-path findings: places where a step can fail, repeat or be reversed and the app does the wrong thing. Every finding needs a code trigger: set triggerType to "code" with the file and line exactly as numbered in the material, and set quote to null. Never cite a file or line that is not in the material. Do not write acceptance criteria.`,
     ),
     user: `${contextBlock(ctx)}\n\n${mat.text}`,
     schema: obj({
       asBuilt: obj({ flows: strArr, dataCollected: strArr, payments: strArr, roles: strArr }),
-      questions: strArr,
+      questions: arr(obj({ question: str, options: strArr, defaultIndex: { type: "integer" } })),
       findings: arr(findingSchema),
     }),
     maxOutputTokens: 16000,
     reasoningEffort: "medium",
   });
+  // A question with fewer than 2 answers cannot be picked from, so it is dropped.
+  const asked = data.questions.filter((q) => q.options.length >= 2).slice(0, 3);
   return {
     artifacts: [{ kind: "as_built", body: data.asBuilt }],
     criteria: [],
     findings: keepVerified(data.findings, ctx, mat.shown),
-    questions: data.questions.slice(0, 3),
+    questions: asked.map((q) => q.question),
+    questionOptions: asked.map((q) => ({ options: q.options, defaultIndex: Math.min(Math.max(q.defaultIndex, 0), q.options.length - 1) })),
     affectedCriterionIds: [],
   };
 }
