@@ -50,14 +50,14 @@ function tools(replies: Array<[number, unknown]>, token?: string) {
 }
 
 describe("mcp tools", () => {
-  it("tools list contains exactly the five tools", async () => {
+  it("tools list contains exactly the six tools", async () => {
     const { list } = tools([]);
     const server = createMcpServer(list);
     const client = new Client({ name: "test", version: "0" });
     const [a, b] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(a), client.connect(b)]);
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    expect(names).toEqual(["get_change", "get_finding", "list_findings", "report_fix", "request_recheck"]);
+    expect(names).toEqual(["get_change", "get_finding", "list_changes", "list_findings", "report_fix", "request_recheck"]);
     await client.close();
   });
 
@@ -165,6 +165,33 @@ describe("mcp tools", () => {
     expect(out).toContain("f1");
     expect(out).toMatch(/Declined cards show a reason.*Gap/);
     expect(out).toContain("Which cards?");
+  });
+
+  it("list_changes returns approved fix changes with their findings", async () => {
+    const change = (id: string, kind: string, stage: string, withdrawn = false) => ({ id, title: `Change ${id}`, kind, stage, withdrawn });
+    const t = tools([
+      [200, { projects: [{ id: "p1" }] }],
+      [200, { project: { id: "p1" }, changes: [change("c1", "fix", "build"), change("c2", "fix", "operate"), change("c3", "fix", "build", true), change("c4", "build", "build")] }],
+      [200, { change: { id: "c1" }, findings: [{ id: "f1" }, { id: "f2" }] }],
+      [200, { total: 0, items: [] }],
+    ]);
+    const out = await t.run("list_changes", {});
+    expect(t.calls.map((c) => c.url)).toEqual([
+      "http://localhost:8787/api/projects",
+      "http://localhost:8787/api/projects/p1",
+      "http://localhost:8787/api/changes/c1",
+      "http://localhost:8787/api/projects/p1/open-items",
+    ]);
+    expect(out).toContain('"id":"c1"');
+    expect(out).toContain('"title":"Change c1"');
+    expect(out).toContain('"stage":"build"');
+    expect(out).toContain('"findingIds":["f1","f2"]');
+    expect(out).not.toMatch(/c2|c3|c4/);
+  });
+
+  it("list_changes says when nothing is approved", async () => {
+    const t = tools([[200, { projects: [] }]]);
+    expect(await t.run("list_changes", {})).toBe("No approved changes to fix yet.");
   });
 
   it("request_recheck sends reason mcp", async () => {

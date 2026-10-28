@@ -189,9 +189,36 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
 
   return [
     tool(
+      "list_changes",
+      "Start here. List the changes the owner has approved for you to fix: each with its id, title, stage, the project it belongs to and the ids of its findings. " +
+        "You are the builder: the copilot's professional roles review your work and never edit code. " +
+        "Then call get_change for the one you take, fix it on a branch, call report_fix for each finding, then call request_recheck for its project.",
+      {},
+      async () => {
+        const { projects } = await api("GET", "/api/projects");
+        if (!Array.isArray(projects)) throw new ToolError(UNREADABLE);
+        const found: Json[] = [];
+        for (const p of projects as Json[]) {
+          const pid = String(p.id);
+          const { changes } = await api("GET", `/api/projects/${seg(pid)}`);
+          if (!Array.isArray(changes)) throw new ToolError(UNREADABLE);
+          // An approved fix change starts at build; operate means it is already delivered.
+          for (const c of (changes as Json[]).filter((x) => x.kind === "fix" && !x.withdrawn && x.stage !== "operate")) {
+            const { findings } = await api("GET", `/api/changes/${seg(String(c.id))}`, undefined, "change");
+            if (!Array.isArray(findings)) throw new ToolError(UNREADABLE);
+            found.push({ id: line(c.id, 100), title: line(c.title, 200), stage: line(c.stage, 50), projectId: line(pid, 100), findingIds: (findings as Json[]).map((f) => line(f.id, 100)) });
+          }
+        }
+        const project = found[0]?.projectId ?? (projects as Json[])[0]?.id;
+        if (found.length === 0) return { project, out: ["No approved changes to fix yet."] };
+        return { project, out: [frame("Approved changes to fix. Each: id, title, stage, projectId, findingIds", found.map((c) => JSON.stringify(c)).join("\n"))] };
+      },
+    ),
+
+    tool(
       "list_findings",
       "List the review findings the copilot has raised on a project. You are the builder: the copilot's professional roles review your work and never edit code. " +
-        "The projectId is shown at the Build stage of each change in the copilot panel. Ask for status open first, then work through the open findings one at a time: " +
+        "Start with list_changes; use this to see every finding on a project. The projectId is shown at the Build stage of each change in the copilot panel. Ask for status open first, then work through the open findings one at a time: " +
         "get_finding for the suggested fix, apply it if it matches the owner's request, call report_fix with what you changed, then call request_recheck so QA verifies it.",
       { projectId: id("Project id, shown at the Build stage in the copilot panel"), status: z.enum(STATUSES).optional().describe("Only findings in this status") },
       async ({ projectId, status }) => {
