@@ -427,12 +427,20 @@ describe("mcp tools", () => {
         { kind: "operations", title: "No backups", findingId: "f6", where: "db.js:3" },
       ],
     };
-    const PREAMBLE = [
-      "Kryterea: 4 open on this project.",
+    const ITEMS = [
       "- legal | Check this: consent | f9",
       "- error handling | Refund twice | f8",
       "- conformance | Requirement FR-1 has no acceptance criteria | f7",
     ].join("\n");
+    // The count is the copilot's own line; the titles are model text, so they sit inside a data block.
+    const PREAMBLE = (out: string) => {
+      const lines = out.split("\n");
+      expect(lines[0]).toBe("Kryterea: 4 open on this project.");
+      const begin = lines.findIndex((l) => /^<<<BEGIN REVIEW DATA [0-9a-f]{12}>>>$/.test(l));
+      expect(begin).toBeGreaterThan(0);
+      expect(lines.slice(begin + 1, begin + 4).join("\n")).toBe(ITEMS);
+      expect(lines[begin + 4]).toMatch(/^<<<END REVIEW DATA [0-9a-f]{12}>>>$/);
+    };
     const cases: Array<[string, Record<string, unknown>, unknown]> = [
       ["list_findings", { projectId: "p1" }, { findings: [finding] }],
       ["get_finding", { findingId: "f1" }, { finding, status: "open", history: [], criterion: null }],
@@ -444,7 +452,7 @@ describe("mcp tools", () => {
       it(`${name} opens with what is still open on the project`, async () => {
         const t = tools([[200, reply], [200, open]]);
         const out = await t.whole(name, args);
-        expect(out[0]).toContain(PREAMBLE);
+        PREAMBLE(out[0]!);
         expect(out[0]).not.toContain("No backups");
         expect(t.calls[1]!.url).toBe("http://localhost:8787/api/projects/p1/open-items");
       });

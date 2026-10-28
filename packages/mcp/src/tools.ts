@@ -111,9 +111,9 @@ async function preamble(call: ReturnType<typeof makeApi>, project: unknown): Pro
     const { total, items } = r.json;
     if (r.status < 200 || r.status >= 300 || !Number.isInteger(total) || !Array.isArray(items)) return NOT_READ;
     if (total === 0) return "Kryterea: nothing open on this project.";
-    // Titles are model text: one cleaned line each, the same cleaning as inside a data block.
+    // Titles are model text, so the items go inside a data block; only the count is the copilot's own line.
     const top = (items as Json[]).slice(0, 3).map((i) => `- ${kindLabel(i.kind)} | ${line(i.title, 160)} | ${line(i.findingId ?? i.where, 200)}`);
-    return [`Kryterea: ${total} open on this project.`, ...top].join("\n");
+    return `Kryterea: ${line(total, 10)} open on this project.\n${frame("Most pressing first. Columns: kind | title | finding id or where", top.join("\n"))}`;
   } catch {
     return NOT_READ;
   }
