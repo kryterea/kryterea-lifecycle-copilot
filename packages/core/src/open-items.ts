@@ -17,7 +17,8 @@ export interface OpenItem {
   createdAt: string;
 }
 
-function where(t: Trigger): string {
+/** Where a finding points: file:line, a screen URL, or a document and line. */
+export function where(t: Trigger): string {
   if (t.type === "code") return `${t.file}:${t.line}`;
   if (t.type === "screen") return t.url;
   return t.document ? (t.line ? `${t.document}:${t.line}` : t.document) : "documents";

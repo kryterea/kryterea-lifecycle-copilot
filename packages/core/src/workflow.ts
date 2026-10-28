@@ -2,12 +2,14 @@ import { discoverDocuments } from "./docs/discover.js";
 import { findingFingerprint, ledgerFor, type CopilotRecord } from "./record/record.js";
 import { changedFiles, diffHunks, listSourceFiles, readLines, syncRepo } from "./repo/repo.js";
 import { applyDrift, driftRule } from "./drift.js";
+import { where } from "./open-items.js";
 import { architectGate, reviewOperations } from "./roles/architect.js";
 import { analyseChange, analyseImpact, baGate, understandApp } from "./roles/ba.js";
 import { reviewDocuments, undocumentedFlows } from "./roles/ba-docs.js";
 import { complianceGate, reviewCompliance } from "./roles/compliance.js";
 import type { RoleContext, RoleResult } from "./roles/context.js";
 import { acceptanceSummary, poGate } from "./roles/po.js";
+import { writeChanges, type Proposals } from "./roles/po-writer.js";
 import { qaGate, verifyCriteria } from "./roles/qa.js";
 import { exploreFlow, type OpenPage } from "./roles/qa-browser.js";
 import {
@@ -85,6 +87,30 @@ export function questionOptions(record: CopilotRecord, changeId: string): Array<
     return options ? { options, defaultIndex: body?.defaults?.[i] ?? 0 } : null;
   });
 }
+
+/**
+ * Opens an understand change for a check: with the owner's problem in her own words, or of the whole repo.
+ * The problem is kept as an artifact so the assessment can put it first.
+ */
+export function startCheck(record: CopilotRecord, i: { projectId: string; problem: string | null }): Change {
+  const problem = i.problem?.trim() || null;
+  const c = record.createChange({
+    projectId: i.projectId,
+    title: problem ? `Check: ${problem}`.slice(0, 200) : "Whole repo check",
+    description: problem ? `${/[.!?]$/.test(problem) ? problem : `${problem}.`} Then check the whole repo.` : "Check the whole repo.",
+    kind: "understand",
+  });
+  if (problem) record.addArtifact({ changeId: c.id, role: "po", stage: "intake", kind: "problem", body: { text: problem } });
+  return c;
+}
+
+/** The problem the owner described when the check started, or null for a whole repo check. */
+export const problemOf = (record: CopilotRecord, changeId: string): string | null =>
+  latestBody<{ text?: string }>(record, changeId, "problem")?.text ?? null;
+
+/** The product owner's latest proposed changes for this check, or null before they are written. */
+export const proposalsOf = (record: CopilotRecord, changeId: string): Proposals | null =>
+  latestBody<Proposals>(record, changeId, "proposed_changes") ?? null;
 
 /** The BA gate from the latest questions. Answers count only when saved after them. */
 function questionsGate(record: CopilotRecord, changeId: string): { state: GateState; reason: string } {
@@ -457,8 +483,18 @@ const DISPATCH: Record<StageId, (s: Session, c: Change) => Promise<Outcome>> = {
     return NEXT;
   },
 
+  // An understand change gets its changes written first. A budget stop leaves that for the next advance.
   release: async (s, c) => {
-    const held = releaseHeld(s.deps.record, c);
+    const { record } = s.deps;
+    const open = c.kind === "understand" && !proposalsOf(record, c.id) ? record.listFindings({ changeId: c.id, status: "open" }) : [];
+    if (open.length) {
+      await runRole(s, c, "po", async (ctx) => {
+        const findings = open.map((f) => ({ id: f.id, role: f.role, title: f.title, plain: f.plain, where: where(f.trigger) }));
+        const body = await writeChanges({ problem: problemOf(record, c.id), findings }, ctx.model, s.deps.packs.role.po);
+        record.addArtifact({ changeId: c.id, role: "po", stage: "release", kind: "proposed_changes", body });
+      });
+    }
+    const held = releaseHeld(record, c);
     return held.length ? stay(held) : NEXT;
   },
 

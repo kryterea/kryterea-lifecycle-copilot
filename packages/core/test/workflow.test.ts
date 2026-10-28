@@ -11,8 +11,11 @@ import {
   advance,
   openFixChange,
   openQuestions,
+  problemOf,
+  proposalsOf,
   questionOptions,
   recheck,
+  startCheck,
   withdrawal,
   type Change,
   type Model,
@@ -115,6 +118,12 @@ function stubModels() {
       return { state: "evidence_found", evidence: [cite], note: "Done.", title: null, plain: null, costIfIgnored: null, fixPrompt: null };
     },
     "po.acceptanceSummary": () => ({ summary: "All agreed work has evidence found." }),
+    // One change per finding label in the prompt.
+    "po.writeChanges": (req) => ({
+      answersProblem: [],
+      duplicates: [],
+      changes: [...req.user.matchAll(/^(F\d+):/gm)].map((m) => ({ title: `Change for ${m[1]}`, forWhom: "Customers", why: "Reason.", findingIds: [m[1]], criteria: [] })),
+    }),
   };
   const factory: ModelFactory = (ledger) =>
     (async (req: ModelRequest) => {
@@ -196,6 +205,40 @@ describe("workflow", () => {
     });
   });
 
+  it("startCheck with a sentence stores the problem and titles the change", () => {
+    const { record, project } = setup();
+    const c = startCheck(record, { projectId: project.id, problem: "Customers get charged twice." });
+    expect(c.kind).toBe("understand");
+    expect(c.title.startsWith("Check: ")).toBe(true);
+    expect(c.description).toBe("Customers get charged twice. Then check the whole repo.");
+    expect(problemOf(record, c.id)).toBe("Customers get charged twice.");
+  });
+
+  it("startCheck with no sentence is a whole repo check", () => {
+    const { record, project } = setup();
+    const c = startCheck(record, { projectId: project.id, problem: null });
+    expect(c.title).toBe("Whole repo check");
+    expect(c.description).toBe("Check the whole repo.");
+    expect(problemOf(record, c.id)).toBeNull();
+  });
+
+  it("an understand change gets proposed changes at release", async () => {
+    const { record, models, deps, project } = setup();
+    const base = models.handlers["ba.understandApp"]!;
+    const baFinding = { title: "Cancel never frees the slot", plain: "Cancelling leaves the slot taken.", costIfIgnored: "Lost bookings.", fixPrompt: "Free the slot on cancel.", triggerType: "code", file: "src/booking.js", line: 2, quote: null };
+    models.handlers["ba.understandApp"] = (req) => ({ ...(base(req) as object), findings: [baFinding] });
+    const c = startCheck(record, { projectId: project.id, problem: "Cancelling does not free the slot." });
+    await advance(deps, c.id);
+    const open = record.listFindings({ changeId: c.id, status: "open" }).map((f) => f.id);
+    expect(open.length).toBeGreaterThan(0);
+    const p = proposalsOf(record, c.id);
+    expect(p).not.toBeNull();
+    expect(p!.changes.flatMap((x) => x.findingIds).sort()).toEqual([...open].sort());
+    expect(models.names().filter((n) => n === "po.writeChanges")).toHaveLength(1);
+    await advance(deps, c.id);
+    expect(models.names().filter((n) => n === "po.writeChanges")).toHaveLength(1);
+  });
+
   it("analysis does not move on while BA questions are unanswered", async () => {
     const { record, models, deps, change } = setup();
     const c = change("feature", "Deposits");
@@ -246,7 +289,7 @@ describe("workflow", () => {
     models.handlers["compliance.reviewCompliance"] = () => ({ findings: [legalFinding] });
     const c = change("understand");
     const r = await advance(deps, c.id);
-    expect(models.names().slice(3)).toEqual(["architect.reviewOperations", "qa.verifyCriteria", "qa.verifyCriteria"]);
+    expect(models.names().slice(3)).toEqual(["architect.reviewOperations", "qa.verifyCriteria", "qa.verifyCriteria", "po.writeChanges"]);
     expect(r).toEqual({ stage: "release", held: ["compliance"], stoppedForBudget: false });
     const legal = record.listFindings({ changeId: c.id });
     expect(legal.map((f) => [f.kind, f.stage, f.status])).toEqual([["legal", "design_review", "open"]]);
