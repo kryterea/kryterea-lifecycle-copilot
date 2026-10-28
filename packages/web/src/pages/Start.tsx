@@ -23,7 +23,7 @@ export function Start({ id }: { id: string }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await api.check(id, problem.trim(), byHand ? PICKABLE.filter((r) => picked.includes(r)) : undefined);
+      const r = await api.check(id, problem.trim(), byHand ? PICKABLE.filter((x) => picked.includes(x)) : undefined);
       location.hash = `#/changes/${encodeURIComponent(r.changeId)}/assessment/${encodeURIComponent(r.jobId)}`;
     } catch (err) {
       setError(message(err));
@@ -86,32 +86,35 @@ export function Start({ id }: { id: string }) {
         <div className="start-block">
           <h2>Who should look?</h2>
           <p className="start-auto">
-            {!byHand && <CheckIcon size={16} />} <strong>Auto (recommended)</strong>
-            <button type="button" className="btn ghost" aria-pressed={byHand} onClick={() => setByHand(!byHand)}>
+            <span className="start-auto-icon">{!byHand && <CheckIcon size={16} />}</span>
+            <strong>{byHand ? "Picked by hand" : "Auto (recommended)"}</strong>
+            <button type="button" className="btn ghost" onClick={() => setByHand(!byHand)}>
               {byHand ? "Use Auto" : "Pick by hand"}
             </button>
           </p>
           {professions.data && (
             <ul className="rows" aria-label="Professionals">
-              {professions.data.map((p) => (
-                <li key={p.role}>
-                  <div className="item">
+              {professions.data.map((p) => {
+                const pickable = byHand && PICKABLE.includes(p.role);
+                const body = (
+                  <>
                     <span className="row-main">
                       <strong>{p.name}</strong>
                       <span className="hint">{p.why}</span>
                     </span>
-                    {byHand && PICKABLE.includes(p.role) && (
+                    {pickable && (
                       <input
                         type="checkbox"
                         className="start-pick"
-                        aria-label={`${p.name} looks`}
                         checked={picked.includes(p.role)}
                         onChange={(e) => setPicked(e.target.checked ? [...picked, p.role] : picked.filter((r) => r !== p.role))}
                       />
                     )}
-                  </div>
-                </li>
-              ))}
+                    {byHand && p.role === "po" && <span className="muted nowrap">Always looks</span>}
+                  </>
+                );
+                return <li key={p.role}>{pickable ? <label className="item">{body}</label> : <div className="item">{body}</div>}</li>;
+              })}
             </ul>
           )}
         </div>
@@ -124,6 +127,7 @@ export function Start({ id }: { id: string }) {
           <button type="submit" className="btn primary" disabled={busy || !!files.error || (byHand && !picked.length)}>
             Check <ChevronIcon size={16} />
           </button>
+          {byHand && !picked.length && <span className="hint">Pick at least one</span>}
         </div>
       </form>
     </div>

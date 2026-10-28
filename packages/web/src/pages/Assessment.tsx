@@ -338,6 +338,7 @@ export function Assessment({ id, jobId }: { id: string; jobId?: string }) {
   const held = RELEASE_ROLES.filter((r) => view.gates[r]?.state === "held");
   const cleared = RELEASE_ROLES.every((r) => view.gates[r]?.state === "cleared");
   const checked = [...new Set(view.runs.filter((r) => r.status === "done").map((r) => r.role))];
+  const notChecked = RELEASE_ROLES.filter((r) => view.gates[r]?.reason === "Not checked");
 
   const answers = new Set(view.proposals?.answersProblem ?? []);
   const yours = [...answers].map((f) => byId.get(f)).filter((f) => f !== undefined);
@@ -375,6 +376,7 @@ export function Assessment({ id, jobId }: { id: string; jobId?: string }) {
             </a>
           </p>
           {checked.length > 0 && <p className="hint">Checked by {checked.map((r) => nameOf(r, p)).join(", ")}.</p>}
+          {notChecked.length > 0 && <p className="hint">Not checked: {notChecked.map((r) => nameOf(r, p)).join(", ")}.</p>}
         </div>
       </header>
 

@@ -1999,8 +1999,21 @@ tbody tr + tr td {
 .start-auto strong {
   color: var(--ink);
 }
+.start-auto-icon {
+  display: inline-flex;
+  width: 16px;
+  flex: none;
+}
 .start-auto .btn {
   margin-left: auto;
+}
+label.item {
+  cursor: pointer;
+}
+.form label.item > span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
 }
 .start-pick {
   width: 20px;
