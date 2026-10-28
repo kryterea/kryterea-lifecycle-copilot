@@ -7,6 +7,8 @@ export { syncRepo, remoteHead, checkRepoUrl, listSourceFiles, changedFiles, comm
 export { discoverDocuments } from "./docs/discover.js";
 export { narrowFiles } from "./repo/narrow.js";
 export { loadPacks } from "./packs.js";
+export { PROFESSIONS } from "./professions.js";
+export type { Profession } from "./professions.js";
 export { understandApp, analyseChange, analyseImpact, baGate } from "./roles/ba.js";
 export { reviewDocuments, undocumentedFlows } from "./roles/ba-docs.js";
 export type { ReadRequirement } from "./roles/ba-docs.js";

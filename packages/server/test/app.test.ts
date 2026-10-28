@@ -103,6 +103,13 @@ describe("HTTP API", () => {
     expect(one.json.changes.map((x: { id: string }) => x.id)).toEqual([c.json.id]);
   });
 
+  it("GET /api/professions lists the catalogue", async () => {
+    const { call } = setup();
+    const r = await call("GET", "/api/professions");
+    expect(r.status).toBe(200);
+    expect(r.json.professions).toHaveLength(5);
+  });
+
   it("rejects a bad repoUrl, an unknown kind and missing fields with 400", async () => {
     const { call } = setup();
     for (const repoUrl of ["http://github.com/a/b.git", "https://user@github.com/a/b.git", "C:/code/app", "--upload-pack=x"]) {

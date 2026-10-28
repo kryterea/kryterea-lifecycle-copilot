@@ -9,6 +9,7 @@ import {
   criteriaOf,
   driftRule,
   openFixChange,
+  PROFESSIONS,
   openItems,
   openQuestions,
   recheck,
@@ -285,6 +286,8 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
     const c = record.getChange(id);
     return { id: c.id, title: c.title, stage: c.stage };
   };
+
+  app.get("/api/professions", (c) => c.json({ professions: PROFESSIONS }));
 
   app.get("/api/projects", (c) => c.json({ projects: record.listProjects() }));
 
