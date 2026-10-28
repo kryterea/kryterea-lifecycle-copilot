@@ -42,9 +42,11 @@ const finding = {
 function tools(replies: Array<[number, unknown]>, token?: string) {
   const api = fakeApi(...replies);
   const list = buildTools({ baseUrl: "http://localhost:8787", ...(token ? { token } : {}), fetch: api.fetchFn });
-  const items = (name: string, args: Record<string, unknown>) => list.find((t) => t.name === name)!.run(args as never);
+  const whole = (name: string, args: Record<string, unknown>) => list.find((t) => t.name === name)!.run(args as never);
+  // The open-items preamble is always the first item; most tests look past it.
+  const items = async (name: string, args: Record<string, unknown>) => (await whole(name, args)).slice(1);
   const run = async (name: string, args: Record<string, unknown>) => (await items(name, args)).join("\n");
-  return { ...api, run, items, list };
+  return { ...api, run, items, whole, list };
 }
 
 describe("mcp tools", () => {
@@ -303,8 +305,8 @@ describe("mcp tools", () => {
       await Promise.all([server.connect(a), client.connect(b)]);
       const r = await client.callTool({ name: "get_finding", arguments: { findingId: "f1" } });
       const content = r.content as Array<{ type: string; text: string }>;
-      expect(content.map((c) => c.type)).toEqual(["text", "text"]);
-      expect(content[1]!.text).toContain(finding.fixPrompt);
+      expect(content.map((c) => c.type)).toEqual(["text", "text", "text"]);
+      expect(content[2]!.text).toContain(finding.fixPrompt);
       await client.close();
     });
 
@@ -412,6 +414,52 @@ describe("mcp tools", () => {
       const list = buildTools({ fetch: hang, timeoutMs: 20 });
       const err = await list.find((t) => t.name === "list_findings")!.run({ projectId: "p1" } as never).catch((e: Error) => e);
       expect((err as Error).message).toBe("The copilot did not answer in time. Is it running?");
+    });
+  });
+
+  describe("open items preamble", () => {
+    const open = {
+      total: 4,
+      items: [
+        { kind: "legal", title: "Check this: consent", findingId: "f9", where: "http://localhost:3000/signup" },
+        { kind: "failure_path", title: "Refund twice", findingId: "f8", where: "server.js:120" },
+        { kind: "conformance", title: "Requirement FR-1 has no acceptance criteria", findingId: "f7", where: "docs/PRD.md:4" },
+        { kind: "operations", title: "No backups", findingId: "f6", where: "db.js:3" },
+      ],
+    };
+    const PREAMBLE = [
+      "Kryterea: 4 open on this project.",
+      "- legal | Check this: consent | f9",
+      "- error handling | Refund twice | f8",
+      "- conformance | Requirement FR-1 has no acceptance criteria | f7",
+    ].join("\n");
+    const cases: Array<[string, Record<string, unknown>, unknown]> = [
+      ["list_findings", { projectId: "p1" }, { findings: [finding] }],
+      ["get_finding", { findingId: "f1" }, { finding, status: "open", history: [], criterion: null }],
+      ["get_change", { changeId: "c1" }, { change: { id: "c1", projectId: "p1", title: "t", kind: "build", stage: "build" }, gates: {}, findings: [], criteria: [] }],
+      ["report_fix", { findingId: "f1", summary: "Added a retry" }, finding],
+      ["request_recheck", { projectId: "p1" }, { started: true }],
+    ];
+    for (const [name, args, reply] of cases) {
+      it(`${name} opens with what is still open on the project`, async () => {
+        const t = tools([[200, reply], [200, open]]);
+        const out = await t.whole(name, args);
+        expect(out[0]).toContain(PREAMBLE);
+        expect(out[0]).not.toContain("No backups");
+        expect(t.calls[1]!.url).toBe("http://localhost:8787/api/projects/p1/open-items");
+      });
+    }
+
+    it("says nothing is open when nothing is", async () => {
+      const t = tools([[200, { findings: [] }], [200, { total: 0, items: [] }]]);
+      expect((await t.whole("list_findings", { projectId: "p1" }))[0]).toBe("Kryterea: nothing open on this project.");
+    });
+
+    it("still answers when open items cannot be read", async () => {
+      const t = tools([[200, { findings: [finding] }], [500, { error: "boom" }]]);
+      const out = await t.whole("list_findings", { projectId: "p1" });
+      expect(out[0]).toBe("Kryterea: open items could not be read.");
+      expect(out[1]).toContain("Payment errors are swallowed");
     });
   });
 });

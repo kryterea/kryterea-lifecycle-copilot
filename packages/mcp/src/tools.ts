@@ -89,13 +89,34 @@ export interface Tool {
   run: (args: never) => Promise<string[]>;
 }
 
+/** What a tool answers, and the project it was about (for the open-items preamble). */
+type Answer = { project: unknown; out: string[] };
+
 function tool<S extends z.ZodRawShape>(
   name: string,
   description: string,
   inputSchema: S,
-  run: (args: z.infer<z.ZodObject<S>>) => Promise<string[]>,
-): Tool {
-  return { name, description, inputSchema, run: run as Tool["run"] };
+  run: (args: z.infer<z.ZodObject<S>>) => Promise<Answer>,
+): Omit<Tool, "run"> & { answer: (args: never) => Promise<Answer> } {
+  return { name, description, inputSchema, answer: run as (args: never) => Promise<Answer> };
+}
+
+const NOT_READ = "Kryterea: open items could not be read.";
+
+/** The first item of every answer: what is still open on the project, the three most pressing. Never throws. */
+async function preamble(call: ReturnType<typeof makeApi>, project: unknown): Promise<string> {
+  if (typeof project !== "string" || !project) return NOT_READ;
+  try {
+    const r = await call("GET", `/api/projects/${seg(project)}/open-items`);
+    const { total, items } = r.json;
+    if (r.status < 200 || r.status >= 300 || !Number.isInteger(total) || !Array.isArray(items)) return NOT_READ;
+    if (total === 0) return "Kryterea: nothing open on this project.";
+    // Titles are model text: one cleaned line each, the same cleaning as inside a data block.
+    const top = (items as Json[]).slice(0, 3).map((i) => `- ${kindLabel(i.kind)} | ${line(i.title, 160)} | ${line(i.findingId ?? i.where, 200)}`);
+    return [`Kryterea: ${total} open on this project.`, ...top].join("\n");
+  } catch {
+    return NOT_READ;
+  }
 }
 
 const id = (what: string) => z.string().trim().min(1).max(200).refine((v) => v !== "." && v !== "..", "Not a valid id").describe(what);
@@ -158,6 +179,13 @@ const findingLine = (f: Json) =>
 export function buildTools(options: ApiOptions = {}): Tool[] {
   const call = makeApi(options);
   const api = strict(call);
+  const withPreamble = ({ answer, ...t }: ReturnType<typeof tool>): Tool => ({
+    ...t,
+    run: async (args: never) => {
+      const { project, out } = await answer(args);
+      return [await preamble(call, project), ...out];
+    },
+  });
 
   return [
     tool(
@@ -170,8 +198,9 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
         const q = status ? `?status=${status}` : "";
         const { findings } = await api("GET", `/api/projects/${seg(projectId)}/findings${q}`, undefined, "findings");
         const list: Json[] = Array.isArray(findings) ? findings : [];
-        if (list.length === 0) return [status ? `No findings with status ${status}.` : "No findings."];
-        return [frame(`Findings for project ${line(projectId, 100)}${status ? ` (${status})` : ""}. Columns: id | status | kind | title`, list.map(findingLine).join("\n"))];
+        if (list.length === 0) return { project: projectId, out: [status ? `No findings with status ${status}.` : "No findings."] };
+        const header = `Findings for project ${line(projectId, 100)}${status ? ` (${status})` : ""}. Columns: id | status | kind | title`;
+        return { project: projectId, out: [frame(header, list.map(findingLine).join("\n"))] };
       },
     ),
 
@@ -193,7 +222,7 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
         if (f.costIfIgnored) lines.push(`Cost if ignored: ${multiline(f.costIfIgnored, 1000)}`);
         lines.push(`Where: ${triggerText(f.trigger)}`);
         if (r.criterion?.text) lines.push(`Criterion: ${line(r.criterion.text, 500)}`);
-        return [frame(`Finding ${fid}`, lines.join("\n")), frame(`Suggested fix for finding ${fid}`, multiline(f.fixPrompt))];
+        return { project: f.projectId, out: [frame(`Finding ${fid}`, lines.join("\n")), frame(`Suggested fix for finding ${fid}`, multiline(f.fixPrompt))] };
       },
     ),
 
@@ -219,7 +248,7 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
         );
         const questions: string[] = r.questions ?? [];
         if (questions.length) lines.push("Open questions:", ...questions.map((q) => `  ${line(q, 500)}`));
-        return [frame(`Change ${line(changeId, 100)}`, lines.join("\n"))];
+        return { project: c.projectId, out: [frame(`Change ${line(changeId, 100)}`, lines.join("\n"))] };
       },
     ),
 
@@ -229,8 +258,9 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
         "The finding stays open, and its gate stays held, until a re-check confirms the fix. Commit, then call request_recheck.",
       { findingId: id("Finding id"), summary: z.string().trim().min(1).max(2000).describe("What you changed and where, up to 2,000 characters") },
       async ({ findingId, summary }) => {
-        await api("POST", `/api/findings/${seg(findingId)}/fix-report`, { summary });
-        return [`Recorded your fix for finding ${line(findingId, 100)}. It stays open until a re-check confirms it: commit, then call request_recheck.`];
+        const r = await api("POST", `/api/findings/${seg(findingId)}/fix-report`, { summary });
+        const out = `Recorded your fix for finding ${line(findingId, 100)}. It stays open until a re-check confirms it: commit, then call request_recheck.`;
+        return { project: r.projectId, out: [out] };
       },
     ),
 
@@ -242,12 +272,12 @@ export function buildTools(options: ApiOptions = {}): Tool[] {
       { projectId: id("Project id, shown at the Build stage in the copilot panel") },
       async ({ projectId }) => {
         const r = await call("POST", `/api/projects/${seg(projectId)}/recheck`, { reason: "mcp" });
-        if (r.status === 409) return [RECHECK_BUSY];
+        if (r.status === 409) return { project: projectId, out: [RECHECK_BUSY] };
         if (r.status < 200 || r.status >= 300) throw new ToolError(apiError(r));
-        return ["Re-check started. It runs in the background; call list_findings with status open in a minute to see the result."];
+        return { project: projectId, out: ["Re-check started. It runs in the background; call list_findings with status open in a minute to see the result."] };
       },
     ),
-  ];
+  ].map(withPreamble);
 }
 
 /** Wraps the tools in an MCP server. A ToolError becomes an error result the agent can read. */
