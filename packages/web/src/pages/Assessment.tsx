@@ -5,7 +5,6 @@ import { lawTag, TriggerLine } from "../components/FindingItem";
 import { CheckIcon, ChevronIcon, CloseIcon, PlusIcon, QuestionIcon, ShieldIcon } from "../components/Icon";
 import { ROLES } from "../components/ProfessionalCard";
 import { Stamp, StatusStamp, type Tone } from "../components/Stamp";
-import { STAGES } from "../components/Trail";
 import { getName, setName } from "../me";
 import { CopyButton } from "./Change";
 
@@ -14,6 +13,8 @@ type Professions = Partial<Record<RoleId, Profession>>;
 
 /** The gates that hold release. */
 const RELEASE_ROLES: RoleId[] = ["ba", "architect", "qa", "compliance"];
+
+const isRunning = (r: { status: string }) => r.status === "running";
 
 const nameOf = (role: RoleId, p: Professions) => p[role]?.name ?? ROLES[role].name;
 
@@ -100,7 +101,7 @@ function Answered({ items }: { items: Answer[] }) {
 }
 
 /** Open questions one at a time. They are saved together once the last one is answered. */
-function Questions({ view, actor, onSaved }: { view: ChangeView; actor: () => string; onSaved: (items: Answer[]) => void }) {
+function Questions({ view, actor, onSaved }: { view: ChangeView; actor: () => string; onSaved: (items: Answer[]) => Promise<void> }) {
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -119,7 +120,7 @@ function Questions({ view, actor, onSaved }: { view: ChangeView; actor: () => st
     try {
       const a = actor();
       await api.answer(view.change.id, { answers: next.map((x) => x.text), assumed: next.map((x) => x.assumed), ...(a && { actor: a }) });
-      onSaved(next);
+      await onSaved(next);
     } catch (e) {
       setError(message(e));
       setAnswers(answers);
@@ -174,7 +175,7 @@ function Questions({ view, actor, onSaved }: { view: ChangeView; actor: () => st
   );
 }
 
-function Proposal({ view, index, byId, actor, onDecided }: { view: ChangeView; index: number; byId: Map<string, FindingView>; actor: () => string; onDecided: (recheck: boolean) => void }) {
+function Proposal({ view, index, byId, actor, onDecided }: { view: ChangeView; index: number; byId: Map<string, FindingView>; actor: () => string; onDecided: (recheck: boolean) => Promise<void> }) {
   const p = view.proposals!.changes[index]!;
   const decision = view.decisions.filter((d) => d.index === index).at(-1);
   const [risk, setRisk] = useState(false);
@@ -190,7 +191,7 @@ function Proposal({ view, index, byId, actor, onDecided }: { view: ChangeView; i
     try {
       if (accept) await api.acceptProposalRisk(view.change.id, index, { actor: a, reason: reason.trim() });
       else await api.approveProposal(view.change.id, index, a);
-      onDecided(accept);
+      await onDecided(accept);
     } catch (e) {
       setError(message(e));
     } finally {
@@ -278,6 +279,8 @@ export function Assessment({ id }: { id: string }) {
   const [view, setView] = useState<ChangeView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loads, setLoads] = useState(0);
+  // Loads in a row with no run running; reset whenever one is.
+  const [quiet, setQuiet] = useState(0);
   const [answered, setAnswered] = useState<Answer[]>([]);
   const [name, setNameDraft] = useState(() => getName() ?? "");
   const [askName] = useState(() => !getName());
@@ -287,7 +290,11 @@ export function Assessment({ id }: { id: string }) {
       api
         .change(id)
         .then(
-          (v) => (setView(v), setError(null)),
+          (v) => {
+            setView(v);
+            setError(null);
+            setQuiet((q) => (v.runs.some(isRunning) ? 0 : q + 1));
+          },
           (e) => setError(message(e)),
         )
         .finally(() => setLoads((n) => n + 1)),
@@ -296,13 +303,17 @@ export function Assessment({ id }: { id: string }) {
   useEffect(() => void load(), [load]);
   const job = useJob(load);
 
-  // Reached from Start without a job id: poll the view while a run is going or the check has not reached release.
-  const busy = view !== null && (view.runs.some((r) => r.status === "running") || STAGES.indexOf(view.stage) < STAGES.indexOf("release"));
+  // Reached from Start without a job id, so the view is polled while a run is running. A short grace covers the
+  // repo sync before the first run and the moment between two runs.
+  // ponytail: a fixed grace of loads, not the job's own state; expose the change's job on the view if it misleads.
+  const running = view !== null && (view.runs.some(isRunning) || job.running);
+  const polling = view !== null && (running || quiet < (view.runs.length ? 2 : 15));
+  const starting = view !== null && view.runs.length === 0 && polling;
   useEffect(() => {
-    if (!busy) return;
+    if (!polling) return;
     const t = setTimeout(load, 2000);
     return () => clearTimeout(t);
-  }, [busy, loads, load]);
+  }, [polling, loads, load]);
 
   /** The name to sign with, saved for next time. Empty until she gives one. */
   const actor = () => {
@@ -311,7 +322,12 @@ export function Assessment({ id }: { id: string }) {
     return a;
   };
 
-  if (!view) return <div className="page">{error ? <p className="error">{error}</p> : <p className="muted">Loading</p>}</div>;
+  const errorLine = error && (
+    <p className="error" role="alert">
+      {error}
+    </p>
+  );
+  if (!view) return <div className="page">{errorLine || <p className="muted">Loading</p>}</div>;
 
   const p: Professions = Object.fromEntries((professions.data ?? []).map((x) => [x.role, x]));
   const byId = new Map(view.findings.map((f) => [f.id, f]));
@@ -334,12 +350,15 @@ export function Assessment({ id }: { id: string }) {
   }
   const rows = rest.filter((f) => !hidden.has(f.id));
   const n = rows.length;
+  const busy = running || starting;
+  const stopped = !running && view.runs.some((r) => r.status === "failed" || r.status === "stopped_budget");
   const nameField = askName && (
     <input aria-label="Your name" placeholder="Your name" value={name} onChange={(e) => setNameDraft(e.target.value)} maxLength={100} autoComplete="name" className="assess-name" />
   );
 
   return (
     <div className="page">
+      {errorLine}
       <header className="page-head">
         <div className="stack assess-head">
           <h1>{view.problem ? `You asked: “${view.problem}”` : view.change.title}</h1>
@@ -355,7 +374,11 @@ export function Assessment({ id }: { id: string }) {
         </div>
       </header>
 
-      {error && <p className="error">{error}</p>}
+      {stopped && (
+        <p className="paused">
+          Checking stopped. <a href={`#/changes/${encodeURIComponent(view.change.id)}`}>Open Details to retry</a>
+        </p>
+      )}
       {(job.startError || job.job?.error) && <p className="error">{job.startError ?? job.job?.error}</p>}
 
       {busy && (
@@ -368,12 +391,12 @@ export function Assessment({ id }: { id: string }) {
         <>
           {nameField}
           <Questions
-            key={view.questions.join("\n")}
+            key={JSON.stringify([view.questions, view.questionOptions])}
             view={view}
             actor={actor}
-            onSaved={(items) => {
+            onSaved={async (items) => {
               setAnswered(items);
-              job.start(() => api.advance(view.change.id));
+              await job.start(() => api.advance(view.change.id));
             }}
           />
         </>
@@ -444,10 +467,10 @@ export function Assessment({ id }: { id: string }) {
                   index={i}
                   byId={byId}
                   actor={actor}
-                  onDecided={(recheck) => {
-                    void load();
+                  onDecided={async (recheck) => {
+                    await load();
                     // Accepting the risk settles findings, so the gates recompute and the release stamp can turn.
-                    if (recheck) void job.start(() => api.advance(view.change.id));
+                    if (recheck) await job.start(() => api.advance(view.change.id));
                   }}
                 />
               ))}
