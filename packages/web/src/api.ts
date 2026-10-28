@@ -16,6 +16,8 @@ import type {
   LegalDuty,
   OpenItem,
   Project,
+  ProposalDecision,
+  Proposals,
   Requirement,
   RunStatus,
   StageId,
@@ -83,6 +85,13 @@ export interface ChangeView {
   follows: LinkedChange | null;
   fixChanges: Array<LinkedChange & { withdrawn: boolean; findingIds: string[] }>;
   documentsRead?: Array<{ name: string; requirements: number; gaps: number }>;
+  /** Her problem in her own words, null for a whole repo check. */
+  problem: string | null;
+  /** The answers on offer for each open question, aligned with `questions`; null where none were stored. */
+  questionOptions: Array<{ options: string[]; defaultIndex: number } | null>;
+  /** The changes Kryterea wrote for a check, null until they are written. */
+  proposals: Proposals | null;
+  decisions: ProposalDecision[];
 }
 
 export interface Spend {
@@ -143,7 +152,10 @@ export const api = {
   change: (c: string) => call<ChangeView>("GET", `/api/changes/${id(c)}`),
   record: (c: string) => call<AcceptanceRecord>("GET", `/api/changes/${id(c)}/record`),
   advance: (c: string) => call<{ jobId: string }>("POST", `/api/changes/${id(c)}/advance`).then((r) => r.jobId),
-  answer: (c: string, answers: string[]) => call<unknown>("POST", `/api/changes/${id(c)}/answers`, { answers }),
+  answer: (c: string, b: { answers: string[]; assumed?: boolean[]; actor?: string }) => call<unknown>("POST", `/api/changes/${id(c)}/answers`, b),
+  approveProposal: (c: string, index: number, actor: string) => call<Change>("POST", `/api/changes/${id(c)}/proposals/${index}/approve`, { actor }),
+  acceptProposalRisk: (c: string, index: number, b: { actor: string; reason: string }) =>
+    call<{ decisions: ProposalDecision[] }>("POST", `/api/changes/${id(c)}/proposals/${index}/accept-risk`, b),
   accept: (c: string, actor: string) => call<{ jobId: string }>("POST", `/api/changes/${id(c)}/accept`, { actor }).then((r) => r.jobId),
   withdraw: (c: string, b: { reason: string; actor: string }) => call<unknown>("POST", `/api/changes/${id(c)}/withdraw`, b),
   reanalyse: (c: string) => call<{ jobId: string }>("POST", `/api/changes/${id(c)}/reanalyse`).then((r) => r.jobId),

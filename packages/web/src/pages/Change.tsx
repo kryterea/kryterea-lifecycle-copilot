@@ -51,7 +51,7 @@ function line(stage: StageId, v: ChangeView, afterDelivery: number): string {
   }
 }
 
-function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text }: { text: string }) {
   const [state, setState] = useState<"idle" | "copied" | "blocked">("idle");
   const copy = async () => {
     try {
@@ -104,10 +104,7 @@ function Questions({ changeId, questions, onSaved }: { changeId: string; questio
     e.preventDefault();
     setError(null);
     try {
-      await api.answer(
-        changeId,
-        answers.map((a) => a.trim()),
-      );
+      await api.answer(changeId, { answers: answers.map((a) => a.trim()) });
       onSaved();
     } catch (err) {
       setError(message(err));

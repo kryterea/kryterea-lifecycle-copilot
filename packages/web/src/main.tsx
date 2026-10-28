@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { SpendMeter, SpendProvider } from "./components/SpendMeter";
+import { Assessment } from "./pages/Assessment";
 import { Change } from "./pages/Change";
 import { CommitTrace } from "./pages/CommitTrace";
 import { Compare } from "./pages/Compare";
@@ -71,6 +72,8 @@ function Page({ hash }: { hash: string }) {
   if (m) return <Start key={m[1]} id={d(m[1]!)} />;
   m = /^#\/projects\/([^/]+)(?:\/(needs-you|documents|trace|connections))?$/.exec(hash);
   if (m) return <Project key={m[1]} id={d(m[1]!)} section={(m[2] as Section | undefined) ?? "changes"} />;
+  m = /^#\/changes\/([^/]+)\/assessment$/.exec(hash);
+  if (m) return <Assessment key={m[1]} id={d(m[1]!)} />;
   m = /^#\/changes\/([^/]+)(\/record)?$/.exec(hash);
   if (!m) {
     if (hash === "#/welcome") return <Welcome />;
