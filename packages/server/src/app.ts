@@ -12,6 +12,7 @@ import {
   openItems,
   openQuestions,
   recheck,
+  compareCommits,
   traceCommit,
   traceRequirement,
   withdrawal,
@@ -542,6 +543,15 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
     const trace = traceCommit(record, project.id, c.req.param("sha"));
     if (!trace) throw new HttpError(404, "Kryterea has not checked this commit.");
     return c.json(trace);
+  });
+
+  app.get("/api/projects/:id/commits", (c) => c.json({ commits: record.commitsChecked(getProject(c.req.param("id")).id) }));
+
+  app.get("/api/projects/:id/compare", (c) => {
+    const project = getProject(c.req.param("id"));
+    const cmp = compareCommits(record, project.id, c.req.query("from") ?? "", c.req.query("to") ?? "");
+    if (!cmp) throw new HttpError(404, "Kryterea has not checked one of these commits.");
+    return c.json(cmp);
   });
 
   app.get("/api/projects/:id/connections", (c) => {

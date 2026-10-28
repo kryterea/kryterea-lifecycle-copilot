@@ -564,6 +564,48 @@ export class CopilotRecord {
     return r ? { at: r.at as string, commit: r.commit_sha as string } : null;
   }
 
+  /**
+   * When a checked commit was the latest: from its first run to the first run at another commit after its last run
+   * finished (null while it still is the latest).
+   */
+  commitWindow(projectId: string, commit: string): { start: string; end: string | null } | null {
+    const span = this.one(
+      `SELECT MIN(r.started_at) AS start, MAX(COALESCE(r.finished_at, r.started_at)) AS last
+       FROM runs r JOIN changes c ON c.id = r.change_id WHERE c.project_id = ? AND r.commit_sha = ?`,
+      projectId,
+      commit,
+    );
+    if (!span?.start) return null;
+    const next = this.one(
+      `SELECT MIN(r.started_at) AS end FROM runs r JOIN changes c ON c.id = r.change_id
+       WHERE c.project_id = ? AND r.commit_sha <> ? AND r.started_at > ?`,
+      projectId,
+      commit,
+      span.last as string,
+    );
+    return { start: span.start as string, end: (next?.end as string | null) ?? null };
+  }
+
+  /** Every commit the project's runs checked, oldest first by its first run. */
+  commitsChecked(projectId: string): Array<{ sha: string; at: string }> {
+    return this.all(
+      `SELECT r.commit_sha AS sha, MIN(r.started_at) AS at FROM runs r JOIN changes c ON c.id = r.change_id
+       WHERE c.project_id = ? GROUP BY r.commit_sha ORDER BY at`,
+      projectId,
+    ).map((r) => ({ sha: r.sha as string, at: r.at as string }));
+  }
+
+  /** The state of the criterion's latest check made before `before` (any time when null). */
+  checkStateBefore(criterionId: string, before: string | null): EvidenceState | null {
+    const r = this.one(
+      "SELECT state FROM checks WHERE criterion_id = ? AND (? IS NULL OR at < ?) ORDER BY seq DESC LIMIT 1",
+      criterionId,
+      before,
+      before,
+    );
+    return r ? (r.state as EvidenceState) : null;
+  }
+
   /** Full commit ids of the project's runs that start with `sha` (a short or full id). */
   runCommits(projectId: string, sha: string): string[] {
     return this.all(

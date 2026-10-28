@@ -3,6 +3,8 @@ import type {
   AcceptanceRecord,
   Change,
   ChangeKind,
+  CommitCompare,
+  CommitState,
   CommitTrace,
   DocSettings,
   Document,
@@ -59,7 +61,7 @@ export interface Connections {
   linear: ConnectionState & { tickets: number };
   mcp: { command: string };
 }
-export type { CommitTrace, OpenItem, TraceChain };
+export type { CommitCompare, CommitState, CommitTrace, OpenItem, TraceChain };
 
 /** Another change this one points at: the change it follows, or a fix change opened from it. */
 export interface LinkedChange {
@@ -146,6 +148,9 @@ export const api = {
   trace: (r: string) => call<TraceChain>("GET", `/api/requirements/${id(r)}/trace`),
   linkLinear: (r: string, identifier: string) => call<{ identifier: string; url: string }>("POST", `/api/requirements/${id(r)}/linear`, { identifier }),
   commitTrace: (p: string, sha: string) => call<CommitTrace>("GET", `/api/projects/${id(p)}/commits/${id(sha)}/trace`),
+  commits: (p: string) => call<{ commits: Array<{ sha: string; at: string }> }>("GET", `/api/projects/${id(p)}/commits`).then((r) => r.commits),
+  compare: (p: string, from: string, to: string) =>
+    call<CommitCompare>("GET", `/api/projects/${id(p)}/compare?from=${id(from)}&to=${id(to)}`),
   connections: (p: string) => call<Connections>("GET", `/api/projects/${id(p)}/connections`),
 };
 

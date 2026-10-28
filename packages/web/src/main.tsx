@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { SpendMeter, SpendProvider } from "./components/SpendMeter";
 import { Change } from "./pages/Change";
 import { CommitTrace } from "./pages/CommitTrace";
+import { Compare } from "./pages/Compare";
 import { DocumentDetail } from "./pages/DocumentDetail";
 import { Project, type Section } from "./pages/Project";
 import { Projects } from "./pages/Projects";
@@ -30,6 +31,8 @@ function Page({ hash }: { hash: string }) {
   if (m) return <DocumentDetail key={m[2]} projectId={d(m[1]!)} docId={d(m[2]!)} />;
   m = /^#\/projects\/([^/]+)\/commits\/([^/]+)$/.exec(hash);
   if (m) return <CommitTrace key={m[2]} projectId={d(m[1]!)} sha={d(m[2]!)} />;
+  m = /^#\/projects\/([^/]+)\/compare(?:\/([^/]+)(?:\/([^/]+))?)?$/.exec(hash);
+  if (m) return <Compare key={m[1]} projectId={d(m[1]!)} from={m[2] && d(m[2])} to={m[3] && d(m[3])} />;
   m = /^#\/requirements\/([^/]+)$/.exec(hash);
   if (m) return <Requirement key={m[1]} id={d(m[1]!)} />;
   m = /^#\/projects\/([^/]+)(?:\/(needs-you|documents|trace|connections))?$/.exec(hash);

@@ -32,6 +32,7 @@ Built during the event (update as tasks finish):
   - Open items at the top of every MCP tool answer, framed as data for the agent
   - One GitHub comment per open pull request (or checked commit) and one Linear comment per linked ticket, kept current after each check, rewritten only when the content changes
   - Trace views: requirements table, requirement chain from document line to sign off, and everything checked at a commit
+  - Before and after: any two checked commits side by side, with open items, evidence and the decisions made at each
   - Panel sections for Needs you, Documents, Trace and Connections; professional cards with their practice and the people who decided
   - The acceptance record carries the trace and ends with "Not legal advice. Kryterea advises and records; people decide."
 

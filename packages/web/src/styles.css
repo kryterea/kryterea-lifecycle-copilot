@@ -1742,6 +1742,73 @@ tbody tr + tr td {
   font-family: var(--mono);
 }
 
+/* Before and after */
+.compare-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.compare-pick {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.compare-pick select {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-input);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--t-label) var(--mono);
+}
+.compare-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.metric {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+}
+.metric-label {
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.metric-values {
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.metric-delta {
+  font-size: var(--t-meta);
+  font-weight: 600;
+}
+.metric-delta.is-good {
+  color: var(--cleared);
+}
+.metric-delta.is-bad {
+  color: var(--caution);
+}
+.metric-delta.is-same {
+  color: var(--muted);
+}
+.compare-list li {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+}
+.compare-stamps {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 /* Connections */
 .connection {
   display: grid;
@@ -1785,6 +1852,13 @@ tbody tr + tr td {
   }
   .open-item {
     padding: 14px;
+  }
+  .compare-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .compare-list li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
   }
 }
 

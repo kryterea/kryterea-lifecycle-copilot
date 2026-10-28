@@ -51,6 +51,9 @@ export function Trace({ projectId, rows, error }: { projectId: string; rows: Req
           <button type="submit" className="btn secondary sm">
             Trace commit
           </button>
+          <a className="btn secondary sm" href={`#/projects/${projectId}/compare`}>
+            Before and after
+          </a>
         </form>
       </div>
       <div className="table-wrap">

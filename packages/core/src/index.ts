@@ -24,5 +24,5 @@ export { applyDrift, driftRule, DRIFT_TITLES } from "./drift.js";
 export { openItems } from "./open-items.js";
 export type { OpenItem } from "./open-items.js";
 export type { DriftRule, Hunk } from "./drift.js";
-export { traceCommit, traceRequirement } from "./trace.js";
-export type { CommitTrace, TraceChain } from "./trace.js";
+export { compareCommits, traceCommit, traceRequirement } from "./trace.js";
+export type { CommitCompare, CommitState, CommitTrace, TraceChain } from "./trace.js";

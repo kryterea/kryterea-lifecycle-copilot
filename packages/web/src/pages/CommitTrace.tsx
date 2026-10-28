@@ -14,6 +14,11 @@ export function CommitTrace({ projectId, sha }: { projectId: string; sha: string
         <h1>
           Commit <code>{(data?.sha ?? sha).slice(0, 7)}</code>
         </h1>
+        {data && (
+          <a className="btn secondary sm" href={`#/projects/${projectId}/compare/${data.sha.slice(0, 7)}`}>
+            Compare with the latest
+          </a>
+        )}
       </header>
       {error ? (
         <p className="empty">{error}</p>

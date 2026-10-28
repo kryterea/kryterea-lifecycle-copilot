@@ -619,6 +619,24 @@ describe("documents, trace, open items and connections", () => {
     expect(none.json.error).toBe("Kryterea has not checked this commit.");
   });
 
+  it("GET commits lists checked commits oldest first, and compare reads before and after or says why not", async () => {
+    const { call } = setup();
+    const { p, c, k } = seedDocs();
+    await new Promise((r) => setTimeout(r, 5));
+    const runId = deps.record.startRun({ changeId: c.id, role: "qa", commit: "b".repeat(40) });
+    deps.record.recordCheck({ criterionId: k.id, runId, state: "evidence_found", evidence: [], note: "" });
+    deps.record.finishRun(runId, "done");
+    const list = await call("GET", `/api/projects/${p.id}/commits`);
+    expect(list.json.commits.map((x: { sha: string }) => x.sha)).toEqual([SHA, "b".repeat(40)]);
+    const cmp = await call("GET", `/api/projects/${p.id}/compare?from=aaaaaaa&to=bbbbbbb`);
+    expect(cmp.status).toBe(200);
+    expect(cmp.json.from).toMatchObject({ sha: SHA, gaps: 1 });
+    expect(cmp.json.to).toMatchObject({ evidenceFound: 1, gaps: 0 });
+    const none = await call("GET", `/api/projects/${p.id}/compare?from=aaaaaaa&to=ccccccc`);
+    expect(none.status).toBe(404);
+    expect(none.json.error).toBe("Kryterea has not checked one of these commits.");
+  });
+
   it("POST requirement linear links a ticket, or says why not", async () => {
     const { req } = seedDocs();
     const off = await setup().call("POST", `/api/requirements/${req.id}/linear`, { identifier: "ENG-12" });

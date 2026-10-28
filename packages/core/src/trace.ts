@@ -1,5 +1,5 @@
 import type { CopilotRecord } from "./record/record.js";
-import type { Check, Criterion, Finding, FindingStatus, Requirement, RequirementEvent } from "./types.js";
+import type { Check, Criterion, EvidenceState, Finding, FindingKind, FindingStatus, Requirement, RequirementEvent, RoleId } from "./types.js";
 
 export interface TraceChain {
   document: { id: string; name: string; line: number; quote: string };
@@ -19,6 +19,65 @@ export interface CommitTrace {
   criteria: Array<{ id: string; text: string; requirementKeys: string[] }>;
   documents: string[];
   findings: Array<{ id: string; title: string; status: FindingStatus }>;
+}
+
+/** Counts for one side of a compare: the record as it stood while that commit was the latest one checked. */
+export interface CommitState {
+  sha: string;
+  open: number;
+  evidenceFound: number;
+  gaps: number;
+  noEvidence: number;
+}
+
+export interface CommitCompare {
+  from: CommitState;
+  to: CommitState;
+  /** Every finding that existed at either commit; null where it did not exist yet. */
+  findings: Array<{ id: string; title: string; kind: FindingKind; role: RoleId; from: FindingStatus | null; to: FindingStatus | null }>;
+  /** Every criterion checked by either commit; null where it had no check yet. */
+  criteria: Array<{ id: string; text: string; requirementKeys: string[]; from: EvidenceState | null; to: EvidenceState | null }>;
+}
+
+/**
+ * Before and after: open items and evidence as they stood at two commits Kryterea checked (short ids are enough).
+ * A commit's state includes decisions made while it was the latest one checked. Null if either was never checked.
+ */
+export function compareCommits(record: CopilotRecord, projectId: string, from: string, to: string): CommitCompare | null {
+  const side = (sha: string) => {
+    if (!/^[0-9a-f]{4,40}$/i.test(sha)) return null;
+    const [full] = record.runCommits(projectId, sha.toLowerCase());
+    const window = full ? record.commitWindow(projectId, full) : null;
+    return full && window ? { sha: full, before: window.end } : null;
+  };
+  const a = side(from);
+  const b = side(to);
+  if (!a || !b) return null;
+  const statusBefore = (findingId: string, before: string | null) =>
+    record.findingHistory(findingId).filter((h) => before === null || h.at < before).at(-1)?.status ?? null;
+
+  const findings = record
+    .listFindings({ projectId })
+    .map((f) => ({ id: f.id, title: f.title, kind: f.kind, role: f.role, from: statusBefore(f.id, a.before), to: statusBefore(f.id, b.before) }))
+    .filter((f) => f.from !== null || f.to !== null);
+  const criteria = record
+    .listCriteria(projectId)
+    .map((k) => ({
+      id: k.id,
+      text: k.text,
+      requirementKeys: record.requirementsLinkedTo("criterion", k.id).map((r) => r.key),
+      from: record.checkStateBefore(k.id, a.before),
+      to: record.checkStateBefore(k.id, b.before),
+    }))
+    .filter((k) => k.from !== null || k.to !== null);
+  const count = (sha: string, side: "from" | "to"): CommitState => ({
+    sha,
+    open: findings.filter((f) => f[side] === "open").length,
+    evidenceFound: criteria.filter((k) => k[side] === "evidence_found").length,
+    gaps: criteria.filter((k) => k[side] === "gap").length,
+    noEvidence: criteria.filter((k) => k[side] === "no_evidence").length,
+  });
+  return { from: count(a.sha, "from"), to: count(b.sha, "to"), findings, criteria };
 }
 
 /** The latest acceptance on a delivered change, unless voided after it. */

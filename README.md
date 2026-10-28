@@ -39,6 +39,7 @@ Kryterea checks the code against what was agreed. It reads the PRDs and specs in
 
 - **Document gaps.** The analyst reads each document the way a reviewer would, against the requirement qualities in ISO/IEC/IEEE 29148, and marks the lines that cannot be built or checked as written ("Cancelling should be easy").
 - **Trace.** Each requirement line keeps a chain: document line, acceptance criteria, Linear ticket, the commits checked, evidence in the code, findings, decisions and sign off. A missing link shows as a gap in the chain. Search a commit to see everything Kryterea checked at it.
+- **Before and after.** Pick any two commits Kryterea checked to see what closed, what is new, what is still open, and which criteria moved from Gap or No evidence to Evidence found. Each side includes the decisions people made while that commit was the latest.
 - **Drift.** Every re-check runs fixed drift rules, with no model call: a requirement changed after criteria were written for it, a requirement with no criteria or no evidence, code lines that were evidence for a criterion changed, or code under an accepted risk changed. Each raises a drift finding, which closes by itself once its rule no longer holds.
 - **Needs you.** Every open item on a project, most pressing first: legal checks, failure paths, drift, then the rest.
 
