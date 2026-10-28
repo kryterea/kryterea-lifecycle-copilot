@@ -150,6 +150,13 @@ export interface AcceptanceRecord {
   runs: Array<{ id: string; role: RoleId; commit: string; status: RunStatus; costUsd: number }>;
   /** From the latest `acceptance_summary` artifact, null when none. */
   summary: string | null;
+  /** Each requirement linked to these criteria: its criteria with their latest state, and the decisions people made on findings about it. */
+  trace: Array<{
+    key: string;
+    text: string;
+    criteria: Array<{ text: string; state: EvidenceState | null }>;
+    decisions: Array<{ title: string; status: FindingStatus; by: string; reason: string; at: string }>;
+  }>;
 }
 
 /** A PRD, spec or other project document: a repo file, or one uploaded or pasted (kept in the record only). */

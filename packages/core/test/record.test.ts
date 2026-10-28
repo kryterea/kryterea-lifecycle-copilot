@@ -160,3 +160,50 @@ describe("record: documents and requirements", () => {
     expect(record.externalPost("linear", "ENG-12")).toEqual({ commentId: "c1", bodyHash: "h2" });
   });
 });
+
+describe("record: acceptance record trace", () => {
+  it("the acceptance record lists each requirement with its criteria, evidence and decisions", () => {
+    const { record, project } = fresh();
+    const change = record.createChange({ projectId: project.id, title: "Links", description: "d", kind: "feature" });
+    const doc = record.saveDocumentVersion({ projectId: project.id, name: "docs/PRD.md", source: "repo", body: "FR-1 Links\nFR-2 Refunds", commit: "a" });
+    record.applyRequirements(doc.document.id, doc.version.id, [
+      { key: "FR-1", text: "Merchants create a link", quote: "FR-1 Links", line: 1 },
+      { key: "FR-2", text: "Merchants refund", quote: "FR-2 Refunds", line: 2 },
+    ]);
+    const reqs = Object.fromEntries(record.listRequirements(project.id).map((r) => [r.key, r]));
+    const k1 = record.addCriterion({ projectId: project.id, changeId: change.id, text: "A link has a URL", isFailurePath: false });
+    const k2 = record.addCriterion({ projectId: project.id, changeId: change.id, text: "Paid once", isFailurePath: true });
+    record.linkRequirement(reqs["FR-1"]!.id, "criterion", k1.id);
+    record.linkRequirement(reqs["FR-1"]!.id, "criterion", k2.id);
+    const run = record.startRun({ changeId: change.id, role: "qa", commit: "a" });
+    record.recordCheck({ criterionId: k1.id, runId: run, state: "evidence_found", evidence: [], note: "" });
+    const { finding } = record.addFinding({
+      projectId: project.id,
+      changeId: change.id,
+      runId: run,
+      role: "qa",
+      stage: "analysis",
+      kind: "failure_path",
+      title: "Webhook can repeat",
+      plain: "p",
+      costIfIgnored: "c",
+      fixPrompt: "f",
+      trigger: { type: "code", file: "a.js", line: 1, commit: "a" },
+      criterionId: k2.id,
+    });
+    record.setFindingStatus(finding.id, "accepted_risk", "Paystack dedupes", "Ada Obi");
+
+    const { trace } = record.acceptanceRecord(change.id);
+    expect(trace).toHaveLength(1);
+    expect(trace[0]).toMatchObject({
+      key: "FR-1",
+      text: "Merchants create a link",
+      criteria: [
+        { text: "A link has a URL", state: "evidence_found" },
+        { text: "Paid once", state: null },
+      ],
+      decisions: [{ title: "Webhook can repeat", status: "accepted_risk", by: "Ada Obi", reason: "Paystack dedupes" }],
+    });
+    expect(typeof trace[0]!.decisions[0]!.at).toBe("string");
+  });
+});

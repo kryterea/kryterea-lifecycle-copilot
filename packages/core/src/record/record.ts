@@ -861,7 +861,26 @@ export class CopilotRecord {
     const latestSummary = this.listArtifacts(changeId).filter((a) => a.kind === "acceptance_summary").at(-1);
     const body = latestSummary?.body as { summary?: unknown } | undefined;
     const summary = typeof body?.summary === "string" ? body.summary : null;
-    return { change, criteria, findings, gates: this.gates(changeId), decisions, runs, summary };
+    const requirements = new Map<string, Requirement>();
+    for (const k of criteria) for (const r of this.requirementsLinkedTo("criterion", k.id)) requirements.set(r.id, r);
+    const trace = [...requirements.values()].map((r) => {
+      const ids = new Set(this.requirementLinks(r.id).filter((l) => l.toType === "criterion").map((l) => l.toId));
+      const about = (f: Finding) =>
+        (f.criterionId !== undefined && ids.has(f.criterionId)) ||
+        this.linksFrom({ type: "finding", id: f.id }).some(
+          (l) => l.rel === "affects" && ((l.to.type === "requirement" && l.to.id === r.id) || (l.to.type === "criterion" && ids.has(l.to.id))),
+        );
+      const titles = new Map(findings.filter(about).map((f) => [f.id, f.title]));
+      return {
+        key: r.key,
+        text: r.text,
+        criteria: criteria.filter((k) => ids.has(k.id)).map((k) => ({ text: k.text, state: k.latest })),
+        decisions: decisions
+          .filter((d) => titles.has(d.findingId))
+          .map((d) => ({ title: titles.get(d.findingId)!, status: d.status, by: d.actor, reason: d.reason, at: d.at })),
+      };
+    });
+    return { change, criteria, findings, gates: this.gates(changeId), decisions, runs, summary, trace };
   }
 }
 

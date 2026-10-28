@@ -145,6 +145,37 @@ export function Record({ id }: { id: string }) {
       </section>
 
       <section>
+        <h2>Trace</h2>
+        {rec.trace.length === 0 ? (
+          <p className="empty">No requirement is linked to these criteria.</p>
+        ) : (
+          <ul className="record-findings">
+            {rec.trace.map((r) => (
+              <li key={r.key}>
+                <p className="record-finding-head">
+                  <span className="key">{r.key}</span>
+                  <strong>{r.text}</strong>
+                </p>
+                <ul className="criteria">
+                  {r.criteria.map((k, i) => (
+                    <li key={i}>
+                      <EvidenceStamp state={k.state} />
+                      <span>{k.text}</span>
+                    </li>
+                  ))}
+                </ul>
+                {r.decisions.map((d, i) => (
+                  <p key={i} className="muted small">
+                    <StatusStamp status={d.status} /> {d.title}. {d.by}: {d.reason}
+                  </p>
+                ))}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
         <h2>Findings</h2>
         {hasLegal && <p className="hint">Legal findings are things to check, not legal advice.</p>}
         {rec.findings.length === 0 ? (
@@ -244,6 +275,7 @@ export function Record({ id }: { id: string }) {
           </>
         )}
       </section>
+      <p className="hint">Not legal advice. Kryterea advises and records; people decide.</p>
     </article>
   );
 }
