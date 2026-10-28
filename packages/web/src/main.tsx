@@ -34,13 +34,18 @@ function useHash() {
 function Home() {
   const [ready, setReady] = useState(false);
   useEffect(() => {
+    let live = true;
     api.projects().then(
       (list) => {
+        if (!live) return;
         if (!getName() && list.length === 0) location.hash = "#/welcome";
         else setReady(true);
       },
-      () => setReady(true),
+      () => live && setReady(true),
     );
+    return () => {
+      live = false;
+    };
   }, []);
   return ready ? <Projects /> : null;
 }
