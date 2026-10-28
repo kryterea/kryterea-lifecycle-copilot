@@ -665,3 +665,20 @@ describe("documents, trace, open items and connections", () => {
     expect(fresh.json.github).toEqual({ state: "connected", detail: null, lastComment: null });
   });
 });
+
+describe("change view for the governed trace", () => {
+  it("carries documents read, requirement keys on criteria, drift and who accepted each risk", async () => {
+    const { call } = setup();
+    const { p, c, k, finding } = seedFinding();
+    const r = deps.record;
+    const doc = r.saveDocumentVersion({ projectId: p.id, name: "docs/PRD.md", source: "repo", body: "FR-1 Take a deposit.", commit: null });
+    const [req] = r.applyRequirements(doc.document.id, doc.version.id, [{ key: "FR-1", text: "Take a deposit", quote: "Take a deposit.", line: 1 }]).added;
+    r.linkRequirement(req!.id, "criterion", k.id);
+    r.addArtifact({ changeId: c.id, role: "ba", stage: "intake", kind: "documents_read", body: { documents: [{ name: "docs/PRD.md", versionId: doc.version.id, hash: "h", commit: null, requirements: 1, gaps: 0 }] } });
+    r.setFindingStatus(finding.id, "accepted_risk", "Retries are rare", "Ada");
+    const v = await call("GET", `/api/changes/${c.id}`);
+    expect(v.json.documentsRead).toEqual([{ name: "docs/PRD.md", requirements: 1, gaps: 0 }]);
+    expect(v.json.criteria[0].requirementKeys).toEqual(["FR-1"]);
+    expect(v.json.findings[0]).toMatchObject({ id: finding.id, drift: null, decision: { status: "accepted_risk", reason: "Retries are rare", actor: "Ada" } });
+  });
+});

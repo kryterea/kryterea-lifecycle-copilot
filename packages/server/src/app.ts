@@ -341,10 +341,17 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
     // The latest run of each role, so the panel can show who has checked this change and who is working now.
     const runs = Object.values(Object.fromEntries(r.runs.map((x) => [x.role, x])));
     // Legal findings carry the law or standard they cite, so the panel can tell a law from an industry standard.
+    // Each finding also carries its drift rule and, once a person decided on it, that decision.
     const findings = r.findings.map((f) => {
       const duty = f.citationId ? deps.packs.legal.find((d) => d.id === f.citationId) : undefined;
-      return withFixReport(duty ? { ...f, law: duty.law, section: duty.section } : f);
+      const last = record.findingHistory(f.id).at(-1);
+      const decision = last && last.status !== "open" ? { status: last.status, reason: last.reason, actor: last.actor, at: last.at } : null;
+      return withFixReport({ ...f, ...(duty ? { law: duty.law, section: duty.section } : {}), drift: driftRule(record, f.id), decision });
     });
+    // What the analyst read for this change, newest read last.
+    const read = artifacts.filter((a) => a.kind === "documents_read").at(-1)?.body as { documents?: Array<{ name: string; requirements: number; gaps: number }> } | undefined;
+    const documentsRead = (read?.documents ?? []).map((d) => ({ name: d.name, requirements: d.requirements, gaps: d.gaps }));
+    const criteria = r.criteria.map((k) => ({ ...k, requirementKeys: record.requirementsLinkedTo("criterion", k.id).map((q) => q.key) }));
     // Fix changes opened from this one after delivery, with the findings each carries. A withdrawn one carries nothing.
     const fixChanges = ids("fix_change").map((id) => ({
       ...linkedChange(id),
@@ -356,7 +363,8 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
       stage: r.change.stage,
       gates: r.gates,
       findings,
-      criteria: r.criteria,
+      criteria,
+      documentsRead,
       questions: openQuestions(record, change.id),
       accepted: accepted(record, change.id),
       runs,
