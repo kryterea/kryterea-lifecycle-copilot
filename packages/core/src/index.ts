@@ -21,6 +21,8 @@ export type { RoleContext, RoleResult, RoleFinding } from "./roles/context.js";
 export { STAGES, accepted, advance, criteriaOf, openFixChange, openQuestions, recheck, syncDocuments, withdrawal } from "./workflow.js";
 export type { WorkflowDeps } from "./workflow.js";
 export { applyDrift, driftRule, DRIFT_TITLES } from "./drift.js";
+export { openItems } from "./open-items.js";
+export type { OpenItem } from "./open-items.js";
 export type { DriftRule, Hunk } from "./drift.js";
 export { traceCommit, traceRequirement } from "./trace.js";
 export type { CommitTrace, TraceChain } from "./trace.js";
