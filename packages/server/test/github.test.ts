@@ -17,7 +17,7 @@ function fakeFetch(...replies: Reply[]) {
 
 const repo = { owner: "kryterea", name: "lagospay" };
 const API = "https://api.github.com/repos/kryterea/lagospay";
-const item = (n: number): OpenItem => ({ id: `f${n}`, findingId: `f${n}`, kind: "operations", role: "architect", title: `Item ${n}`, why: "w", where: `a.js:${n}`, requirementKey: null, createdAt: "" });
+const item = (n: number): OpenItem => ({ id: `f${n}`, findingId: `f${n}`, kind: "operations", role: "architect", title: `Item ${n}`, why: "w", where: `a.js:${n}`, requirementKey: null, changeId: null, requirementId: null, createdAt: "" });
 
 describe("githubClient", () => {
   it("lists open pull requests with their head commit", async () => {

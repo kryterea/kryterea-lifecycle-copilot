@@ -17,7 +17,7 @@ function fakeFetch(...replies: Reply[]) {
 }
 
 const item = (over: Partial<OpenItem>): OpenItem => ({
-  id: "f1", findingId: "f1", kind: "failure_path", role: "qa", title: "Refund twice", why: "w", where: "server.js:120", requirementKey: "FR-1", createdAt: "", ...over,
+  id: "f1", findingId: "f1", kind: "failure_path", role: "qa", title: "Refund twice", why: "w", where: "server.js:120", requirementKey: "FR-1", changeId: null, requirementId: null, createdAt: "", ...over,
 });
 
 describe("linearClient", () => {

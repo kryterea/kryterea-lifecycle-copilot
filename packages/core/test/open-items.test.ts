@@ -33,7 +33,9 @@ describe("openItems", () => {
       "No backups",
     ]);
     expect(items.map((i) => i.where)).toEqual(["http://localhost:3000/signup", "server.js:120", "docs/PRD.md:4", "docs/PRD.md:9", "db.js:3"]);
-    expect(items[2]).toMatchObject({ kind: "conformance", role: "ba", requirementKey: "FR-1" });
+    expect(items[2]).toMatchObject({ kind: "conformance", role: "ba", requirementKey: "FR-1", changeId: t.change.id });
+    expect(items[2]!.requirementId).toEqual(expect.any(String));
+    expect(items[0]).toMatchObject({ requirementId: null, changeId: t.change.id });
     expect(items[0]).toMatchObject({ why: "why Check this: consent", requirementKey: null });
   });
 
@@ -53,6 +55,6 @@ describe("openItems", () => {
     t.add("architect", "operations", "No backups", t.code("db.js", 3));
     const { total, items } = openItems(t.record, t.project.id);
     expect(total).toBe(2);
-    expect(items.at(-1)).toMatchObject({ kind: "setup", findingId: null, title: "No PRD or spec found" });
+    expect(items.at(-1)).toMatchObject({ kind: "setup", findingId: null, changeId: null, requirementId: null, title: "No PRD or spec found" });
   });
 });

@@ -5,12 +5,15 @@ import type { Finding, FindingKind, RoleId, Trigger } from "./types.js";
 export interface OpenItem {
   id: string;
   findingId: string | null;
+  /** The change the finding was raised on, for a link to it. */
+  changeId: string | null;
   kind: FindingKind | "setup";
   role: RoleId;
   title: string;
   why: string;
   where: string;
   requirementKey: string | null;
+  requirementId: string | null;
   createdAt: string;
 }
 
@@ -39,12 +42,14 @@ export function openItems(record: CopilotRecord, projectId: string): { total: nu
     return {
       id: f.id,
       findingId: f.id,
+      changeId: f.changeId,
       kind: f.kind,
       role: f.role,
       title: f.title,
       why: f.plain,
       where: where(f.trigger),
       requirementKey: req ? record.getRequirement(req.to.id).key : null,
+      requirementId: req?.to.id ?? null,
       createdAt: f.createdAt,
     };
   });
@@ -52,12 +57,14 @@ export function openItems(record: CopilotRecord, projectId: string): { total: nu
     items.push({
       id: `setup:documents:${projectId}`,
       findingId: null,
+      changeId: null,
       kind: "setup",
       role: "ba",
       title: "No PRD or spec found",
       why: "Kryterea checks the code against what was agreed. Add a PRD or spec under docs/, or upload one.",
       where: "docs/",
       requirementKey: null,
+      requirementId: null,
       createdAt: "",
     });
   }
