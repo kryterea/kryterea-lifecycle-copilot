@@ -21,6 +21,7 @@ import {
   proposalDecisions,
   proposalsOf,
   questionOptions,
+  PICKABLE_ROLES,
   PROFESSIONS,
   recheck,
   startCheck,
@@ -175,6 +176,15 @@ function text(b: Body, key: string, max: number): string {
 
 function optText(b: Body, key: string, max: number): string | undefined {
   return b[key] === undefined || b[key] === null || b[key] === "" ? undefined : text(b, key, max);
+}
+
+/** An optional non-empty list of unique professions from `allowed`; absent means all of them (Auto). */
+function optPick<T extends string>(v: unknown, allowed: readonly T[], key: string): T[] | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (!Array.isArray(v) || v.length === 0) throw bad(`${key} must be a non-empty list`);
+  const picked = v.map((x) => oneOf(x, allowed, key));
+  if (new Set(picked).size !== picked.length) throw bad(`${key} must not repeat a profession`);
+  return picked;
 }
 
 function oneOf<T extends string>(v: unknown, allowed: readonly T[], key: string): T {
@@ -371,9 +381,10 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
     const project = getProject(c.req.param("id"));
     const b = await readBody(c);
     const problem = optText(b, "problem", 500) ?? null;
+    const roles = optPick(b.roles, PICKABLE_ROLES, "roles");
     // A recheck holds the whole project, so refuse before opening a change that could not start.
     notBusy(project.id, "new");
-    const change = startCheck(record, { projectId: project.id, problem });
+    const change = startCheck(record, { projectId: project.id, problem, ...(roles ? { roles } : {}) });
     return c.json({ changeId: change.id, jobId: started(startAdvance(project.id, change.id)) }, 202);
   });
 

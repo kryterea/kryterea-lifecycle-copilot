@@ -214,6 +214,17 @@ describe("HTTP API", () => {
     expect(view.change.title).toBe("Whole repo check");
   });
 
+  it("check takes the professions to look and refuses a bad list", async () => {
+    const { p } = seedChange();
+    const { call } = setup({ advanceFn: async () => ({ stage: "intake", held: [], stoppedForBudget: false }) });
+    const ok = await call("POST", `/api/projects/${p.id}/check`, { roles: ["ba", "qa"] });
+    expect(ok.status).toBe(202);
+    expect(deps.record.listArtifacts(ok.json.changeId).find((a) => a.kind === "scope")?.body).toEqual({ roles: ["ba", "qa"] });
+    for (const roles of [[], ["ba", "ba"], ["po"], ["nope"], "ba", [1]]) {
+      expect((await call("POST", `/api/projects/${p.id}/check`, { roles })).status).toBe(400);
+    }
+  });
+
   describe("proposals", () => {
     function seedProposals() {
       const { p, c } = seedChange();

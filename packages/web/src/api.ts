@@ -144,7 +144,8 @@ export const api = {
   projects: () => call<{ projects: Project[] }>("GET", "/api/projects").then((r) => r.projects),
   createProject: (b: { repoUrl: string; name?: string; appUrl?: string }) => call<Project>("POST", "/api/projects", b),
   files: (p: string) => call<RepoFiles>("GET", `/api/projects/${id(p)}/files`),
-  check: (p: string, problem: string) => call<{ changeId: string; jobId: string }>("POST", `/api/projects/${id(p)}/check`, { problem }),
+  check: (p: string, problem: string, roles?: string[]) =>
+    call<{ changeId: string; jobId: string }>("POST", `/api/projects/${id(p)}/check`, { problem, ...(roles ? { roles } : {}) }),
   project: (p: string) => call<{ project: Project; changes: Array<Change & { withdrawn: boolean }> }>("GET", `/api/projects/${id(p)}`),
   createChange: (p: string, b: { title: string; description: string; kind: ChangeKind }) =>
     call<Change>("POST", `/api/projects/${id(p)}/changes`, b),

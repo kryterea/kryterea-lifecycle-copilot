@@ -2,6 +2,9 @@ import { useState, type FormEvent } from "react";
 import { api, message, useLoad } from "../api";
 import { CheckIcon, ChevronIcon } from "../components/Icon";
 
+/** The professions she can leave out. The product owner always looks. */
+const PICKABLE = ["ba", "architect", "qa", "compliance"];
+
 const GROUP_LABEL = { code: "Code", documents: "Documents", config: "Config", tests: "Tests", skipped: "Skipped" } as const;
 
 /** After linking a repo: what was read, what is wrong in her words, who should look. */
@@ -10,6 +13,8 @@ export function Start({ id }: { id: string }) {
   const files = useLoad(() => api.files(id), id);
   const professions = useLoad(() => api.professions(), "professions");
   const [problem, setProblem] = useState("");
+  const [byHand, setByHand] = useState(false);
+  const [picked, setPicked] = useState<string[]>(PICKABLE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +23,7 @@ export function Start({ id }: { id: string }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await api.check(id, problem.trim());
+      const r = await api.check(id, problem.trim(), byHand ? PICKABLE.filter((r) => picked.includes(r)) : undefined);
       location.hash = `#/changes/${encodeURIComponent(r.changeId)}/assessment/${encodeURIComponent(r.jobId)}`;
     } catch (err) {
       setError(message(err));
@@ -81,7 +86,10 @@ export function Start({ id }: { id: string }) {
         <div className="start-block">
           <h2>Who should look?</h2>
           <p className="start-auto">
-            <CheckIcon size={16} /> <strong>Auto (recommended)</strong>
+            {!byHand && <CheckIcon size={16} />} <strong>Auto (recommended)</strong>
+            <button type="button" className="btn ghost" aria-pressed={byHand} onClick={() => setByHand(!byHand)}>
+              {byHand ? "Use Auto" : "Pick by hand"}
+            </button>
           </p>
           {professions.data && (
             <ul className="rows" aria-label="Professionals">
@@ -92,6 +100,15 @@ export function Start({ id }: { id: string }) {
                       <strong>{p.name}</strong>
                       <span className="hint">{p.why}</span>
                     </span>
+                    {byHand && PICKABLE.includes(p.role) && (
+                      <input
+                        type="checkbox"
+                        className="start-pick"
+                        aria-label={`${p.name} looks`}
+                        checked={picked.includes(p.role)}
+                        onChange={(e) => setPicked(e.target.checked ? [...picked, p.role] : picked.filter((r) => r !== p.role))}
+                      />
+                    )}
                   </div>
                 </li>
               ))}
@@ -104,7 +121,7 @@ export function Start({ id }: { id: string }) {
           </p>
         )}
         <div className="row">
-          <button type="submit" className="btn primary" disabled={busy || !!files.error}>
+          <button type="submit" className="btn primary" disabled={busy || !!files.error || (byHand && !picked.length)}>
             Check <ChevronIcon size={16} />
           </button>
         </div>

@@ -1999,6 +1999,15 @@ tbody tr + tr td {
 .start-auto strong {
   color: var(--ink);
 }
+.start-auto .btn {
+  margin-left: auto;
+}
+.start-pick {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  accent-color: var(--brand);
+}
 
 /* Assessment: her problem first, the rest as rows, the changes written for her */
 

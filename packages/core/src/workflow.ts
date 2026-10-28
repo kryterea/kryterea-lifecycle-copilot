@@ -90,11 +90,15 @@ export function questionOptions(record: CopilotRecord, changeId: string): Array<
   });
 }
 
+/** The professions a check can be limited to. The product owner always runs. */
+export const PICKABLE_ROLES = ["ba", "architect", "qa", "compliance"] as const satisfies readonly RoleId[];
+
 /**
  * Opens an understand change for a check: with the owner's problem in her own words, or of the whole repo.
- * The problem is kept as an artifact so the assessment can put it first.
+ * The problem is kept as an artifact so the assessment can put it first. `roles` limits which professions
+ * look (kept as a `scope` artifact); absent means every profession.
  */
-export function startCheck(record: CopilotRecord, i: { projectId: string; problem: string | null }): Change {
+export function startCheck(record: CopilotRecord, i: { projectId: string; problem: string | null; roles?: RoleId[] }): Change {
   const problem = i.problem?.trim() || null;
   const c = record.createChange({
     projectId: i.projectId,
@@ -103,8 +107,15 @@ export function startCheck(record: CopilotRecord, i: { projectId: string; proble
     kind: "understand",
   });
   if (problem) record.addArtifact({ changeId: c.id, role: "po", stage: "intake", kind: "problem", body: { text: problem } });
+  if (i.roles) record.addArtifact({ changeId: c.id, role: "po", stage: "intake", kind: "scope", body: { roles: i.roles } });
   return c;
 }
+
+/** True when the change was limited to some professions and this one is not among them. */
+const skipped = (record: CopilotRecord, changeId: string, role: RoleId): boolean => {
+  const roles = latestBody<{ roles?: RoleId[] }>(record, changeId, "scope")?.roles;
+  return role !== "po" && roles !== undefined && !roles.includes(role);
+};
 
 /** The problem the owner described when the check started, or null for a whole repo check. */
 export const problemOf = (record: CopilotRecord, changeId: string): string | null =>
@@ -125,8 +136,9 @@ function questionsGate(record: CopilotRecord, changeId: string): { state: GateSt
 export const withdrawal = (record: CopilotRecord, changeId: string) =>
   latestBody<{ reason: string; actor: string }>(record, changeId, "withdrawn") ?? null;
 
-/** Records the gate only when it differs from the current one. True when cleared. */
+/** Records the gate only when it differs from the current one. True when cleared. A profession left out of the scope is held. */
 function gate(record: CopilotRecord, changeId: string, role: RoleId, g: { state: GateState; reason: string }): boolean {
+  if (skipped(record, changeId, role)) g = { state: "held", reason: "Not checked" };
   const cur = record.gates(changeId)[role];
   if (cur?.state !== g.state || cur.reason !== g.reason) record.recordGate(changeId, role, g.state, g.reason);
   return g.state === "cleared";
@@ -167,6 +179,7 @@ function asBuiltFor(record: CopilotRecord, change: Change, projectWide = change.
  */
 async function runRole(s: Session, change: Change, role: RoleId, work: (ctx: RoleContext) => Promise<void>): Promise<void> {
   const { record } = s.deps;
+  if (skipped(record, change.id, role)) return;
   const repo = await s.repo();
   const runId = record.startRun({ changeId: change.id, role, commit: repo.commit });
   s.runIds.push(runId);

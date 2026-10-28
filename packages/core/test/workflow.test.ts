@@ -226,6 +226,32 @@ describe("workflow", () => {
     expect(problemOf(record, c.id)).toBeNull();
   });
 
+  it("a skipped profession does not run", async () => {
+    const { models, deps, project, runs, record } = setup();
+    const c = startCheck(record, { projectId: project.id, problem: null, roles: ["ba", "qa"] });
+    await advance(deps, c.id);
+    const roles = runs(c.id).map((x) => x.role);
+    expect(roles).toContain("ba");
+    expect(roles).toContain("qa");
+    expect(roles).not.toContain("compliance");
+    expect(roles).not.toContain("architect");
+    expect(models.names()).not.toContain("compliance.reviewCompliance");
+    expect(models.names()).not.toContain("architect.reviewOperations");
+  });
+
+  it("release stays Held while a profession is not checked", async () => {
+    const { deps, project, record } = setup();
+    const c = startCheck(record, { projectId: project.id, problem: null, roles: ["ba", "qa"] });
+    const r = await advance(deps, c.id);
+    expect(r.held).toEqual(["compliance", "architect"]);
+    expect(record.getChange(c.id).stage).toBe("release");
+    const g = record.gates(c.id);
+    expect(g.compliance).toMatchObject({ state: "held", reason: "Not checked" });
+    expect(g.architect).toMatchObject({ state: "held", reason: "Not checked" });
+    expect(g.ba?.state).toBe("cleared");
+    expect(g.qa?.state).toBe("cleared");
+  });
+
   it("an understand change gets proposed changes at release", async () => {
     const { record, models, deps, project } = setup();
     const base = models.handlers["ba.understandApp"]!;
