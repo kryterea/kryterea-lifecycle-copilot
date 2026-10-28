@@ -9,7 +9,7 @@ export interface Profession {
 }
 
 /** The five professions the copilot carries, in workflow order. */
-export const PROFESSIONS: Profession[] = [
+export const PROFESSIONS: readonly Profession[] = [
   {
     role: "ba",
     name: "Business analyst",
@@ -28,7 +28,7 @@ export const PROFESSIONS: Profession[] = [
     role: "qa",
     name: "QA",
     frameworks: ["Failure paths"],
-    checks: "Every step that can fail, repeat or be reversed",
+    checks: "Every step that can break, repeat or be reversed",
     why: "Refunds, retries and double clicks are failure paths",
   },
   {
