@@ -1583,17 +1583,27 @@ tbody tr + tr td {
 }
 .diff li {
   padding: 4px 10px;
-  border-left: 3px solid;
+  border-radius: var(--r-sm);
   font: 0.8125rem / 1.5 var(--mono);
 }
+.diff li::before {
+  margin-right: 8px;
+  font-weight: 600;
+}
 .diff .ins {
-  border-color: var(--cleared);
   background: var(--cleared-tint);
 }
+.diff .ins::before {
+  content: "+";
+  color: var(--cleared);
+}
 .diff .del {
-  border-color: var(--danger);
   background: var(--danger-tint);
   text-decoration: line-through;
+}
+.diff .del::before {
+  content: "\2212";
+  color: var(--danger);
 }
 .doc-gaps + .doc-gaps {
   margin-top: 12px;
