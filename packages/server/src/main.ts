@@ -108,7 +108,18 @@ const syncDeps = {
   status: syncStatus,
 };
 const jobs = new Jobs(console.error, syncAfterJob(syncDeps));
-const app = createApp(liveDeps, { budgetUsd, jobs, port, host: hostname, apiToken, model: modelName, fake });
+const app = createApp(liveDeps, {
+  budgetUsd,
+  jobs,
+  port,
+  host: hostname,
+  apiToken,
+  model: modelName,
+  fake,
+  linear: syncDeps.linear,
+  githubConnected: Boolean(githubToken),
+  syncStatus,
+});
 const webDir = join(root, "packages", "web", "dist", "app");
 if (existsSync(webDir)) app.get("*", serveStatic({ root: webDir }));
 

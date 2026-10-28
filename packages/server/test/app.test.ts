@@ -529,3 +529,139 @@ describe("push poller", () => {
     stop();
   });
 });
+
+describe("documents, trace, open items and connections", () => {
+  const SHA = "a".repeat(40);
+  function seedDocs() {
+    const { p, c, k, finding } = seedFinding();
+    const r = deps.record;
+    const doc = r.saveDocumentVersion({ projectId: p.id, name: "docs/PRD.md", source: "repo", body: "# PRD\nFR-1 Take a deposit.", commit: SHA });
+    const [req] = r.applyRequirements(doc.document.id, doc.version.id, [{ key: "FR-1", text: "Take a deposit", quote: "Take a deposit.", line: 2 }]).added;
+    r.linkRequirement(req!.id, "criterion", k.id);
+    const runId = r.startRun({ changeId: c.id, role: "qa", commit: SHA });
+    r.recordCheck({ criterionId: k.id, runId, state: "gap", evidence: [], note: "" });
+    r.finishRun(runId, "done");
+    return { p, c, k, finding, doc: doc.document, req: req! };
+  }
+
+  it("GET open-items ranks what is open, with the setup item when there are no documents", async () => {
+    const { call } = setup();
+    const { p } = seedFinding();
+    const r = await call("GET", `/api/projects/${p.id}/open-items`);
+    expect(r.status).toBe(200);
+    expect(r.json.total).toBe(2);
+    expect(r.json.items.map((i: { title: string }) => i.title)).toEqual(["No deposit on retry", "No PRD or spec found"]);
+  });
+
+  it("GET documents and one document with its versions, requirements and findings", async () => {
+    const { call } = setup();
+    const { p, doc } = seedDocs();
+    const list = await call("GET", `/api/projects/${p.id}/documents`);
+    expect(list.json.documents).toHaveLength(1);
+    expect(list.json.documents[0]).toMatchObject({ id: doc.id, name: "docs/PRD.md", requirements: 1, gaps: 0 });
+    const one = await call("GET", `/api/documents/${doc.id}`);
+    expect(one.json.document.name).toBe("docs/PRD.md");
+    expect(one.json.versions).toHaveLength(1);
+    expect(one.json.requirements.map((x: { key: string }) => x.key)).toEqual(["FR-1"]);
+    expect(one.json.findings).toEqual([]);
+    expect((await call("GET", "/api/documents/nope")).status).toBe(404);
+  });
+
+  it("POST documents stores an upload; empty is 400; over 200 KB is 413 with the plain message", async () => {
+    const { call } = setup();
+    const { p } = seedChange();
+    const ok = await call("POST", `/api/projects/${p.id}/documents`, { name: "Client brief", body: "The client wants refunds." });
+    expect(ok.status).toBe(201);
+    expect(ok.json).toMatchObject({ document: { name: "Client brief", source: "upload" }, changed: true });
+    expect((await call("POST", `/api/projects/${p.id}/documents`, { name: "", body: "x" })).status).toBe(400);
+    expect((await call("POST", `/api/projects/${p.id}/documents`, { name: "x", body: " " })).status).toBe(400);
+    const big = await call("POST", `/api/projects/${p.id}/documents`, { name: "Big", body: "x".repeat(200 * 1024 + 1) });
+    expect(big.status).toBe(413);
+    expect(big.json.error).toBe("That document is over 200 KB. Split it or paste the part that matters.");
+    const huge = await call("POST", `/api/projects/${p.id}/documents`, { name: "Huge", body: "x".repeat(600 * 1024) });
+    expect(huge.status).toBe(413);
+    expect(huge.json.error).toBe("That document is over 200 KB. Split it or paste the part that matters.");
+    // Other routes keep their 64 KB limit.
+    expect((await call("POST", `/api/projects/${p.id}/changes`, { title: "t", description: "x".repeat(70 * 1024), kind: "feature" })).status).toBe(413);
+  });
+
+  it("PUT doc-settings saves include and exclude globs", async () => {
+    const { call } = setup();
+    const { p } = seedChange();
+    const r = await call("PUT", `/api/projects/${p.id}/doc-settings`, { include: ["notes/**/*.md"], exclude: ["docs/old/**"] });
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ include: ["notes/**/*.md"], exclude: ["docs/old/**"] });
+    expect(deps.record.docSettings(p.id)).toEqual({ include: ["notes/**/*.md"], exclude: ["docs/old/**"] });
+    expect((await call("PUT", `/api/projects/${p.id}/doc-settings`, { include: "x", exclude: [] })).status).toBe(400);
+  });
+
+  it("GET requirements carries criteria, tickets, evidence, open and drift", async () => {
+    const { call } = setup();
+    const { p, req } = seedDocs();
+    deps.record.linkRequirement(req.id, "linear_issue", "ENG-12");
+    const r = await call("GET", `/api/projects/${p.id}/requirements`);
+    expect(r.json.requirements).toHaveLength(1);
+    expect(r.json.requirements[0]).toMatchObject({ key: "FR-1", criteria: 1, tickets: ["ENG-12"], evidence: "gap", open: 1, drifted: false });
+  });
+
+  it("GET requirement trace, and commit trace or 404", async () => {
+    const { call } = setup();
+    const { p, req } = seedDocs();
+    const t = await call("GET", `/api/requirements/${req.id}/trace`);
+    expect(t.json.requirement.key).toBe("FR-1");
+    expect(t.json.gaps).toContain("No Linear ticket");
+    expect((await call("GET", "/api/requirements/nope/trace")).status).toBe(404);
+    const ct = await call("GET", `/api/projects/${p.id}/commits/aaaaaaa/trace`);
+    expect(ct.status).toBe(200);
+    expect(ct.json.sha).toBe(SHA);
+    const none = await call("GET", `/api/projects/${p.id}/commits/bbbbbbb/trace`);
+    expect(none.status).toBe(404);
+    expect(none.json.error).toBe("Kryterea has not checked this commit.");
+  });
+
+  it("POST requirement linear links a ticket, or says why not", async () => {
+    const { req } = seedDocs();
+    const off = await setup().call("POST", `/api/requirements/${req.id}/linear`, { identifier: "ENG-12" });
+    expect(off.status).toBe(409);
+    expect(off.json.error).toBe("Linear is not connected.");
+    const linear = {
+      issue: async (id: string) => (id === "ENG-12" ? { id: "uuid", identifier: id, title: "Deposits", url: "https://linear.app/x/ENG-12" } : null),
+      upsertComment: async () => "c",
+    };
+    const { call } = setup({ linear });
+    const ok = await call("POST", `/api/requirements/${req.id}/linear`, { identifier: "eng-12" });
+    expect(ok.status).toBe(200);
+    expect(ok.json).toMatchObject({ requirementId: req.id, identifier: "ENG-12", url: "https://linear.app/x/ENG-12" });
+    expect(deps.record.requirementLinks(req.id).filter((l) => l.toType === "linear_issue").map((l) => l.toId)).toEqual(["ENG-12"]);
+    const missing = await call("POST", `/api/requirements/${req.id}/linear`, { identifier: "ENG-99" });
+    expect(missing.status).toBe(404);
+    expect(missing.json.error).toBe("Linear has no ticket ENG-99.");
+    expect((await call("POST", `/api/requirements/${req.id}/linear`, { identifier: "not a key" })).status).toBe(400);
+  });
+
+  it("GET connections shows each side's state and the MCP command", async () => {
+    const { req, p } = seedDocs();
+    deps.record.linkRequirement(req.id, "linear_issue", "ENG-12");
+    const off = await setup().call("GET", `/api/projects/${p.id}/connections`);
+    expect(off.json).toMatchObject({
+      github: { state: "off", detail: null, lastComment: null },
+      linear: { state: "off", detail: null, lastComment: null, tickets: 1 },
+      mcp: { command: "claude mcp add lifecycle-copilot -e COPILOT_URL=http://localhost:8787 -- node packages/mcp/dist/src/main.js" },
+    });
+    const syncStatus = new Map([
+      [
+        p.id,
+        {
+          linear: { state: "connected" as const, detail: null, lastComment: "ENG-12" },
+          github: { state: "error" as const, detail: "GitHub did not accept the token (401).", lastComment: null },
+        },
+      ],
+    ]);
+    const linear = { issue: async () => null, upsertComment: async () => "c" };
+    const on = await setup({ syncStatus, githubConnected: true, linear }).call("GET", `/api/projects/${p.id}/connections`);
+    expect(on.json.github).toEqual({ state: "error", detail: "GitHub did not accept the token (401).", lastComment: null });
+    expect(on.json.linear).toEqual({ state: "connected", detail: null, lastComment: "ENG-12", tickets: 1 });
+    const fresh = await setup({ githubConnected: true }).call("GET", `/api/projects/${p.id}/connections`);
+    expect(fresh.json.github).toEqual({ state: "connected", detail: null, lastComment: null });
+  });
+});

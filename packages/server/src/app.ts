@@ -7,20 +7,31 @@ import {
   advance,
   checkRepoUrl,
   criteriaOf,
+  driftRule,
   openFixChange,
+  openItems,
   openQuestions,
   recheck,
+  traceCommit,
+  traceRequirement,
   withdrawal,
   type ChangeKind,
+  type EvidenceState,
   type FindingStatus,
   type RunStatus,
   type WorkflowDeps,
 } from "@lifecycle/core";
+import type { linearClient } from "./linear.js";
+import type { ConnectionState, SyncStatus } from "./sync.js";
 
 const CHANGE_KINDS: readonly ChangeKind[] = ["understand", "feature", "fix"];
 const FINDING_STATUSES: readonly FindingStatus[] = ["open", "fixed", "accepted_risk", "deferred"];
 const RECHECK_REASONS = ["manual", "mcp"] as const;
 const MAX_BODY_BYTES = 64 * 1024;
+const MAX_DOC_BYTES = 200 * 1024;
+const DOC_TOO_BIG = "That document is over 200 KB. Split it or paste the part that matters.";
+const DOC_UPLOAD = /^\/api\/projects\/[^/]+\/documents$/;
+const MCP_COMMAND = "claude mcp add lifecycle-copilot -e COPILOT_URL=http://localhost:8787 -- node packages/mcp/dist/src/main.js";
 
 export interface Job {
   id: string;
@@ -105,7 +116,7 @@ export type Log = (message: string, error?: unknown) => void;
 
 class HttpError extends Error {
   constructor(
-    readonly status: 400 | 401 | 403 | 404 | 409 | 415,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 415 | 502,
     message: string,
     readonly extra: Record<string, unknown> = {},
   ) {
@@ -219,6 +230,12 @@ export interface AppOptions {
   /** Injectable for tests. */
   advanceFn?: typeof advance;
   recheckFn?: typeof recheck;
+  /** Null or absent when LINEAR_API_KEY is not set. */
+  linear?: Pick<ReturnType<typeof linearClient>, "issue" | "upsertComment"> | null;
+  /** True when GITHUB_TOKEN is set. */
+  githubConnected?: boolean;
+  /** Each project's last sync to GitHub and Linear (filled by sync.ts). */
+  syncStatus?: Map<string, SyncStatus>;
 }
 
 export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
@@ -231,7 +248,10 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
   const app = new Hono();
 
   app.use("/api/*", requestGuard({ port: opts.port ?? 8787, host: opts.host, apiToken: opts.apiToken }));
-  app.use("/api/*", bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json({ error: "Body is larger than 64 KB" }, 413) }));
+  // A document upload may carry up to 200 KB of text (JSON escaping can double it); everything else 64 KB.
+  const docLimit = bodyLimit({ maxSize: 2 * MAX_DOC_BYTES + 4096, onError: (c) => c.json({ error: DOC_TOO_BIG }, 413) });
+  const apiLimit = bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json({ error: "Body is larger than 64 KB" }, 413) });
+  app.use("/api/*", (c, next) => (c.req.method === "POST" && DOC_UPLOAD.test(c.req.path) ? docLimit : apiLimit)(c, next));
   app.onError((err, c) => {
     if (err instanceof HttpError) return c.json({ error: err.message, ...err.extra }, err.status);
     log(`${c.req.method} ${c.req.path} failed:`, err);
@@ -420,6 +440,115 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
     const change = record.getChange(finding.changeId);
     record.addArtifact({ changeId: change.id, role: finding.role, stage: change.stage, kind: "fix_report", body: { findingId: finding.id, summary } });
     return c.json(withFixReport(finding), 201);
+  });
+
+  app.get("/api/projects/:id/open-items", (c) => c.json(openItems(record, getProject(c.req.param("id")).id)));
+
+  /** Open findings raised on a document's lines. */
+  const docFindings = (projectId: string, name: string) =>
+    record.listFindings({ projectId, status: "open" }).filter((f) => f.trigger.type === "doc" && f.trigger.document === name);
+
+  app.get("/api/projects/:id/documents", (c) => {
+    const project = getProject(c.req.param("id"));
+    const requirements = record.listRequirements(project.id, { status: "active" });
+    const documents = record.listDocuments(project.id).map((d) => ({
+      ...d,
+      requirements: requirements.filter((r) => r.documentId === d.id).length,
+      gaps: docFindings(project.id, d.name).length,
+    }));
+    return c.json({ documents });
+  });
+
+  app.get("/api/documents/:id", (c) => {
+    const document = found(() => record.getDocument(c.req.param("id")));
+    return c.json({
+      document,
+      versions: record.documentVersions(document.id),
+      requirements: record.listRequirements(document.projectId).filter((r) => r.documentId === document.id),
+      findings: docFindings(document.projectId, document.name),
+    });
+  });
+
+  app.post("/api/projects/:id/documents", async (c) => {
+    const project = getProject(c.req.param("id"));
+    const b = await readBody(c);
+    const name = text(b, "name", 200).trim();
+    if (typeof b.body !== "string" || !b.body.trim()) throw bad("body is required");
+    if (Buffer.byteLength(b.body, "utf8") > MAX_DOC_BYTES) throw new HttpError(413, DOC_TOO_BIG);
+    return c.json(record.saveDocumentVersion({ projectId: project.id, name, source: "upload", body: b.body, commit: null }), 201);
+  });
+
+  app.put("/api/projects/:id/doc-settings", async (c) => {
+    const project = getProject(c.req.param("id"));
+    const b = await readBody(c);
+    const globs = (key: string) => {
+      const v = b[key];
+      if (!Array.isArray(v) || v.length > 50 || !v.every((g) => typeof g === "string" && g.trim() && g.length <= 200)) {
+        throw bad(`${key} must be a list of up to 50 file patterns`);
+      }
+      return v.map((g: string) => g.trim());
+    };
+    record.setDocSettings(project.id, { include: globs("include"), exclude: globs("exclude") });
+    return c.json(record.docSettings(project.id));
+  });
+
+  /** One state for a requirement's criteria: a gap anywhere wins, then evidence, then no evidence. */
+  const evidenceOf = (states: Array<EvidenceState | null>): EvidenceState | null =>
+    states.includes("gap") ? "gap" : states.includes("evidence_found") ? "evidence_found" : states.includes("no_evidence") ? "no_evidence" : null;
+
+  app.get("/api/projects/:id/requirements", (c) => {
+    const project = getProject(c.req.param("id"));
+    const requirements = record.listRequirements(project.id, { status: "active" }).map((req) => {
+      const t = traceRequirement(record, req.id);
+      const open = t.findings.filter((f) => f.status === "open");
+      return {
+        ...req,
+        criteria: t.criteria.length,
+        tickets: t.tickets,
+        evidence: evidenceOf(t.criteria.map((k) => k.latest?.state ?? null)),
+        open: open.length,
+        drifted: open.some((f) => driftRule(record, f.id) !== null),
+      };
+    });
+    return c.json({ requirements });
+  });
+
+  app.get("/api/requirements/:id/trace", (c) => c.json(found(() => traceRequirement(record, c.req.param("id")))));
+
+  app.post("/api/requirements/:id/linear", async (c) => {
+    const requirement = found(() => record.getRequirement(c.req.param("id")));
+    const b = await readBody(c);
+    const identifier = text(b, "identifier", 30).trim().toUpperCase();
+    if (!/^[A-Z][A-Z0-9]{1,9}-\d+$/.test(identifier)) throw bad("identifier must look like ENG-12");
+    if (!opts.linear) throw new HttpError(409, "Linear is not connected.");
+    const issue = await opts.linear.issue(identifier).catch((e: unknown) => {
+      throw new HttpError(502, e instanceof Error ? e.message : "Could not reach Linear.");
+    });
+    if (!issue) throw new HttpError(404, `Linear has no ticket ${identifier}.`);
+    record.linkRequirement(requirement.id, "linear_issue", identifier);
+    return c.json({ requirementId: requirement.id, identifier, title: issue.title, url: issue.url });
+  });
+
+  app.get("/api/projects/:id/commits/:sha/trace", (c) => {
+    const project = getProject(c.req.param("id"));
+    const trace = traceCommit(record, project.id, c.req.param("sha"));
+    if (!trace) throw new HttpError(404, "Kryterea has not checked this commit.");
+    return c.json(trace);
+  });
+
+  app.get("/api/projects/:id/connections", (c) => {
+    const project = getProject(c.req.param("id"));
+    const last = opts.syncStatus?.get(project.id);
+    const side = (on: boolean, s: ConnectionState | undefined): ConnectionState =>
+      on ? (s ?? { state: "connected", detail: null, lastComment: null }) : { state: "off", detail: null, lastComment: null };
+    const tickets = new Set(
+      record.listRequirements(project.id).flatMap((r) => record.requirementLinks(r.id).filter((l) => l.toType === "linear_issue").map((l) => l.toId)),
+    ).size;
+    return c.json({
+      github: side(opts.githubConnected === true, last?.github),
+      linear: { ...side(Boolean(opts.linear), last?.linear), tickets },
+      mcp: { command: MCP_COMMAND },
+    });
   });
 
   app.get("/api/findings/:id", (c) => {
