@@ -211,9 +211,13 @@ async function syncDocs(s: Session, change: Change): Promise<{ changed: string[]
 
   await runRole(s, change, "ba", async (ctx) => {
     const previous = due.flatMap((d) => record.listRequirements(projectId).filter((r) => r.documentId === d.id));
-    const out = await reviewDocuments(ctx, due.map((d) => ({ name: d.name, body: d.latest.body })), previous);
+    const out = await reviewDocuments(ctx, due.map((d) => ({ name: d.name, body: d.latest.body })), previous, record.listCriteria(projectId));
     for (const d of due) {
-      record.applyRequirements(d.id, d.latest.id, out.requirements.filter((r) => r.document === d.name));
+      const read = out.requirements.filter((r) => r.document === d.name);
+      record.applyRequirements(d.id, d.latest.id, read);
+      // Existing criteria the analyst matched. Links are only added, never removed by a later read.
+      const byKey = new Map(record.listRequirements(projectId).filter((r) => r.documentId === d.id).map((r) => [r.key, r.id]));
+      for (const r of read) for (const k of r.criterionIds) record.linkRequirement(byKey.get(r.key)!, "criterion", k);
     }
     const before = new Set(record.listFindings({ projectId, status: "open" }).map((f) => f.id));
     save(ctx, "ba", change.stage, { artifacts: [], criteria: [], findings: out.findings, questions: [], affectedCriterionIds: [] });
@@ -575,8 +579,9 @@ export async function recheck(
       confirmReportedFixes(record, projectId, repo.commit, shown);
     }
     if (toVerify.length) await verify(s, newest, "operate", toVerify);
-    // Drift: deterministic rules over the record and the diff, no model call. An unknown diff has no hunks.
-    const hunks = diff && base && base !== repo.commit ? await diffHunks(repo.dir, base, repo.commit).catch(() => []) : [];
+    // Drift: deterministic rules over the record and the diff, no model call. No baseline or no new commit: nothing
+    // changed. A baseline whose diff cannot be read is null, so every cited line counts as changed (fails closed).
+    const hunks = !base || base === repo.commit ? [] : diff ? await diffHunks(repo.dir, base, repo.commit).catch(() => null) : null;
     // A drift run is recorded only when a rule raises a finding.
     let driftRun: string | undefined;
     applyDrift(record, projectId, record.getChange(target.id), {

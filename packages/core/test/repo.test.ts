@@ -293,3 +293,23 @@ describe("diffHunks and commitMessages", () => {
     rmSync(d, { recursive: true, force: true });
   });
 });
+
+describe("diffHunks body lines", () => {
+  it("is not fooled by removed or added lines that look like file headers", async () => {
+    const d = mkdtempSync(join(tmpdir(), "lifecycle-hunks2-"));
+    git(d, "init", "-q");
+    writeFileSync(join(d, "q.sql"), "select 1;\n-- old comment\nselect 2;\n3\n4\n5\nend;\n");
+    git(d, "add", "-A");
+    git(d, "commit", "-q", "-m", "one");
+    const from = git(d, "rev-parse", "HEAD");
+    writeFileSync(join(d, "q.sql"), "select 1;\n++ b/evil.js\nselect 2;\n3\n4\n5\nEND;\n");
+    git(d, "add", "-A");
+    git(d, "commit", "-q", "-m", "two");
+    const to = git(d, "rev-parse", "HEAD");
+    expect(await diffHunks(d, from, to)).toEqual([
+      { file: "q.sql", start: 2, end: 2 },
+      { file: "q.sql", start: 7, end: 7 },
+    ]);
+    rmSync(d, { recursive: true, force: true });
+  });
+});

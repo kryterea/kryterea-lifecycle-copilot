@@ -176,16 +176,23 @@ export async function changedFiles(
  */
 export async function diffHunks(dir: string, from: string, to: string): Promise<Array<{ file: string; start: number; end: number }>> {
   if (!COMMIT_ID.test(from) || !COMMIT_ID.test(to)) throw new Error("diffHunks: from and to must be commit ids");
-  const raw = await git(["diff", "-U0", "--no-renames", "--no-color", from, to, "--"], { cwd: dir });
+  const raw = await git(["-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--no-color", from, to, "--"], { cwd: dir });
   const out: Array<{ file: string; start: number; end: number }> = [];
   let oldFile = "";
   let file: string | null = null;
+  // File headers are read only between "diff --git" and the first "@@": a body line can start with "---" or "+++".
+  let header = false;
   for (const line of raw.split("\n")) {
-    if (line.startsWith("--- ")) oldFile = line.slice(4).replace(/^a\//, "");
-    else if (line.startsWith("+++ ")) {
+    if (line.startsWith("diff --git ")) {
+      header = true;
+      file = null;
+    } else if (header && line.startsWith("--- ")) oldFile = line.slice(4).replace(/^a\//, "");
+    else if (header && line.startsWith("+++ ")) {
       file = line === "+++ /dev/null" ? null : line.slice(4).replace(/^b\//, "");
       if (file === null) out.push({ file: oldFile, start: 1, end: Number.MAX_SAFE_INTEGER });
-    } else if (file && line.startsWith("@@")) {
+    } else if (line.startsWith("@@")) {
+      header = false;
+      if (!file) continue;
       const m = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
       if (!m) continue;
       const start = Number(m[1]);

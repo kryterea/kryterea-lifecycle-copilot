@@ -1,4 +1,4 @@
-import type { JsonSchema, Requirement } from "../types.js";
+import type { Criterion, JsonSchema, Requirement } from "../types.js";
 import {
   checkTriggers,
   contextBlock,
@@ -33,6 +33,7 @@ interface RawRequirement {
   text: string;
   quote: string;
   line: number;
+  covers?: string[];
 }
 
 interface RawGap {
@@ -52,11 +53,14 @@ export interface ReadRequirement {
   text: string;
   quote: string;
   line: number;
+  /** Existing criteria the analyst found check this requirement. */
+  criterionIds: string[];
 }
 
 const INSTRUCTIONS = `Task: read the project's documents (PRD, specs, requirements) like a professional business analyst.
 1. Extract each requirement: one thing the product must do or be. Give its text in one sentence, its exact quote copied word for word from one line of the document, and that line's number as shown. Keep an ID written in the document (such as FR-3) as its key. Otherwise, when it is the same requirement as one in the previous requirements listed for that document (even reworded), reuse that key. Otherwise use the document's short name in capitals, a hyphen and the next free number (such as PRD-4).
-2. Raise at most ${MAX_GAPS} gaps, most important first. Check each requirement against the qualities in ISO/IEC/IEEE 29148 (necessary, unambiguous, verifiable, consistent, complete) and use kind "quality" for a requirement that lacks one. Use "failure_path" for a step that can fail, repeat or be reversed with no rule for it, "contradiction" when two documents or two lines disagree, and "missing_need" for a missing compliance, security or operations need. Each gap quotes the document word for word with its document name and line number. Say each gap in terms the owner can act on: title starts with what is wrong in plain words, fixPrompt says what to write in the document.
+2. In covers, list the labels (such as C1) of the existing acceptance criteria listed in the user message that check this requirement; empty if none.
+3. Raise at most ${MAX_GAPS} gaps, most important first. Check each requirement against the qualities in ISO/IEC/IEEE 29148 (necessary, unambiguous, verifiable, consistent, complete) and use kind "quality" for a requirement that lacks one. Use "failure_path" for a step that can fail, repeat or be reversed with no rule for it, "contradiction" when two documents or two lines disagree, and "missing_need" for a missing compliance, security or operations need. Each gap quotes the document word for word with its document name and line number. Say each gap in terms the owner can act on: title starts with what is wrong in plain words, fixPrompt says what to write in the document.
 Never quote text, a document or a line you were not given.`;
 
 const NOT_IN_DOCS = "Not in any document: ";
@@ -122,15 +126,18 @@ export async function reviewDocuments(
   ctx: RoleContext,
   docs: Array<{ name: string; body: string }>,
   previous: Requirement[],
+  criteria: Criterion[] = [],
 ): Promise<{ requirements: ReadRequirement[]; findings: RoleResult["findings"] }> {
   const block = documentsBlock(docs);
   const prev = previous.length ? previous.map((r) => `- ${defang(r.key)}: ${defang(r.text)}`).join("\n") : "(none)";
+  const labels = new Map(criteria.map((k, i) => [`C${i + 1}`, k.id]));
+  const crit = criteria.length ? criteria.map((k, i) => `C${i + 1}: ${defang(k.text)}`).join("\n") : "(none)";
   const { data } = await ctx.model<{ requirements: RawRequirement[]; gaps: RawGap[] }>({
     name: "ba.reviewDocuments",
     system: systemPrompt(ctx.packs.role.ba, INSTRUCTIONS),
-    user: `${contextBlock(ctx)}\n\nPrevious requirements (reuse a key when it is the same requirement):\n${prev}\n\n${block.text}`,
+    user: `${contextBlock(ctx)}\n\nPrevious requirements (reuse a key when it is the same requirement):\n${prev}\n\nExisting acceptance criteria:\n${crit}\n\n${block.text}`,
     schema: obj({
-      requirements: arr(obj({ document: str, key: str, text: str, quote: str, line: int })),
+      requirements: arr(obj({ document: str, key: str, text: str, quote: str, line: int, covers: { type: "array", items: str } })),
       gaps: arr(
         obj({
           document: str,
@@ -167,7 +174,8 @@ export async function reviewDocuments(
       key = `${prefix}-${n}`;
     }
     keys.add(key);
-    requirements.push({ document: r.document, key, text: r.text, quote: r.quote, line: r.line });
+    const criterionIds = [...new Set((r.covers ?? []).map((l) => labels.get(l.trim())).filter((id): id is string => id !== undefined))];
+    requirements.push({ document: r.document, key, text: r.text, quote: r.quote, line: r.line, criterionIds });
   }
 
   const findings = data.gaps

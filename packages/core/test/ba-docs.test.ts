@@ -172,3 +172,18 @@ describe("undocumentedFlows", () => {
     expect(seen).toHaveLength(0);
   });
 });
+
+describe("reviewDocuments with existing criteria", () => {
+  it("links each requirement to the existing criteria it covers, by label, dropping unknown labels", async () => {
+    const seen: ModelRequest[] = [];
+    const criteria = [{ id: "k1", projectId: "p1", changeId: "c0", text: "A merchant creates a link with an amount", isFailurePath: false, createdAt: "t" }];
+    const out = await reviewDocuments(
+      ctx(stub({ requirements: [{ ...req("FR-1", "Merchants create payment links with an amount.", 3), covers: ["C1", "C9"] }], gaps: [] }, seen)),
+      [{ name: "docs/PRD.md", body: PRD }],
+      [],
+      criteria,
+    );
+    expect(seen[0]!.user).toContain("C1: A merchant creates a link with an amount");
+    expect(out.requirements[0]!.criterionIds).toEqual(["k1"]);
+  });
+});

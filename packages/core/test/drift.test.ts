@@ -98,3 +98,27 @@ describe("applyDrift", () => {
     expect(t.drift([{ file: "server.js", start: 10, end: 20 }, { file: "other.js", start: 120, end: 120 }])).toEqual({ raised: 0, confirmed: 0 });
   });
 });
+
+describe("applyDrift identity and unknown diffs", () => {
+  it("a finding that only looks like a drift title is never confirmed by drift", () => {
+    const t = fresh();
+    const { finding } = t.record.addFinding({
+      projectId: t.project.id, changeId: t.change.id, runId: t.runId, role: "ba", stage: "intake", kind: "conformance",
+      title: "Requirement FR-9 has no acceptance criteria", plain: "p", costIfIgnored: "c", fixPrompt: "f",
+      trigger: { type: "doc", quote: "q", document: "docs/PRD.md", line: 1 },
+    });
+    expect(t.drift().confirmed).toBe(0);
+    expect(t.record.findingStatus(finding.id)).toBe("open");
+  });
+
+  it("an unknown diff sends every accepted risk on code back for review", () => {
+    const t = fresh();
+    const { finding } = t.record.addFinding({
+      projectId: t.project.id, changeId: t.change.id, runId: t.runId, role: "architect", stage: "operate", kind: "operations",
+      title: "No backups of payments", plain: "p", costIfIgnored: "c", fixPrompt: "f", trigger: { type: "code", file: "db.js", line: 4, commit: "a".repeat(40) },
+    });
+    t.record.setFindingStatus(finding.id, "accepted_risk", "Host snapshots", "Ada");
+    applyDrift(t.record, t.project.id, t.change, { hunks: null, commit: "b".repeat(40), runId: t.runId });
+    expect(t.open()).toEqual([["ba", "Accepted risk needs review: No backups of payments"]]);
+  });
+});
