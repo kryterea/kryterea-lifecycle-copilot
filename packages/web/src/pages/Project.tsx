@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import type { Change, ChangeKind, Project as ProjectT } from "@lifecycle/core";
-import { api, message, safeHref, useJob } from "../api";
+import { api, message, safeHref, useJob, useLoad } from "../api";
 import { BackIcon, ChevronIcon, CloseIcon, ExternalIcon, PlusIcon, RefreshIcon } from "../components/Icon";
+import { NeedsYou } from "../components/NeedsYou";
 import { JobNote, useSpend } from "../components/SpendMeter";
 import { MiniTrail, STAGE_NAMES } from "../components/Trail";
+import { Connections } from "./Connections";
+import { Documents } from "./Documents";
+import { Trace } from "./Trace";
 
 const KINDS: Array<[ChangeKind, string]> = [
   ["understand", "Baseline"],
@@ -11,6 +15,15 @@ const KINDS: Array<[ChangeKind, string]> = [
   ["fix", "Fix"],
 ];
 const KIND_NAME = Object.fromEntries(KINDS) as Record<ChangeKind, string>;
+
+export type Section = "changes" | "needs-you" | "documents" | "trace" | "connections";
+const SECTIONS: Array<[Section, string]> = [
+  ["changes", "Changes"],
+  ["needs-you", "Needs you"],
+  ["documents", "Documents"],
+  ["trace", "Trace"],
+  ["connections", "Connections"],
+];
 
 /** A link that opens the URL when it is a safe one; a local path stays plain text. */
 function Out({ label, url }: { label: string; url: string }) {
@@ -26,7 +39,7 @@ function Out({ label, url }: { label: string; url: string }) {
   );
 }
 
-export function Project({ id }: { id: string }) {
+export function Project({ id, section = "changes" }: { id: string; section?: Section }) {
   const [data, setData] = useState<{ project: ProjectT; changes: Array<Change & { withdrawn: boolean }> } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", description: "", kind: "feature" as ChangeKind });
@@ -34,6 +47,9 @@ export function Project({ id }: { id: string }) {
   const [adding, setAdding] = useState(false);
   const kindSet = useRef(false);
   const { refresh: refreshSpend } = useSpend();
+  const open = useLoad(() => api.openItems(id), id);
+  const docs = useLoad(() => api.documents(id), id);
+  const reqs = useLoad(() => api.requirements(id), id);
 
   const load = useCallback(() => {
     api.project(id).then((d) => {
@@ -47,6 +63,9 @@ export function Project({ id }: { id: string }) {
 
   const { job, running, start, startError } = useJob(() => {
     load();
+    open.reload();
+    docs.reload();
+    reqs.reload();
     refreshSpend();
   });
 
@@ -66,7 +85,13 @@ export function Project({ id }: { id: string }) {
   if (!data) return error ? <p className="error page-pad">{error}</p> : <p className="muted page-pad">Loading.</p>;
   const { project, changes } = data;
   const empty = changes.length === 0;
-  const open = adding || empty;
+  const formOpen = section === "changes" && (adding || empty);
+  const counts: Partial<Record<Section, number>> = {
+    changes: changes.length,
+    ...(open.data ? { "needs-you": open.data.total } : {}),
+    ...(docs.data ? { documents: docs.data.length } : {}),
+    ...(reqs.data ? { trace: reqs.data.length } : {}),
+  };
 
   return (
     <div className="page">
@@ -85,17 +110,31 @@ export function Project({ id }: { id: string }) {
           <button type="button" className="btn secondary icon" disabled={running} onClick={() => start(() => api.recheck(id))} aria-label="Re-check now" title="Re-check now">
             <RefreshIcon size={16} className={running ? "spin" : undefined} />
           </button>
-          {!empty && (
-            <button type="button" className={open ? "btn ghost" : "btn primary"} onClick={() => setAdding(!adding)} aria-expanded={open}>
-              {open ? <CloseIcon size={16} /> : <PlusIcon size={16} />}
-              {open ? "Close" : "New change"}
+          {section === "changes" && !empty && (
+            <button type="button" className={formOpen ? "btn ghost" : "btn primary"} onClick={() => setAdding(!adding)} aria-expanded={formOpen}>
+              {formOpen ? <CloseIcon size={16} /> : <PlusIcon size={16} />}
+              {formOpen ? "Close" : "New change"}
             </button>
           )}
         </div>
       </header>
       <JobNote job={job} startError={startError} />
 
-      {open && (
+      <nav className="sections" aria-label="Project sections">
+        {SECTIONS.map(([s, label]) => (
+          <a key={s} href={`#/projects/${id}${s === "changes" ? "" : `/${s}`}`} aria-current={s === section ? "page" : undefined} className={s === "needs-you" && counts[s] ? "has-open" : undefined}>
+            {label}
+            {counts[s] !== undefined && <span className="num">{counts[s]}</span>}
+          </a>
+        ))}
+      </nav>
+
+      {section === "needs-you" && <NeedsYou items={open.data} error={open.error} projectId={id} />}
+      {section === "documents" && <Documents projectId={id} rows={docs.data} error={docs.error} onChanged={docs.reload} />}
+      {section === "trace" && <Trace projectId={id} rows={reqs.data} error={reqs.error} />}
+      {section === "connections" && <Connections projectId={id} />}
+
+      {formOpen && (
         <form className="card form" onSubmit={create}>
           {empty && <p className="hint">Start with a baseline so every later change has one.</p>}
           <fieldset className="segmented">
@@ -128,7 +167,7 @@ export function Project({ id }: { id: string }) {
         </form>
       )}
 
-      {!empty && (
+      {section === "changes" && !empty && (
         <ul className="rows" aria-label="Changes">
           {changes.map((c) => (
             <li key={c.id}>

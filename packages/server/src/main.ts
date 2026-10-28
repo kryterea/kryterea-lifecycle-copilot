@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -61,7 +61,8 @@ if (fake) {
   modelFor = (ledger) => createModel({ ...options, ledger });
 }
 
-const dataDir = join(root, "data");
+// COPILOT_DATA_DIR keeps a scratch record apart from the real one (UI checks, demos).
+const dataDir = env.COPILOT_DATA_DIR ? resolve(env.COPILOT_DATA_DIR) : join(root, "data");
 mkdirSync(dataDir, { recursive: true });
 const deps = {
   record: CopilotRecord.open(join(dataDir, "copilot.db")),

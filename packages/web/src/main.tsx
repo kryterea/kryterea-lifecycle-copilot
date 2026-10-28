@@ -2,12 +2,15 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { SpendMeter, SpendProvider } from "./components/SpendMeter";
 import { Change } from "./pages/Change";
-import { Project } from "./pages/Project";
+import { CommitTrace } from "./pages/CommitTrace";
+import { DocumentDetail } from "./pages/DocumentDetail";
+import { Project, type Section } from "./pages/Project";
 import { Projects } from "./pages/Projects";
 import { Record } from "./pages/Record";
+import { Requirement } from "./pages/Requirement";
 import "./styles.css";
 
-/** Hash routes, so the server serves one index.html: #/, #/projects/:id, #/changes/:id, #/changes/:id/record. */
+/** Hash routes, so the server serves one index.html: projects (and their sections), changes, records, requirements. */
 function useHash() {
   const [hash, setHash] = useState(location.hash);
   useEffect(() => {
@@ -22,11 +25,19 @@ function useHash() {
 }
 
 function Page({ hash }: { hash: string }) {
-  const m = /^#\/(projects|changes)\/([^/]+)(\/record)?$/.exec(hash);
+  const d = decodeURIComponent;
+  let m = /^#\/projects\/([^/]+)\/documents\/([^/]+)$/.exec(hash);
+  if (m) return <DocumentDetail key={m[2]} projectId={d(m[1]!)} docId={d(m[2]!)} />;
+  m = /^#\/projects\/([^/]+)\/commits\/([^/]+)$/.exec(hash);
+  if (m) return <CommitTrace key={m[2]} projectId={d(m[1]!)} sha={d(m[2]!)} />;
+  m = /^#\/requirements\/([^/]+)$/.exec(hash);
+  if (m) return <Requirement key={m[1]} id={d(m[1]!)} />;
+  m = /^#\/projects\/([^/]+)(?:\/(needs-you|documents|trace|connections))?$/.exec(hash);
+  if (m) return <Project key={m[1]} id={d(m[1]!)} section={(m[2] as Section | undefined) ?? "changes"} />;
+  m = /^#\/changes\/([^/]+)(\/record)?$/.exec(hash);
   if (!m) return <Projects />;
-  const id = decodeURIComponent(m[2]!);
-  if (m[1] === "projects") return <Project key={id} id={id} />;
-  return m[3] ? <Record key={id} id={id} /> : <Change key={id} id={id} />;
+  const id = d(m[1]!);
+  return m[2] ? <Record key={id} id={id} /> : <Change key={id} id={id} />;
 }
 
 function App() {

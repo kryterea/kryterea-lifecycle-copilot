@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { Project } from "@lifecycle/core";
 import { api, message } from "../api";
 import { ChevronIcon, CloseIcon, PlusIcon } from "../components/Icon";
+import { Stamp } from "../components/Stamp";
 
 export function Projects() {
   const [projects, setProjects] = useState<Project[] | null>(null);
@@ -10,8 +11,14 @@ export function Projects() {
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
 
+  const [openCounts, setOpenCounts] = useState<Record<string, number>>({});
+
   useEffect(() => {
-    api.projects().then(setProjects, (e) => setError(message(e)));
+    api.projects().then((list) => {
+      setProjects(list);
+      // Each project's open count; one that cannot be read simply shows no stamp.
+      for (const p of list) api.openItems(p.id).then((r) => setOpenCounts((o) => ({ ...o, [p.id]: r.total })), () => {});
+    }, (e) => setError(message(e)));
   }, []);
 
   const create = async (e: FormEvent) => {
@@ -90,6 +97,7 @@ export function Projects() {
                   <strong>{p.name}</strong>
                   <span className="mono muted">{p.repoUrl.replace(/^https:\/\//i, "")}</span>
                 </span>
+                {openCounts[p.id] !== undefined && (openCounts[p.id] ? <Stamp tone="held">{`${openCounts[p.id]} open`}</Stamp> : <Stamp tone="cleared">Nothing open</Stamp>)}
                 <ChevronIcon size={16} className="go" />
               </a>
             </li>

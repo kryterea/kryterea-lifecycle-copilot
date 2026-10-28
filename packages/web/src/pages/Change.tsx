@@ -253,6 +253,12 @@ export function Change({ id }: { id: string }) {
   const findings = view.findings.filter((f) => (sel === "release" ? unresolved(f) : f.stage === sel || (sel === "operate" && afterDelivery.includes(f))));
   const openCount = findings.filter(unresolved).length;
   const duty = ON_DUTY[sel];
+  // Open gaps the analyst found in the documents, grouped by document.
+  const docGaps = new Map<string, typeof view.findings>();
+  for (const f of view.findings) {
+    if (f.status !== "open" || f.trigger.type !== "doc" || !f.trigger.document) continue;
+    docGaps.set(f.trigger.document, [...(docGaps.get(f.trigger.document) ?? []), f]);
+  }
   const isNow = sel === stage;
   const live = isNow && !withdrawn;
   const noCriteria = live && NEEDS_CRITERIA.includes(stage) && view.criteria.length === 0;
@@ -376,6 +382,43 @@ export function Change({ id }: { id: string }) {
           </ul>
         )}
 
+        {sel === "intake" && (view.documentsRead?.length ?? 0) > 0 && (
+          <div className="block">
+            <h3 className="block-head">Documents read</h3>
+            <ul className="plain-list">
+              {view.documentsRead!.map((d) => (
+                <li key={d.name} className="row">
+                  <code>{d.name}</code>
+                  <span className="muted">{d.requirements === 1 ? "1 requirement" : `${d.requirements} requirements`}</span>
+                  {d.gaps > 0 && <Stamp tone="held">{d.gaps === 1 ? "1 gap" : `${d.gaps} gaps`}</Stamp>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {sel === "analysis" && docGaps.size > 0 && (
+          <div className="block">
+            <h3 className="block-head">Document gaps</h3>
+            {[...docGaps].map(([doc, list]) => (
+              <div key={doc} className="doc-gaps">
+                <p>
+                  <code>{doc}</code>
+                </p>
+                <ul className="plain-list">
+                  {list.map((f) => (
+                    <li key={f.id}>
+                      <span className="muted">line {f.trigger.type === "doc" ? f.trigger.line : ""}</span> <q>{f.trigger.type === "doc" ? f.trigger.quote : ""}</q>
+                      <br />
+                      <a href={`#finding-${f.id}`}>{f.title}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+
         {sel === "verification" && view.criteria.length > 0 && (
           <div className="block">
             <h3 className="block-head">Acceptance criteria</h3>
@@ -384,6 +427,11 @@ export function Change({ id }: { id: string }) {
                 <li key={k.id}>
                   <EvidenceStamp state={k.latest} />
                   <span>
+                    {k.requirementKeys?.map((key) => (
+                      <span key={key} className="key">
+                        {key}
+                      </span>
+                    ))}
                     {k.text}
                     {k.isFailurePath && <span className="muted"> Failure path.</span>}
                   </span>
