@@ -57,4 +57,13 @@ describe("openItems", () => {
     expect(total).toBe(2);
     expect(items.at(-1)).toMatchObject({ kind: "setup", findingId: null, changeId: null, requirementId: null, title: "No PRD or spec found" });
   });
+
+  it("before the first run, repo documents are not read yet rather than missing", () => {
+    const record = CopilotRecord.open(":memory:");
+    const project = record.createProject({ name: "LagosPay", repoUrl: "x" });
+    const { items } = openItems(record, project.id);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: "setup", title: "Documents not read yet" });
+    expect(items[0]!.why).toContain("first change runs");
+  });
 });

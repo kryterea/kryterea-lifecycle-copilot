@@ -127,7 +127,7 @@ export function Documents({ projectId, rows, error, onChanged }: { projectId: st
       )}
       {patterns && <Patterns projectId={projectId} />}
       {rows.length === 0 ? (
-        <p className="empty">No PRD or spec found. Add one to the repo under docs/, or paste one here.</p>
+        <p className="empty">No PRD or spec yet. Kryterea reads them from docs/ in the repo each time a change runs, or paste one here.</p>
       ) : (
         <ul className="rows" aria-label="Documents">
           {rows.map((d) => (

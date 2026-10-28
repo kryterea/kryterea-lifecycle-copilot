@@ -54,14 +54,18 @@ export function openItems(record: CopilotRecord, projectId: string): { total: nu
     };
   });
   if (!record.listDocuments(projectId).length) {
+    // Repo documents are read when a run starts, so before the first run they are unread, not missing.
+    const unread = !record.commitsChecked(projectId).length;
     items.push({
       id: `setup:documents:${projectId}`,
       findingId: null,
       changeId: null,
       kind: "setup",
       role: "ba",
-      title: "No PRD or spec found",
-      why: "Kryterea checks the code against what was agreed. Add a PRD or spec under docs/, or upload one.",
+      title: unread ? "Documents not read yet" : "No PRD or spec found",
+      why: unread
+        ? "Kryterea reads the PRDs and specs under docs/ when the first change runs. You can also upload one."
+        : "Kryterea checks the code against what was agreed. Add a PRD or spec under docs/, or upload one.",
       where: "docs/",
       requirementKey: null,
       requirementId: null,
