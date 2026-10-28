@@ -170,8 +170,10 @@ function stillHolds(record: CopilotRecord, f: Finding, rule: DriftRule, holds: M
   const subjects = record.linksFrom({ type: "finding", id: f.id }).filter((l) => l.rel === "affects");
   switch (rule) {
     case "evidence_lines_changed": {
+      // Against the latest time it was raised: a reopened finding keeps its first createdAt.
       const at = f.criterionId ? record.latestCheckInfo(f.criterionId)?.at : undefined;
-      return at === undefined || at <= f.createdAt;
+      const raisedAt = record.findingHistory(f.id).findLast((h) => h.status === "open")?.at ?? f.createdAt;
+      return at === undefined || at <= raisedAt;
     }
     case "accepted_risk_changed": {
       // Holds until a person decides on the original again after this review was raised.

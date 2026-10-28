@@ -127,8 +127,10 @@ export async function reviewDocuments(
   docs: Array<{ name: string; body: string }>,
   previous: Requirement[],
   criteria: Criterion[] = [],
-): Promise<{ requirements: ReadRequirement[]; findings: RoleResult["findings"] }> {
+): Promise<{ requirements: ReadRequirement[]; findings: RoleResult["findings"]; shown: Map<string, number> }> {
   const block = documentsBlock(docs);
+  // Lines shown per document. A document missing here was past the reading limit and was not read at all.
+  const shown = new Map([...block.lines].map(([name, lines]) => [name, lines.length]));
   const prev = previous.length ? previous.map((r) => `- ${defang(r.key)}: ${defang(r.text)}`).join("\n") : "(none)";
   const labels = new Map(criteria.map((k, i) => [`C${i + 1}`, k.id]));
   const crit = criteria.length ? criteria.map((k, i) => `C${i + 1}: ${defang(k.text)}`).join("\n") : "(none)";
@@ -189,5 +191,5 @@ export async function reviewDocuments(
       fixPrompt: g.fixPrompt,
       trigger: { type: "doc" as const, quote: g.quote, document: g.document, line: g.line },
     }));
-  return { requirements, findings };
+  return { requirements, findings, shown };
 }

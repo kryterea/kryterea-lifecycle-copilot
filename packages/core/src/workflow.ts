@@ -1,7 +1,7 @@
 import { discoverDocuments } from "./docs/discover.js";
 import { findingFingerprint, ledgerFor, type CopilotRecord } from "./record/record.js";
 import { changedFiles, diffHunks, listSourceFiles, readLines, syncRepo } from "./repo/repo.js";
-import { applyDrift } from "./drift.js";
+import { applyDrift, driftRule } from "./drift.js";
 import { architectGate, reviewOperations } from "./roles/architect.js";
 import { analyseChange, analyseImpact, baGate, understandApp } from "./roles/ba.js";
 import { reviewDocuments, undocumentedFlows } from "./roles/ba-docs.js";
@@ -178,9 +178,11 @@ function readVersions(record: CopilotRecord, projectId: string): Set<string> {
   return new Set(ids);
 }
 
-/** Open document findings by the analyst: a doc trigger that names a document. */
+/** Open document gaps by the analyst: a doc trigger that names a document. Drift findings are not gaps in a document. */
 const docGapsOn = (record: CopilotRecord, changeId: string) =>
-  record.listFindings({ changeId, status: "open" }).filter((f) => f.role === "ba" && f.trigger.type === "doc" && f.trigger.document !== undefined);
+  record
+    .listFindings({ changeId, status: "open" })
+    .filter((f) => f.role === "ba" && f.trigger.type === "doc" && f.trigger.document !== undefined && driftRule(record, f.id) === null);
 
 /** The analyst's gate for documents: held while any document gap raised on the change is open. */
 function docGate(record: CopilotRecord, changeId: string): { state: GateState; reason: string } {
@@ -210,39 +212,62 @@ async function syncDocs(s: Session, change: Change): Promise<{ changed: string[]
   if (!due.length) return { changed: [] };
 
   await runRole(s, change, "ba", async (ctx) => {
-    const previous = due.flatMap((d) => record.listRequirements(projectId).filter((r) => r.documentId === d.id));
-    const out = await reviewDocuments(ctx, due.map((d) => ({ name: d.name, body: d.latest.body })), previous, record.listCriteria(projectId));
-    for (const d of due) {
-      const read = out.requirements.filter((r) => r.document === d.name);
-      record.applyRequirements(d.id, d.latest.id, read);
-      // Existing criteria the analyst matched. Links are only added, never removed by a later read.
-      const byKey = new Map(record.listRequirements(projectId).filter((r) => r.documentId === d.id).map((r) => [r.key, r.id]));
-      for (const r of read) for (const k of r.criterionIds) record.linkRequirement(byKey.get(r.key)!, "criterion", k);
+    // One call reads as many documents as fit; the rest go to the next call, so none is skipped.
+    let pending = due;
+    while (pending.length) {
+      const previous = pending.flatMap((d) => record.listRequirements(projectId).filter((r) => r.documentId === d.id));
+      const out = await reviewDocuments(ctx, pending.map((d) => ({ name: d.name, body: d.latest.body })), previous, record.listCriteria(projectId));
+      const batch = pending.filter((d) => out.shown.has(d.name));
+      if (!batch.length) break;
+      pending = pending.filter((d) => !out.shown.has(d.name));
+      for (const d of batch) {
+        const read = out.requirements.filter((r) => r.document === d.name);
+        // A document cut at the reading limit keeps each requirement the model could not see (its quote is not in the
+        // lines shown), at the line its quote is on now.
+        const lines = d.latest.body.replaceAll("\r\n", "\n").split("\n");
+        const shownText = lines.slice(0, out.shown.get(d.name)!).join("\n");
+        const keys = new Set(read.map((r) => r.key));
+        const kept =
+          shownText.length < lines.join("\n").length
+            ? previous
+                .filter((r) => r.documentId === d.id && r.status === "active" && !keys.has(r.key) && !shownText.includes(r.quote))
+                .map((r) => ({ ...r, line: lines.findIndex((l) => l.includes(r.quote)) + 1 || r.line }))
+            : [];
+        record.applyRequirements(d.id, d.latest.id, [...read, ...kept]);
+        // Existing criteria the analyst matched. Links are only added, never removed by a later read.
+        const byKey = new Map(record.listRequirements(projectId).filter((r) => r.documentId === d.id).map((r) => [r.key, r.id]));
+        for (const r of read) for (const k of r.criterionIds) record.linkRequirement(byKey.get(r.key)!, "criterion", k);
+      }
+      const before = new Set(record.listFindings({ projectId, status: "open" }).map((f) => f.id));
+      save(ctx, "ba", change.stage, { artifacts: [], criteria: [], findings: out.findings, questions: [], affectedCriterionIds: [] });
+      const raised = new Set(out.findings.map((f) => findingFingerprint(projectId, "ba", f.kind, f.title)));
+      // A gap the re-read did not raise again closes only when its quoted line is gone, or a new gap quotes that line.
+      for (const f of record.listFindings({ projectId, status: "open" })) {
+        const t = f.trigger;
+        if (!before.has(f.id) || f.role !== "ba" || t.type !== "doc" || raised.has(f.fingerprint) || driftRule(record, f.id) !== null) continue;
+        const doc = batch.find((d) => d.name === t.document);
+        if (!doc) continue;
+        const again = out.findings.find((g) => g.trigger.type === "doc" && g.trigger.document === t.document && g.trigger.quote === t.quote);
+        if (again) record.setFindingStatus(f.id, "fixed", `Raised again on re-read as "${again.title}"`, "ba");
+        else if (!doc.latest.body.includes(t.quote)) record.setFindingStatus(f.id, "fixed", `Not raised again on re-read at ${doc.latest.contentHash.slice(0, 7)}`, "ba");
+      }
+      record.addArtifact({
+        changeId: change.id,
+        role: "ba",
+        stage: change.stage,
+        kind: "documents_read",
+        body: {
+          documents: batch.map((d) => ({
+            name: d.name,
+            versionId: d.latest.id,
+            hash: d.latest.contentHash,
+            commit: d.latest.commit,
+            requirements: out.requirements.filter((r) => r.document === d.name).length,
+            gaps: out.findings.filter((f) => f.trigger.type === "doc" && f.trigger.document === d.name).length,
+          })),
+        },
+      });
     }
-    const before = new Set(record.listFindings({ projectId, status: "open" }).map((f) => f.id));
-    save(ctx, "ba", change.stage, { artifacts: [], criteria: [], findings: out.findings, questions: [], affectedCriterionIds: [] });
-    const raised = new Set(out.findings.map((f) => findingFingerprint(projectId, "ba", f.kind, f.title)));
-    for (const f of record.listFindings({ projectId, status: "open" })) {
-      if (!before.has(f.id) || f.role !== "ba" || f.trigger.type !== "doc" || raised.has(f.fingerprint)) continue;
-      const doc = due.find((d) => d.name === (f.trigger as { document?: string }).document);
-      if (doc) record.setFindingStatus(f.id, "fixed", `Not raised again on re-read at ${doc.latest.contentHash.slice(0, 7)}`, "ba");
-    }
-    record.addArtifact({
-      changeId: change.id,
-      role: "ba",
-      stage: change.stage,
-      kind: "documents_read",
-      body: {
-        documents: due.map((d) => ({
-          name: d.name,
-          versionId: d.latest.id,
-          hash: d.latest.contentHash,
-          commit: d.latest.commit,
-          requirements: out.requirements.filter((r) => r.document === d.name).length,
-          gaps: out.findings.filter((f) => f.trigger.type === "doc" && f.trigger.document === d.name).length,
-        })),
-      },
-    });
   });
   return { changed: due.map((d) => d.name) };
 }
@@ -268,10 +293,12 @@ function notRaisedYet(record: CopilotRecord, projectId: string, findings: RoleRe
   const open = record.listFindings({ projectId, status: "open" });
   return findings.filter((f) => {
     const t = f.trigger;
+    // A drift finding never covers QA's finding: it closes on its own rule, which would take QA's gap with it.
     const same = open.find(
       (o) =>
-        (f.criterionId !== undefined && o.criterionId === f.criterionId) ||
-        (o.kind === "failure_path" && t.type === "code" && o.trigger.type === "code" && o.trigger.file === t.file && Math.abs(o.trigger.line - t.line) <= 3),
+        driftRule(record, o.id) === null &&
+        ((f.criterionId !== undefined && o.criterionId === f.criterionId) ||
+          (o.kind === "failure_path" && t.type === "code" && o.trigger.type === "code" && o.trigger.file === t.file && Math.abs(o.trigger.line - t.line) <= 3)),
     );
     if (same && f.criterionId && same.criterionId !== f.criterionId) {
       record.link({ type: "finding", id: same.id }, "affects", { type: "criterion", id: f.criterionId });

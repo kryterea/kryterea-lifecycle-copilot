@@ -61,6 +61,22 @@ describe("applyDrift", () => {
     expect(f!.trigger).toEqual({ type: "code", file: "server.js", line: 120, commit: "b".repeat(40) });
   });
 
+  it("evidence_lines_changed raised again after a later check stays open until the next check", async () => {
+    const t = fresh();
+    const k = t.criterion("A refund marks the payment refunded");
+    const check = () =>
+      t.record.recordCheck({ criterionId: k.id, runId: t.runId, state: "evidence_found", evidence: [{ type: "code", file: "server.js", line: 120, commit: "a".repeat(40) }], note: "" });
+    check();
+    t.drift([{ file: "server.js", start: 118, end: 121 }]);
+    await tick();
+    check();
+    await tick();
+    expect(t.drift([]).confirmed).toBe(1);
+    await tick();
+    t.drift([{ file: "server.js", start: 119, end: 120 }], "c".repeat(40));
+    expect(t.open()).toEqual([["qa", 'Code behind the evidence for "A refund marks the payment refunded" changed']]);
+  });
+
   it("an accepted risk whose trigger lines change gets a review finding and keeps its acceptance", () => {
     const t = fresh();
     const { finding } = t.record.addFinding({

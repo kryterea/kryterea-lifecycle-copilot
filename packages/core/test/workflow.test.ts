@@ -688,6 +688,22 @@ describe("workflow", () => {
     expect(record.listFindings({ projectId: project.id, status: "open" }).filter((f) => f.kind === "failure_path")).toHaveLength(0);
   });
 
+  it("QA's gap is kept beside a drift finding on the same criterion, and outlives it", async () => {
+    const { record, models, deps, change, crit, project, origin } = setup();
+    await advance(deps, change("understand").id);
+    const f = change("feature", "Take a deposit");
+    await advance(deps, f.id);
+    const book = crit("CRIT-BOOK");
+    models.qa["CRIT-BOOK"] = { state: "gap", evidence: [{ file: "src/app.js", line: 2 }], note: "No slot check.", title: "Booking accepts an empty slot", plain: "An empty slot is saved.", costIfIgnored: "Broken bookings.", fixPrompt: "Check the slot." };
+    origin.put("src/app.js", "export function book(slot) {\n  return save(slot);\n}\n");
+    origin.commit("drop the slot check");
+    await recheck(deps, project.id, "push");
+    const onBook = () => record.listFindings({ projectId: project.id, status: "open" }).filter((x) => x.criterionId === book.id).map((x) => x.title);
+    expect(onBook()).toContain("Booking accepts an empty slot");
+    await recheck(deps, project.id, "manual");
+    expect(onBook()).toContain("Booking accepts an empty slot");
+  });
+
   describe("documents", () => {
     const PRD = "# Salon PRD\n\nFR-1: Customers book a slot online.\nCancelling should be easy.\n";
     const docGap = { document: "docs/PRD.md", kind: "quality", title: "Easy cancelling cannot be checked", plain: "Nobody can tell what easy means.", costIfIgnored: "Arguments about cancelling.", fixPrompt: "Say how cancelling works.", quote: "Cancelling should be easy.", line: 4 };
@@ -790,6 +806,74 @@ describe("workflow", () => {
       const { models, deps, change } = setup();
       await advance(deps, change("understand").id);
       expect(models.names()).not.toContain("ba.undocumentedFlows");
+    });
+
+    it("documents past the reading limit are read in a later call, not dropped", async () => {
+      const { record, models, deps, change, project, origin } = withPrd();
+      const big = ["# Big", ...Array.from({ length: 2000 }, (_, i) => `Line ${i} ${"x".repeat(40)}`)].join("\n");
+      origin.put("docs/A-big.md", big);
+      origin.commit("big doc");
+      const c = change("understand");
+      await advance(deps, c.id);
+      expect(models.names().filter((n) => n === "ba.reviewDocuments")).toHaveLength(2);
+      expect(record.listRequirements(project.id, { status: "active" }).map((r) => r.key)).toEqual(["FR-1"]);
+      const read = record.listArtifacts(c.id).filter((a) => a.kind === "documents_read").flatMap((a) => (a.body as { documents: Array<{ name: string }> }).documents.map((d) => d.name));
+      expect(read.sort()).toEqual(["docs/A-big.md", "docs/PRD.md"]);
+    });
+
+    it("a requirement and a gap past the reading limit stay as they were", async () => {
+      const { record, deps, change, project, origin } = withPrd();
+      await advance(deps, change("understand").id);
+      const filler = Array.from({ length: 2000 }, (_, i) => `Note ${i} ${"x".repeat(40)}`).join("\n");
+      origin.put("docs/PRD.md", PRD.replace("# Salon PRD\n", `# Salon PRD\n${filler}\n`));
+      origin.commit("long PRD");
+      await recheck(deps, project.id, "push");
+      expect(record.listRequirements(project.id, { status: "active" }).map((r) => r.key)).toEqual(["FR-1"]);
+      expect(record.listFindings({ projectId: project.id, status: "open" }).map((f) => f.title)).toContain(docGap.title);
+    });
+
+    it("a gap whose quoted line is still there stays open when a re-read does not raise it", async () => {
+      const { record, models, deps, change, project, origin } = withPrd();
+      await advance(deps, change("understand").id);
+      models.handlers["ba.reviewDocuments"] = () => ({ requirements: [{ document: "docs/PRD.md", key: "FR-1", text: "Customers book a slot online.", quote: "FR-1: Customers book a slot online.", line: 3 }], gaps: [] });
+      origin.put("docs/PRD.md", `${PRD}Prices are in naira.\n`);
+      origin.commit("add prices");
+      await recheck(deps, project.id, "push");
+      expect(record.listFindings({ projectId: project.id, status: "open" }).map((f) => f.title)).toContain(docGap.title);
+    });
+
+    it("a gap reworded on re-read replaces the old one on the same line", async () => {
+      const { record, models, deps, change, project, origin } = withPrd();
+      await advance(deps, change("understand").id);
+      models.handlers["ba.reviewDocuments"] = () => ({ requirements: [], gaps: [{ ...docGap, title: "Cancelling has no rule" }] });
+      origin.put("docs/PRD.md", `${PRD}Prices are in naira.\n`);
+      origin.commit("add prices");
+      await recheck(deps, project.id, "push");
+      const open = record.listFindings({ projectId: project.id, status: "open" }).filter((f) => f.trigger.type === "doc" && f.trigger.quote === docGap.quote);
+      expect(open.map((f) => f.title)).toEqual(["Cancelling has no rule"]);
+    });
+
+    it("drift findings on a document survive a re-read and never hold the analyst's gate", async () => {
+      const { record, models, deps, change, project, origin } = withPrd();
+      const base = models.handlers["ba.reviewDocuments"]!;
+      models.handlers["ba.reviewDocuments"] = (req) => {
+        const out = base(req) as { requirements: unknown[]; gaps: unknown[] };
+        return { ...out, requirements: [...out.requirements, { document: "docs/PRD.md", key: "FR-2", text: "Customers cancel online.", quote: "Cancelling should be easy.", line: 4 }] };
+      };
+      const c = change("understand");
+      await advance(deps, c.id);
+      const [gap] = record.listFindings({ changeId: c.id, status: "open" });
+      record.setFindingStatus(gap!.id, "accepted_risk", "Agreed with the client", "owner");
+      await recheck(deps, project.id, "manual");
+      const drift = record.listFindings({ projectId: project.id, status: "open" }).find((f) => f.title === "Requirement FR-2 has no acceptance criteria");
+      expect(drift).toBeDefined();
+      expect(record.gates(c.id).ba?.state).toBe("cleared");
+
+      models.handlers["ba.reviewDocuments"] = () => ({ requirements: [], gaps: [] });
+      origin.put("docs/PRD.md", PRD.replace("Cancelling should be easy.", "Cancelling is free."));
+      origin.commit("reword cancel");
+      await advance(deps, change("feature", "Add deposits").id);
+      expect(record.findingStatus(drift!.id)).toBe("open");
     });
 
     it("no documents: no document model call and no document findings", async () => {
