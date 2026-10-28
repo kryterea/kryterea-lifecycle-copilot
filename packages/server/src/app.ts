@@ -42,7 +42,11 @@ export class Jobs {
   private readonly jobs = new Map<string, Job>();
   private readonly locks = new Map<string, string>();
 
-  constructor(private readonly log: Log = console.error) {}
+  /** `settled` runs after every job, failed ones included (the sync to GitHub and Linear). */
+  constructor(
+    private readonly log: Log = console.error,
+    private readonly settled?: (job: Job) => void,
+  ) {}
 
   get(id: string): Job | undefined {
     return this.jobs.get(id);
@@ -88,6 +92,7 @@ export class Jobs {
       .finally(() => {
         job.finishedAt = new Date().toISOString();
         this.locks.delete(lock);
+        this.settled?.(job);
       });
     return { jobId: job.id, started: true };
   }
