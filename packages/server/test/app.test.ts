@@ -1,9 +1,10 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BudgetExceededError, CopilotRecord, type Packs, type WorkflowDeps } from "@lifecycle/core";
-import { Jobs, createApp, type AppOptions } from "../src/app.js";
+import { Jobs, createApp, nameFromRepo, type AppOptions } from "../src/app.js";
 import { pollOnce, startPoller } from "../src/poller.js";
 
 const packs: Packs = {
@@ -117,7 +118,7 @@ describe("HTTP API", () => {
       expect(r.status).toBe(400);
       expect(r.json.error).toMatch(/repoUrl/);
     }
-    expect((await call("POST", "/api/projects", { repoUrl: REPO })).status).toBe(400);
+    expect((await call("POST", "/api/projects", { repoUrl: "" })).status).toBe(400);
     expect((await call("POST", "/api/projects", { name: "x".repeat(201), repoUrl: REPO })).status).toBe(400);
     expect((await call("POST", "/api/projects", "not json")).status).toBe(400);
     expect(deps.record.listProjects()).toEqual([]);
@@ -131,6 +132,132 @@ describe("HTTP API", () => {
     deps.allowLocalRepos = true;
     const { call } = setup();
     expect((await call("POST", "/api/projects", { name: "Local", repoUrl: dir })).status).toBe(201);
+  });
+
+  it("creates a project named from the repo", async () => {
+    const { call } = setup();
+    const r = await call("POST", "/api/projects", { repoUrl: "https://github.com/kryterea/demo-merchant-payments" });
+    expect(r.status).toBe(201);
+    expect(r.json.name).toBe("Demo merchant payments");
+    expect(nameFromRepo("https://github.com/a/billing_api.git")).toBe("Billing api");
+  });
+
+  it("names a local repo from its folder", async () => {
+    deps.allowLocalRepos = true;
+    const { call } = setup();
+    const repo = join(dir, "salon-booking");
+    mkdirSync(repo);
+    const r = await call("POST", "/api/projects", { repoUrl: repo });
+    expect(r.json.name).toBe("Salon booking");
+  });
+
+  /** A committed local repo with the given files, for routes that sync. */
+  function fixtureRepo(files: Record<string, string>): string {
+    const repo = join(dir, "fixture");
+    mkdirSync(repo);
+    const git = (...a: string[]) =>
+      execFileSync("git", ["-c", "user.name=T", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", ...a], { cwd: repo });
+    git("init", "-q");
+    for (const [rel, body] of Object.entries(files)) {
+      mkdirSync(dirname(join(repo, rel)), { recursive: true });
+      writeFileSync(join(repo, rel), body);
+    }
+    git("add", "-A");
+    git("commit", "-q", "-m", "init");
+    return repo;
+  }
+
+  it("lists the files picked up, grouped", async () => {
+    deps.allowLocalRepos = true;
+    const repoUrl = fixtureRepo({
+      "src/a.js": "export const a = 1;\n",
+      "docs/PRD.md": "# Salon\n\nTake a deposit.\nRefund on cancel.\n",
+      "package.json": "{}\n",
+      "test/a.test.js": "test();\n",
+    });
+    const { call } = setup();
+    const p = (await call("POST", "/api/projects", { repoUrl })).json;
+    const r = await call("GET", `/api/projects/${p.id}/files`);
+    expect(r.status).toBe(200);
+    expect(r.json.commit).toMatch(/^[0-9a-f]{40}$/);
+    const group = (kind: string) => r.json.groups.find((g: any) => g.kind === kind).files;
+    expect(group("code")).toEqual(["src/a.js"]);
+    expect(group("documents")).toEqual(["docs/PRD.md"]);
+    expect(group("config")).toEqual(["package.json"]);
+    expect(group("tests")).toEqual(["test/a.test.js"]);
+    expect(r.json.documents).toEqual([{ path: "docs/PRD.md", lines: 4 }]);
+  });
+
+  it("check starts an understand change with the problem", async () => {
+    const { p } = seedChange();
+    const advanceFn = vi.fn(async () => ({ stage: "intake" as const, held: [] as [], stoppedForBudget: false }));
+    const { call } = setup({ advanceFn });
+    const r = await call("POST", `/api/projects/${p.id}/check`, { problem: "Customers get charged twice." });
+    expect(r.status).toBe(202);
+    expect(r.json.jobId).toBeTruthy();
+    const view = (await call("GET", `/api/changes/${r.json.changeId}`)).json;
+    expect(view.change.kind).toBe("understand");
+    expect(view.problem).toBe("Customers get charged twice.");
+    expect(view.proposals).toBeNull();
+    expect(view.decisions).toEqual([]);
+    expect(advanceFn).toHaveBeenCalledWith(deps, r.json.changeId);
+    expect((await call("POST", `/api/projects/${p.id}/check`, { problem: "x".repeat(501) })).status).toBe(400);
+  });
+
+  it("check with no problem is a whole repo check", async () => {
+    const { p } = seedChange();
+    const { call } = setup({ advanceFn: async () => ({ stage: "intake", held: [], stoppedForBudget: false }) });
+    const r = await call("POST", `/api/projects/${p.id}/check`, {});
+    expect(r.status).toBe(202);
+    const view = (await call("GET", `/api/changes/${r.json.changeId}`)).json;
+    expect(view.problem).toBeNull();
+    expect(view.change.title).toBe("Whole repo check");
+  });
+
+  describe("proposals", () => {
+    function seedProposals() {
+      const { p, c } = seedChange();
+      const body = { answersProblem: [], duplicates: [], changes: [{ title: "Charge once", forWhom: "Customers", why: "No double charge.", findingIds: [], criteria: [{ text: "One charge per order", isFailurePath: false }] }] };
+      deps.record.addArtifact({ changeId: c.id, role: "po", stage: "release", kind: "proposed_changes", body });
+      return { p, c };
+    }
+
+    it("approve and accept-risk go through", async () => {
+      const { call } = setup();
+      const { c } = seedProposals();
+      expect((await call("POST", `/api/changes/${c.id}/proposals/0/approve`, {})).status).toBe(400);
+      expect((await call("POST", `/api/changes/${c.id}/proposals/7/approve`, { actor: "Ada" })).status).toBe(404);
+      const ok = await call("POST", `/api/changes/${c.id}/proposals/0/approve`, { actor: "Ada" });
+      expect(ok.status).toBe(201);
+      expect(ok.json.kind).toBe("fix");
+      expect((await call("POST", `/api/changes/${c.id}/proposals/0/approve`, { actor: "Ada" })).json.id).toBe(ok.json.id);
+      const view = (await call("GET", `/api/changes/${c.id}`)).json;
+      expect(view.proposals.changes).toHaveLength(1);
+      expect(view.decisions).toMatchObject([{ index: 0, decision: "approved", actor: "Ada", fixChangeId: ok.json.id }]);
+    });
+
+    it("accept-risk needs a reason and a real proposal", async () => {
+      const { call } = setup();
+      const { c } = seedProposals();
+      expect((await call("POST", `/api/changes/${c.id}/proposals/0/accept-risk`, { actor: "Ada" })).status).toBe(400);
+      expect((await call("POST", `/api/changes/${c.id}/proposals/3/accept-risk`, { actor: "Ada", reason: "Later" })).status).toBe(404);
+      const ok = await call("POST", `/api/changes/${c.id}/proposals/0/accept-risk`, { actor: "Ada", reason: "Low volume" });
+      expect(ok.status).toBe(200);
+      expect(ok.json.decisions).toMatchObject([{ index: 0, decision: "accepted_risk", reason: "Low volume" }]);
+    });
+
+    it("refuses the other kind of decision on the same proposal with 409", async () => {
+      const { call } = setup();
+      const { c } = seedProposals();
+      await call("POST", `/api/changes/${c.id}/proposals/0/approve`, { actor: "Ada" });
+      const r = await call("POST", `/api/changes/${c.id}/proposals/0/accept-risk`, { actor: "Ada", reason: "Changed my mind" });
+      expect(r.status).toBe(409);
+      expect(r.json.error).toMatch(/already has a different decision/);
+
+      const other = seedProposals().c;
+      await call("POST", `/api/changes/${other.id}/proposals/0/accept-risk`, { actor: "Ada", reason: "Low volume" });
+      expect((await call("POST", `/api/changes/${other.id}/proposals/0/approve`, { actor: "Ada" })).status).toBe(409);
+    });
   });
 
   it("returns 404 JSON for ids that do not exist", async () => {

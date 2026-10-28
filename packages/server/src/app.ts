@@ -1,19 +1,30 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import {
   BudgetExceededError,
+  acceptProposalRisk,
   accepted,
   advance,
+  approveProposal,
   checkRepoUrl,
   criteriaOf,
+  discoverDocuments,
   driftRule,
+  listSourceFiles,
   openFixChange,
   openItems,
   openQuestions,
+  problemOf,
+  proposalDecisions,
+  proposalsOf,
   questionOptions,
   PROFESSIONS,
   recheck,
+  startCheck,
+  syncRepo,
   compareCommits,
   traceCommit,
   traceRequirement,
@@ -24,6 +35,7 @@ import {
   type RunStatus,
   type WorkflowDeps,
 } from "@lifecycle/core";
+import { parseGithubRepo } from "./github.js";
 import type { linearClient } from "./linear.js";
 import type { ConnectionState, SyncStatus } from "./sync.js";
 
@@ -128,6 +140,18 @@ class HttpError extends Error {
 }
 
 const bad = (message: string) => new HttpError(400, message);
+
+/** A project name from its repo: the GitHub repo name or last path segment, as words (`demo-merchant-payments` becomes `Demo merchant payments`). */
+export function nameFromRepo(repoUrl: string): string {
+  const raw = parseGithubRepo(repoUrl)?.name ?? repoUrl.trim().replace(/[\\/]+$/, "").split(/[\\/]/).at(-1)!.replace(/\.git$/, "");
+  const words = raw.replace(/[-_]+/g, " ").trim();
+  return words ? words[0]!.toUpperCase() + words.slice(1) : "Project";
+}
+
+type FileKind = "code" | "documents" | "config" | "tests" | "skipped";
+const FILE_KINDS: readonly FileKind[] = ["code", "documents", "config", "tests", "skipped"];
+const TEST_PATH = /(^|[/._-])(tests?|specs?|__tests__)([/._-]|$)/i;
+const CONFIG_FILE = /^(package\.json|dockerfile|\.env\.example|.*\.config\.[^.]+|.*\.ya?ml|.*\.toml)$/i;
 
 type Body = Record<string, unknown>;
 
@@ -294,8 +318,8 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
 
   app.post("/api/projects", async (c) => {
     const b = await readBody(c);
-    const name = text(b, "name", 200);
     const repoUrl = text(b, "repoUrl", 2000);
+    const name = optText(b, "name", 200) ?? nameFromRepo(repoUrl);
     const appUrl = optText(b, "appUrl", 2000);
     try {
       checkRepoUrl(repoUrl, deps.allowLocalRepos === true);
@@ -321,6 +345,36 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
       kind: oneOf(b.kind, CHANGE_KINDS, "kind"),
     });
     return c.json(change, 201);
+  });
+
+  // What a check will read, grouped for the owner. No model call.
+  // ponytail: listSourceFiles drops files over the size limit, so "skipped" stays empty until it reports them.
+  app.get("/api/projects/:id/files", async (c) => {
+    const project = getProject(c.req.param("id"));
+    let repo: { dir: string; commit: string };
+    try {
+      repo = await syncRepo(project.repoUrl, deps.cacheDir, deps.githubToken, { allowLocal: deps.allowLocalRepos === true });
+    } catch (e) {
+      log(`GET ${c.req.path} could not read the repo:`, e);
+      throw new HttpError(502, "Could not read the repo. Check the link and try again.");
+    }
+    const files = await listSourceFiles(repo.dir);
+    const docs = new Set(discoverDocuments(files, record.docSettings(project.id)));
+    const kindOf = (f: string): FileKind =>
+      docs.has(f) ? "documents" : TEST_PATH.test(f) ? "tests" : CONFIG_FILE.test(f.split("/").at(-1)!) ? "config" : "code";
+    const groups = FILE_KINDS.map((kind) => ({ kind, files: files.filter((f) => kindOf(f) === kind && kind !== "skipped") }));
+    const documents = [...docs].map((path) => ({ path, lines: readFileSync(join(repo.dir, path), "utf8").replace(/\n$/, "").split("\n").length }));
+    return c.json({ commit: repo.commit, groups, documents });
+  });
+
+  app.post("/api/projects/:id/check", async (c) => {
+    const project = getProject(c.req.param("id"));
+    const b = await readBody(c);
+    const problem = optText(b, "problem", 500) ?? null;
+    // A recheck holds the whole project, so refuse before opening a change that could not start.
+    notBusy(project.id, "new");
+    const change = startCheck(record, { projectId: project.id, problem });
+    return c.json({ changeId: change.id, jobId: started(startAdvance(project.id, change.id)) }, 202);
   });
 
   app.get("/api/projects/:id/findings", (c) => {
@@ -372,6 +426,9 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
       documentsRead,
       questions: openQuestions(record, change.id),
       questionOptions: questionOptions(record, change.id),
+      problem: problemOf(record, change.id),
+      proposals: proposalsOf(record, change.id),
+      decisions: proposalDecisions(record, change.id),
       accepted: accepted(record, change.id),
       runs,
       withdrawn: withdrawal(record, change.id),
@@ -444,6 +501,30 @@ export function createApp(deps: WorkflowDeps, opts: AppOptions = {}): Hono {
     record.setStage(change.id, "analysis");
     return c.json({ jobId: started(startAdvance(change.projectId, change.id)) }, 202);
   });
+
+  /** One decision per proposal: the other kind of decision on the same index is a conflict. */
+  const proposalRoute = (kind: "approved" | "accepted_risk") => async (c: Context) => {
+    const change = getChange(c.req.param("id")!);
+    const b = await readBody(c);
+    const actor = text(b, "actor", 100).trim();
+    const reason = kind === "accepted_risk" ? text(b, "reason", 1000).trim() : "";
+    const raw = c.req.param("index")!;
+    const index = Number(raw);
+    try {
+      if (!/^\d+$/.test(raw) || !proposalsOf(record, change.id)?.changes[index]) throw new Error("No such proposed change");
+      if (proposalDecisions(record, change.id).some((d) => d.index === index && d.decision !== kind)) {
+        throw new HttpError(409, "This proposed change already has a different decision");
+      }
+      if (kind === "approved") return c.json(approveProposal(record, change.id, index, actor), 201);
+      acceptProposalRisk(record, change.id, index, actor, reason);
+      return c.json({ decisions: proposalDecisions(record, change.id) }, 200);
+    } catch (e) {
+      if (e instanceof Error && e.message === "No such proposed change") throw new HttpError(404, e.message);
+      throw e;
+    }
+  };
+  app.post("/api/changes/:id/proposals/:index/approve", proposalRoute("approved"));
+  app.post("/api/changes/:id/proposals/:index/accept-risk", proposalRoute("accepted_risk"));
 
   app.post("/api/changes/:id/fix-change", (c) => {
     const change = getChange(c.req.param("id"));
