@@ -23,6 +23,7 @@ import {
   type ModelFactory,
   type Packs,
   type Project,
+  type ProposalDecision,
   type RoleId,
   type StageId,
 } from "./types.js";
@@ -584,7 +585,7 @@ function linkFixChange(record: CopilotRecord, from: Change, fix: Change, finding
   record.addArtifact({ changeId: fix.id, role: "po", stage: "intake", kind: "follows", body: { changeId: from.id } });
 }
 
-export type ProposalDecision = { index: number; decision: "approved" | "accepted_risk"; actor: string; reason?: string; fixChangeId?: string };
+export type { ProposalDecision } from "./types.js";
 
 /** The decisions made on a check's proposed changes so far, oldest first. */
 export const proposalDecisions = (record: CopilotRecord, changeId: string): ProposalDecision[] =>

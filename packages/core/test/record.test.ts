@@ -207,3 +207,37 @@ describe("record: acceptance record trace", () => {
     expect(typeof trace[0]!.decisions[0]!.at).toBe("string");
   });
 });
+
+describe("record: problem first", () => {
+  it("the record carries the problem, assumed answers and decisions", () => {
+    const { record, project } = fresh();
+    const check = record.createChange({ projectId: project.id, title: "Check: refunds", description: "d", kind: "understand" });
+    const add = (changeId: string, role: "ba" | "po", kind: string, body: unknown) =>
+      record.addArtifact({ changeId, role, stage: "analysis", kind, body });
+    add(check.id, "ba", "problem", { text: "Refunds go twice" });
+    add(check.id, "ba", "questions", { questions: ["Old question?"] });
+    add(check.id, "ba", "answers", { answers: ["Stale"] });
+    add(check.id, "ba", "questions", { questions: ["Who refunds?", "Which provider?"] });
+    // Answers saved before the latest questions do not count, so there are none yet.
+    expect(record.acceptanceRecord(check.id).answers).toEqual([]);
+    add(check.id, "ba", "answers", { answers: ["The owner", "Paystack"], assumed: [false, true], actor: "Ada Obi" });
+    add(check.id, "po", "proposal_decision", { index: 0, decision: "approved", actor: "Ada Obi" });
+    const fix = record.createChange({ projectId: project.id, title: "Fix", description: "d", kind: "fix" });
+    add(fix.id, "po", "follows", { changeId: check.id });
+
+    const expected = {
+      problem: "Refunds go twice",
+      answers: [
+        { question: "Who refunds?", answer: "The owner", assumed: false, actor: "Ada Obi" },
+        { question: "Which provider?", answer: "Paystack", assumed: true, actor: "Ada Obi" },
+      ],
+      proposalDecisions: [{ index: 0, decision: "approved", actor: "Ada Obi" }],
+    };
+    expect(record.acceptanceRecord(check.id)).toMatchObject(expected);
+    expect(record.acceptanceRecord(fix.id)).toMatchObject(expected);
+
+    const plain = record.createChange({ projectId: project.id, title: "Add export", description: "d", kind: "feature" });
+    add(plain.id, "ba", "problem", { text: "Not hers" });
+    expect(record.acceptanceRecord(plain.id)).toMatchObject({ problem: null, answers: [], proposalDecisions: [] });
+  });
+});

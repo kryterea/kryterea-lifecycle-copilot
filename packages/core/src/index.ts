@@ -23,7 +23,7 @@ export type { ProposedChange, Proposals, WriterFinding } from "./roles/po-writer
 export { systemPrompt, checkTriggers, repoMaterial, defang, documentsBlock, quoteNear } from "./roles/context.js";
 export type { RoleContext, RoleResult, RoleFinding } from "./roles/context.js";
 export { STAGES, acceptProposalRisk, accepted, advance, approveProposal, criteriaOf, openFixChange, openQuestions, problemOf, proposalDecisions, proposalsOf, questionOptions, recheck, startCheck, syncDocuments, withdrawal } from "./workflow.js";
-export type { ProposalDecision, WorkflowDeps } from "./workflow.js";
+export type { WorkflowDeps } from "./workflow.js";
 export { applyDrift, driftRule, DRIFT_TITLES } from "./drift.js";
 export { openItems } from "./open-items.js";
 export type { OpenItem } from "./open-items.js";

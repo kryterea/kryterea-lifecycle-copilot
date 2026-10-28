@@ -141,6 +141,9 @@ export interface Check {
 
 export type GateMap = Partial<Record<RoleId, { state: GateState; reason: string; at: string }>>;
 
+/** A decision made on one of a check's proposed changes. */
+export type ProposalDecision = { index: number; decision: "approved" | "accepted_risk"; actor: string; reason?: string; fixChangeId?: string };
+
 export interface AcceptanceRecord {
   change: Change;
   criteria: Array<Criterion & { latest: EvidenceState | null }>;
@@ -148,6 +151,12 @@ export interface AcceptanceRecord {
   gates: GateMap;
   decisions: Array<{ findingId: string; status: FindingStatus; reason: string; actor: string; at: string }>;
   runs: Array<{ id: string; role: RoleId; commit: string; status: RunStatus; costUsd: number }>;
+  /** Her problem in her own words: for a fix change, from the check it follows. Null when none was given. */
+  problem: string | null;
+  /** The latest questions paired with the answers saved after them. */
+  answers: Array<{ question: string; answer: string; assumed: boolean; actor: string | null }>;
+  /** The decisions made on the proposed changes of the check this record starts from. */
+  proposalDecisions: ProposalDecision[];
   /** From the latest `acceptance_summary` artifact, null when none. */
   summary: string | null;
   /** Each requirement linked to these criteria: its criteria with their latest state, and the decisions people made on findings about it. */

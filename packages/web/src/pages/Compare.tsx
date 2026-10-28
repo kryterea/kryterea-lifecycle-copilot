@@ -23,6 +23,12 @@ export function Compare({ projectId, from, to }: { projectId: string; from?: str
   const b = to ?? list.at(-1)?.sha;
   const ready = a !== undefined && b !== undefined && a !== b;
   const cmp = useLoad(() => (ready ? api.compare(projectId, a, b) : Promise.resolve(null)), `${projectId}/${a}/${b}`);
+  // The findings that explain her problem come from the project's latest understand change.
+  const problem = useLoad(async () => {
+    const { changes } = await api.project(projectId);
+    const check = changes.filter((c) => c.kind === "understand").at(-1);
+    return check ? ((await api.change(check.id)).proposals?.answersProblem ?? []) : [];
+  }, projectId);
 
   const picker = (label: string, value: string | undefined, set: (sha: string) => void) => (
     <label className="compare-pick">
@@ -67,7 +73,7 @@ export function Compare({ projectId, from, to }: { projectId: string; from?: str
           ) : !cmp.data ? (
             <p className="muted">Loading.</p>
           ) : (
-            <Result projectId={projectId} cmp={cmp.data} />
+            <Result projectId={projectId} cmp={cmp.data} yours={new Set(problem.data ?? [])} />
           )}
         </div>
       )}
@@ -82,10 +88,13 @@ function delta(before: number, after: number, better: "down" | "up") {
   return { text: `${Math.abs(d)} ${d < 0 ? "fewer" : "more"}`, tone: good ? "good" : "bad" };
 }
 
-function Result({ projectId, cmp }: { projectId: string; cmp: CommitCompare }) {
-  const closed = cmp.findings.filter((f) => f.from === "open" && f.to !== null && f.to !== "open");
-  const added = cmp.findings.filter((f) => f.from !== "open" && f.to === "open");
-  const still = cmp.findings.filter((f) => f.from === "open" && f.to === "open");
+function Result({ projectId, cmp, yours }: { projectId: string; cmp: CommitCompare; yours: Set<string> }) {
+  // Her problem first, closed or still open; the groups below hold the rest.
+  const mine = cmp.findings.filter((f) => yours.has(f.id) && f.from === "open");
+  const rest = cmp.findings.filter((f) => !mine.includes(f));
+  const closed = rest.filter((f) => f.from === "open" && f.to !== null && f.to !== "open");
+  const added = rest.filter((f) => f.from !== "open" && f.to === "open");
+  const still = rest.filter((f) => f.from === "open" && f.to === "open");
   const moved = cmp.criteria.filter((k) => k.from !== k.to);
   const same = cmp.criteria.length - moved.length;
   return (
@@ -116,6 +125,7 @@ function Result({ projectId, cmp }: { projectId: string; cmp: CommitCompare }) {
         </a>
       </p>
 
+      {mine.length > 0 && <FindingGroup title="Your problem" empty="" rows={mine} />}
       <FindingGroup title="Closed" empty="Nothing open before was closed." rows={closed} />
       <FindingGroup title="New" empty="Nothing new opened." rows={added} />
       <FindingGroup title="Still open" empty="Nothing open before is still open." rows={still} />

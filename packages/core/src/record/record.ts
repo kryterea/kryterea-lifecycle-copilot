@@ -19,6 +19,7 @@ import type {
   LinkEnd,
   LinkRel,
   Project,
+  ProposalDecision,
   Requirement,
   RequirementEvent,
   RequirementLink,
@@ -873,6 +874,31 @@ export class CopilotRecord {
     }));
   }
 
+  /**
+   * Her problem, the answers she gave and the decisions on proposed changes. A fix change reads them from the
+   * check it follows. Read here from artifacts: workflow.ts imports this file, so it cannot be used back.
+   */
+  private problemFirst(change: Change): Pick<AcceptanceRecord, "problem" | "answers" | "proposalDecisions"> {
+    const follows = this.listArtifacts(change.id).filter((a) => a.kind === "follows").at(-1)?.body as { changeId?: string } | undefined;
+    const source = follows?.changeId ?? change.id;
+    const arts = this.listArtifacts(source);
+    const latest = (kind: string) => arts.findLastIndex((a) => a.kind === kind);
+    const questionsAt = latest("questions");
+    const answersAt = latest("answers");
+    const questions = (arts[questionsAt]?.body as { questions?: string[] } | undefined)?.questions ?? [];
+    const given = answersAt > questionsAt ? (arts[answersAt]?.body as { answers?: string[]; assumed?: boolean[]; actor?: string }) : {};
+    const answers = (given.answers ?? []).map((answer, i) => ({
+      question: questions[i] ?? "",
+      answer,
+      assumed: given.assumed?.[i] ?? false,
+      actor: given.actor ?? null,
+    }));
+    const isCheck = source !== change.id || change.kind === "understand";
+    const problem = isCheck ? ((arts[latest("problem")]?.body as { text?: string } | undefined)?.text ?? null) : null;
+    const proposalDecisions = isCheck ? arts.filter((a) => a.kind === "proposal_decision").map((a) => a.body as ProposalDecision) : [];
+    return { problem, answers, proposalDecisions };
+  }
+
   /** Criteria are the change's own plus any it affects. Decisions are status changes made by people. */
   acceptanceRecord(changeId: string): AcceptanceRecord {
     const change = this.getChange(changeId);
@@ -922,7 +948,7 @@ export class CopilotRecord {
           .map((d) => ({ title: titles.get(d.findingId)!, status: d.status, by: d.actor, reason: d.reason, at: d.at })),
       };
     });
-    return { change, criteria, findings, gates: this.gates(changeId), decisions, runs, summary, trace };
+    return { change, criteria, findings, gates: this.gates(changeId), decisions, runs, ...this.problemFirst(change), summary, trace };
   }
 }
 
