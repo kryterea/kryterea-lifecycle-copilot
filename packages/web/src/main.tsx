@@ -5,10 +5,15 @@ import { Change } from "./pages/Change";
 import { CommitTrace } from "./pages/CommitTrace";
 import { Compare } from "./pages/Compare";
 import { DocumentDetail } from "./pages/DocumentDetail";
+import { Guides } from "./pages/Guides";
 import { Project, type Section } from "./pages/Project";
 import { Projects } from "./pages/Projects";
 import { Record } from "./pages/Record";
 import { Requirement } from "./pages/Requirement";
+import { Templates } from "./pages/Templates";
+import { Welcome } from "./pages/Welcome";
+import { api } from "./api";
+import { getName } from "./me";
 import "./styles.css";
 
 /** Hash routes, so the server serves one index.html: projects (and their sections), changes, records, requirements. */
@@ -25,6 +30,27 @@ function useHash() {
   return hash;
 }
 
+/** Projects, except a first visit (no saved name, no projects) goes to the welcome page. */
+function Home() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    api.projects().then(
+      (list) => {
+        if (!getName() && list.length === 0) location.hash = "#/welcome";
+        else setReady(true);
+      },
+      () => setReady(true),
+    );
+  }, []);
+  return ready ? <Projects /> : null;
+}
+
+const TABS = [
+  ["#/", "Projects"],
+  ["#/templates", "Templates"],
+  ["#/guides", "Guides"],
+] as const;
+
 function Page({ hash }: { hash: string }) {
   const d = decodeURIComponent;
   let m = /^#\/projects\/([^/]+)\/documents\/([^/]+)$/.exec(hash);
@@ -38,7 +64,12 @@ function Page({ hash }: { hash: string }) {
   m = /^#\/projects\/([^/]+)(?:\/(needs-you|documents|trace|connections))?$/.exec(hash);
   if (m) return <Project key={m[1]} id={d(m[1]!)} section={(m[2] as Section | undefined) ?? "changes"} />;
   m = /^#\/changes\/([^/]+)(\/record)?$/.exec(hash);
-  if (!m) return <Projects />;
+  if (!m) {
+    if (hash === "#/welcome") return <Welcome />;
+    if (hash === "#/templates") return <Templates />;
+    if (hash === "#/guides") return <Guides />;
+    return <Home />;
+  }
   const id = d(m[1]!);
   return m[2] ? <Record key={id} id={id} /> : <Change key={id} id={id} />;
 }
@@ -61,6 +92,16 @@ function App() {
           </a>
           <SpendMeter />
         </div>
+        <nav className="tabs" aria-label="Sections">
+          {TABS.map(([href, label]) => {
+            const current = href === "#/" ? !/^#\/(welcome|templates|guides)$/.test(hash) : hash === href;
+            return (
+              <a key={href} href={href} aria-current={current ? "page" : undefined}>
+                {label}
+              </a>
+            );
+          })}
+        </nav>
       </header>
       <main>
         <Page hash={hash} />

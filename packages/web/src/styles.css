@@ -246,6 +246,74 @@ code,
   flex: none;
 }
 
+/* Top tabs: Projects, Templates, Guides. The current one is underlined in the brand colour. */
+.tabs {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+}
+.tabs a {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: var(--t-label);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.tabs a:hover {
+  color: var(--ink);
+}
+.tabs a[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--brand);
+}
+
+.templates,
+.guide {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  list-style: none;
+}
+.templates li {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--secondary);
+  font: 500 0.6875rem / 1.2 var(--mono);
+}
+.guide {
+  counter-reset: step;
+}
+.guide li {
+  padding: 16px 18px;
+  counter-increment: step;
+}
+.guide h2 {
+  font-size: var(--t-section);
+  font-weight: 600;
+}
+.guide h2::before {
+  content: counter(step) ". ";
+  color: var(--muted);
+}
+.guide p {
+  margin-top: 4px;
+  color: var(--secondary);
+}
+
 main {
   max-width: 1200px;
   margin: 0 auto;
@@ -1345,6 +1413,7 @@ tbody tr + tr td {
 
 @media (max-width: 560px) {
   .top-inner,
+  .tabs,
   main {
     padding-left: 16px;
     padding-right: 16px;

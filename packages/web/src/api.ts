@@ -121,6 +121,10 @@ async function call<T>(method: "GET" | "POST" | "PUT", path: string, body?: unkn
 const id = encodeURIComponent;
 
 export const api = {
+  professions: () =>
+    call<{ professions: Array<{ role: string; name: string; frameworks: string[]; checks: string; why: string }> }>("GET", "/api/professions").then(
+      (r) => r.professions,
+    ),
   projects: () => call<{ projects: Project[] }>("GET", "/api/projects").then((r) => r.projects),
   createProject: (b: { name: string; repoUrl: string; appUrl?: string }) => call<Project>("POST", "/api/projects", b),
   project: (p: string) => call<{ project: Project; changes: Array<Change & { withdrawn: boolean }> }>("GET", `/api/projects/${id(p)}`),
