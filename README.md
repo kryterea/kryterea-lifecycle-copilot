@@ -33,6 +33,17 @@ Every path has an end:
 | Something breaks after delivery | Open a fix change from the delivered one; it carries the findings through the gates again, and both records link to each other |
 | The server restarts mid-run | Interrupted runs are closed on start, so nothing shows as working forever |
 
+## Documents, trace and drift
+
+Kryterea checks the code against what was agreed. It reads the PRDs and specs in your repo (`docs/` by default; set your own patterns in the panel), or ones you paste in from Notion or Drive.
+
+- **Document gaps.** The analyst reads each document the way a reviewer would, against the requirement qualities in ISO/IEC/IEEE 29148, and marks the lines that cannot be built or checked as written ("Cancelling should be easy").
+- **Trace.** Each requirement line keeps a chain: document line, acceptance criteria, Linear ticket, the commits checked, evidence in the code, findings, decisions and sign off. A missing link shows as a gap in the chain. Search a commit to see everything Kryterea checked at it.
+- **Drift.** Every re-check runs fixed drift rules, with no model call: a requirement changed after criteria were written for it, a requirement with no criteria or no evidence, code lines that were evidence for a criterion changed, or code under an accepted risk changed. Each raises a drift finding, which closes by itself once its rule no longer holds.
+- **Needs you.** Every open item on a project, most pressing first: legal checks, failure paths, drift, then the rest.
+
+Kryterea warns and records; it never blocks. Open items stay visible until they are fixed and confirmed by a re-check, or accepted by a named person with a reason.
+
 ## Run it
 
 Needs Node 22.13 or later and pnpm.
@@ -76,6 +87,17 @@ When a change reaches Build, the panel shows the project id and a prompt to past
 | `get_change` | Sees the stage, gates and criteria of a change |
 | `report_fix` | Says what it changed; the finding stays open until a re-check confirms it |
 | `request_recheck` | Asks for a re-check against the latest commit |
+
+Every tool answer starts with the project's open items, so the agent sees what is still open before it acts.
+
+## GitHub and Linear
+
+The same open items reach the places the team already works. Each is optional; the project's Connections section shows what is set up.
+
+- **GitHub.** Set `GITHUB_TOKEN` in `.env`. After each check Kryterea keeps one comment up to date on each open pull request, or on the checked commit when there is none, listing what is open and linking the trace. It comments; it never blocks a merge.
+- **Linear.** Set `LINEAR_API_KEY` in `.env` and link a ticket to a requirement in the panel. Kryterea keeps one comment on that ticket with the requirement's open items and the state of its criteria.
+
+Restart the server after changing `.env`. A comment is rewritten only when its content changes.
 
 ## Where this sits in Kryterea
 

@@ -25,39 +25,43 @@ Diagram builds one piece at a time on a paper slide.
 
 ## 0:20 to 1:50 One change, end to end
 
-Screen recording of the panel, fake mode off, real Muse Spark runs on `demo-merchant-payments`.
+Screen recording of the panel, fake mode off, real Muse Spark runs on `demo-merchant-payments`. The app and its `docs/PRD.md` were both written by the coding agent from the prompts in its `PROMPTS.md`.
 
 | Time | Screen | Voice |
 |---|---|---|
-| 0:20 | Projects page. Tagline under the title. Add project with the repo URL. | Ada adds the client's repo. Kryterea only reads it. |
-| 0:28 | Baseline change. Run next step. The dark Instrument band names each professional as it works. | Five professionals review the app as it is built today, on Muse Spark. |
-| 0:40 | Analysis: the analyst's questions. Ada types two answers. | The business analyst asks what the code cannot answer. **[from the run]** |
-| 0:50 | Design review. Open one legal finding: "Check this", the NDPA section, the Law tag. | Compliance reads the Nigeria Data Protection Act and the card security rules against the code and cites the exact section. **[from the run]** |
-| 1:00 | One operations finding from the architect. | The architect asks what happens when it breaks. **[from the run]** |
-| 1:08 | New change: "Add monthly subscriptions". Run to Build. The hand-off block: project id and prompt, Copy. | The client wants businesses to charge customers every month. At Build, Kryterea hands Ada's coding agent the project and the findings. |
-| 1:15 | Cut to the coding agent's terminal (OpenCode on Muse Spark): `list_findings`, edits, `report_fix`, commit, `request_recheck`. | The agent works through the findings over MCP. |
-| 1:28 | Back in the panel: the finding shows "Fix reported". | The agent's word is not proof. The finding stays open. |
-| 1:33 | Re-check runs. The finding turns Fixed; QA marks each criterion Evidence found. | Kryterea checks the new commit. Only then does it count. |
-| 1:42 | Release: every gate Cleared. Acceptance: "Work you can sign", Ada types her name, Accept delivery. | Every gate clears, and Ada signs for the work. |
+| 0:20 | Projects page. Add project with the repo URL. Documents section: `docs/PRD.md`, its requirement count and gaps. | Ada adds the client's repo. Kryterea only reads it, starting with the PRD her agent wrote. |
+| 0:30 | Document view: numbered lines, requirement keys, a gap beside its line. **[from the run]** | The analyst reads the PRD like a reviewer would and marks the lines nobody can build or check as written. |
+| 0:42 | Needs you: the ranked list. Open one legal item: "Check this", the NDPA section, "Not legal advice". **[from the run]** | Everything open on the project, most pressing first. Compliance cites the exact section of the law. |
+| 0:55 | Trace: the requirements table. Open subscriptions: the chain from document line to sign off, with its gaps. Link the Linear ticket. | Every requirement keeps a chain: the line it came from, its criteria, its ticket, the code, the decisions. A missing link shows as a gap. |
+| 1:08 | Coding agent's terminal (OpenCode on Muse Spark): a tool answer that opens with "Kryterea: N open on this project." Then `get_finding`, edits, `report_fix`, commit, `request_recheck`. | Ada's coding agent sees the same open items before every action, and works through them over MCP. |
+| 1:20 | The pull request comment on GitHub, then the comment on the Linear ticket: the same items. **[from the run]** | The same warning reaches GitHub and Linear. Kryterea comments; it never blocks a merge. |
+| 1:30 | Back in the panel: the re-check runs, the finding turns Fixed, the chain fills with evidence. | The agent's word is not proof. Only a re-check of the new commit closes it. |
+| 1:42 | Acceptance: every gate Cleared. Ada types her name, Accept delivery. | Every gate clears, and Ada signs for the work. |
 
 ## 1:50 to 2:35 After delivery
 
 | Time | Screen | Voice |
 |---|---|---|
-| 1:50 | "Hi Ada." Diagram: the app goes live, a new push arrives. | A week later, the agent pushes a change straight to the live app. |
-| 1:58 | Operate stage: "Needs you". A finding raised after delivery. **[from the run]** | Kryterea keeps watching. It finds what the push broke. |
-| 2:08 | Open fix change. The new change says "Follows" the delivered one and carries the finding. | One click opens a fix change. The finding goes back through the gates. Nothing gets lost. |
-| 2:18 | Acceptance record: the serif document, "Checked by" line, decisions with names, the link to the fix change. Print. | Every decision, every finding and every name lands in one record Ada can hand to her client. |
+| 1:50 | "Hi Ada." Diagram: the app goes live, a new push arrives. | A week later, a push changes code the work was signed on. |
+| 1:58 | Needs you: a drift finding, with the Drift stamp and the commit. The GitHub comment updates. **[from the run]** | Kryterea runs its drift rules on every push. The code moved away from what was agreed, and everyone sees it. |
+| 2:10 | The finding: accept it as a risk, with Ada's name and reason. The decision line under the professional's card. | Ada decides. Kryterea warns and records; people decide. |
+| 2:20 | Acceptance record: the Trace section, each requirement with its criteria and decisions, and the closing line "Not legal advice. Kryterea advises and records; people decide." Print. | Every requirement, every decision and every name in one record Ada can hand to her client. |
 
-## 2:35 to 2:50 What changed for Ada
+## 2:35 to 2:45 What changed for Ada
 
 Paper slide, Ada and the client logo, three ticked lines. Each line is something the video showed.
 
-- Every finding ended: fixed and confirmed, or accepted with a reason
-- Her coding agent's fixes were checked, not trusted
-- One signed record from request to delivery, and after
+- Every requirement traced from the PRD line to the signed record
+- Drift caught on the push, in the panel, the agent, GitHub and Linear
+- Every open item ended: fixed and confirmed, or accepted by a named person
 
-## 2:50 to 3:00 Close
+## 2:45 to 2:52 Where this sits in Kryterea
+
+Paper slide, the Trail motif. "Where this sits in Kryterea." The copilot as one layer of the Kryterea platform, beside the platform's teams, projects with members, named sign off, and Drive and Notion connections. Small caption: "Platform features shown for context. Not part of this entry."
+
+Voice: This copilot is the delivery layer of Kryterea, the platform for work teams can sign.
+
+## 2:52 to 3:00 Close
 
 | Screen | Voice |
 |---|---|

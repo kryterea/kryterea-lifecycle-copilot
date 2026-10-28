@@ -24,6 +24,16 @@ Built during the event (update as tasks finish):
 - [x] README
 - [x] QA in the running app (2026-10-27): QA tries criteria in the app with a headless browser (Playwright), choosing each step with Muse Spark and judging from screenshots; opt in with `COPILOT_QA_BROWSER=1`
 - [ ] Demo app (separate repo `demo-merchant-payments`), built by a coding agent running on Muse Spark from the prompts in its `PROMPTS.md`
+- [x] Governed trace (2026-10-27 to 2026-10-28):
+  - Documents read from the repo or pasted in, kept as versions, with requirements read line by line
+  - Document gaps from the analyst, and acceptance criteria linked to the requirements they cover
+  - Deterministic drift rules on every re-check, each finding closing by itself when its rule no longer holds
+  - Needs you: one ranked list of open items per project
+  - Open items at the top of every MCP tool answer, framed as data for the agent
+  - One GitHub comment per open pull request (or checked commit) and one Linear comment per linked ticket, kept current after each check, rewritten only when the content changes
+  - Trace views: requirements table, requirement chain from document line to sign off, and everything checked at a commit
+  - Panel sections for Needs you, Documents, Trace and Connections; professional cards with their practice and the people who decided
+  - The acceptance record carries the trace and ends with "Not legal advice. Kryterea advises and records; people decide."
 
 ## What is not ours, or not new
 
@@ -33,4 +43,6 @@ Built during the event (update as tasks finish):
 - The panel's look follows the Kryterea platform's existing visual language so the two read as one family: its colour values, type scale, fonts (Geist, Source Serif 4, JetBrains Mono, loaded from Google Fonts), radii, shadows, motion timings, and the shapes of its stage Trail, status stamps, pill buttons and dark "Instrument" band. Those values and shapes were followed by eye and by number; every component, stylesheet and icon in `packages/web` was written fresh during the event, and no Kryterea code was copied.
 - From Kryterea's brand set: the Kryterea symbol (drawn inline in `packages/web/src/main.tsx`) and `packages/web/public/favicon.svg`, plus Kryterea's positioning line ("Claude and Codex build. Kryterea is the professional they build with.") and its "Work You Can Sign" theme, used in the panel and README.
 - The Impeccable design skill for Claude Code guided the redesign and its finish review.
+- GitHub and Linear APIs, used through their public REST and GraphQL endpoints.
+- Teams, multiple projects with members, named sign off from a stakeholder register, and Drive and Notion connections are features of the existing Kryterea platform. They are named in the video's closing card as where this copilot sits; none of them is built, copied or demoed here.
 - Kryterea's private Business Analysis OS (BA OS) was used as pre-existing development tooling: a pre-mortem on the plan, drafting and verifying the NDPA obligation list against the official text, drawing the workflow diagram, independent review of the copilot's own output on the demo app, and editing prose. BA OS's own skills, playbooks, rubrics, templates and reports are not in this repository, and BA OS is not part of this entry. The things it helped produce during the event (the legal pack in `packs/legal/`, the README diagram and prose) were created during the build window and are part of the entry.
