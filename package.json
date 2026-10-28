@@ -9,7 +9,9 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "dev": "pnpm -r --parallel --if-present dev"
+    "dev": "pnpm -r --parallel --if-present dev",
+    "demo": "pnpm -r build && node scripts/demo.mjs",
+    "demo:export": "pnpm -r build && node scripts/export-demo.mjs"
   },
   "devDependencies": {
     "@types/node": "^22",

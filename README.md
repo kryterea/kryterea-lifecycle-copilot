@@ -45,6 +45,22 @@ Kryterea checks the code against what was agreed. It reads the PRDs and specs in
 
 Kryterea warns and records; it never blocks. Open items stay visible until they are fixed and confirmed by a re-check, or accepted by a named person with a reason.
 
+## See the demo run without a key
+
+The demo app is [kryterea/demo-merchant-payments](https://github.com/kryterea/demo-merchant-payments): payment links for small businesses in Lagos, built by a coding agent on Muse Spark from the prompts in its `PROMPTS.md`. Its before and after, as Kryterea recorded it, is in [docs/hackathon/before-after.md](docs/hackathon/before-after.md).
+
+To open the recorded run in the panel, with no Meta, GitHub or Linear key and nothing sent anywhere:
+
+```bash
+pnpm install
+```
+
+```bash
+pnpm demo
+```
+
+It prints the address of the before and after page. The record is a copy of `demo/lagospay.db`, so anything you change there is thrown away.
+
 ## Run it
 
 Needs Node 22.13 or later and pnpm.

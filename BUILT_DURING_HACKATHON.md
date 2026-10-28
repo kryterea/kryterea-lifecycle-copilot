@@ -23,7 +23,8 @@ Built during the event (update as tasks finish):
 - [x] Every process has an end (2026-10-27): fix reports wait on a re-check, fix changes carry findings raised after delivery, withdraw with a reason, back to analysis when no criteria were written, later rounds of analyst questions, reopen a settled finding, interrupted runs closed on start, and the Build stage hand-off for the coding agent
 - [x] README
 - [x] QA in the running app (2026-10-27): QA tries criteria in the app with a headless browser (Playwright), choosing each step with Muse Spark and judging from screenshots; opt in with `COPILOT_QA_BROWSER=1`
-- [ ] Demo app (separate repo `demo-merchant-payments`), built by a coding agent running on Muse Spark from the prompts in its `PROMPTS.md`
+- [ ] Demo app ([kryterea/demo-merchant-payments](https://github.com/kryterea/demo-merchant-payments), public), built by a coding agent running on Muse Spark from the prompts in its `PROMPTS.md`
+- [x] `pnpm demo` opens the recorded demo run with no keys; `pnpm demo:export` saves a live run as the demo record (refusing local paths and anything key-like) and writes `docs/hackathon/before-after.md` from it
 - [x] Governed trace (2026-10-27 to 2026-10-28):
   - Documents read from the repo or pasted in, kept as versions, with requirements read line by line
   - Document gaps from the analyst, and acceptance criteria linked to the requirements they cover

@@ -75,3 +75,5 @@ Voice: This copilot is the delivery layer of Kryterea, the platform for work tea
 - Coding agent on camera runs on Meta credits (OpenCode with Muse Spark).
 - Keep the Replay stamp off camera: record with live runs, not fake mode.
 - Read the final voice-over aloud against the timing; cut words, not pauses.
+- After the live run: tag `before` (the agent's code and PRD) and `after` (its last fix) in the demo repo, run `pnpm demo:export` on the live data dir, and take the outcomes card's numbers from `docs/hackathon/before-after.md`.
+- Show the Before and after page once, between the confirmed fix and the signed record.
