@@ -17,6 +17,7 @@ import {
   type Change,
   type Check,
   type Criterion,
+  type Finding,
   type FindingKind,
   type GateState,
   type ModelFactory,
@@ -569,13 +570,68 @@ export function openFixChange(record: CopilotRecord, changeId: string): Change {
     description: [`Findings raised after "${c.title}" was delivered:`, ...open.map((f) => `- ${f.title}: ${f.plain}`)].join("\n"),
     kind: "fix",
   });
-  for (const f of open) {
+  linkFixChange(record, c, fix, open);
+  return fix;
+}
+
+/** Carries findings onto a fix change and has each change name the other, so the record reads both ways. */
+function linkFixChange(record: CopilotRecord, from: Change, fix: Change, findings: Finding[]): void {
+  for (const f of findings) {
     record.link({ type: "finding", id: f.id }, "raised_on", { type: "change", id: fix.id });
     if (f.criterionId) record.link({ type: "change", id: fix.id }, "affects", { type: "criterion", id: f.criterionId });
   }
-  record.addArtifact({ changeId: c.id, role: "po", stage: "operate", kind: "fix_change", body: { changeId: fix.id } });
-  record.addArtifact({ changeId: fix.id, role: "po", stage: "intake", kind: "follows", body: { changeId: c.id } });
+  record.addArtifact({ changeId: from.id, role: "po", stage: from.stage, kind: "fix_change", body: { changeId: fix.id } });
+  record.addArtifact({ changeId: fix.id, role: "po", stage: "intake", kind: "follows", body: { changeId: from.id } });
+}
+
+export type ProposalDecision = { index: number; decision: "approved" | "accepted_risk"; actor: string; reason?: string; fixChangeId?: string };
+
+/** The decisions made on a check's proposed changes so far, oldest first. */
+export const proposalDecisions = (record: CopilotRecord, changeId: string): ProposalDecision[] =>
+  record.listArtifacts(changeId).filter((a) => a.kind === "proposal_decision").map((a) => a.body as ProposalDecision);
+
+function proposalAt(record: CopilotRecord, changeId: string, index: number) {
+  const ch = proposalsOf(record, changeId)?.changes[index];
+  if (!ch) throw new Error("No such proposed change");
+  return ch;
+}
+
+/**
+ * Approving a written change opens a fix change for the coding agent, parked at build with the proposal's
+ * criteria. Only the findings still open are carried over (none open still opens it: the re-check confirms).
+ * Approving the same proposal again returns the fix change it already opened.
+ */
+export function approveProposal(record: CopilotRecord, changeId: string, index: number, actor: string): Change {
+  const ch = proposalAt(record, changeId, index);
+  if (!actor.trim()) throw new Error("Say who is approving");
+  const done = proposalDecisions(record, changeId).find((d) => d.index === index && d.decision === "approved");
+  if (done?.fixChangeId) return record.getChange(done.fixChangeId);
+  const from = record.getChange(changeId);
+  const findings = record.listFindings({ changeId }).filter((f) => ch.findingIds.includes(f.id));
+  const fix = record.createChange({
+    projectId: from.projectId,
+    title: ch.title.slice(0, 200),
+    description: [`For ${ch.forWhom}. ${ch.why}`, ...findings.map((f) => `- ${f.title}`)].join("\n"),
+    kind: "fix",
+  });
+  record.setStage(fix.id, "build");
+  for (const c of ch.criteria) {
+    const k = record.addCriterion({ projectId: from.projectId, changeId: fix.id, text: c.text, isFailurePath: c.isFailurePath });
+    record.link({ type: "change", id: fix.id }, "satisfies", { type: "criterion", id: k.id });
+  }
+  linkFixChange(record, from, fix, findings.filter((f) => f.status === "open"));
+  record.addArtifact({ changeId, role: "po", stage: from.stage, kind: "proposal_decision", body: { index, decision: "approved", actor, fixChangeId: fix.id } });
   return fix;
+}
+
+/** Accepting the risk closes the proposal's still open findings under the actor, with their reason. */
+export function acceptProposalRisk(record: CopilotRecord, changeId: string, index: number, actor: string, reason: string): void {
+  const ch = proposalAt(record, changeId, index);
+  if (!actor.trim() || !reason.trim()) throw new Error("Say who is accepting the risk and why");
+  for (const f of record.listFindings({ changeId, status: "open" })) {
+    if (ch.findingIds.includes(f.id)) record.setFindingStatus(f.id, "accepted_risk", reason, actor);
+  }
+  record.addArtifact({ changeId, role: "po", stage: record.getChange(changeId).stage, kind: "proposal_decision", body: { index, decision: "accepted_risk", actor, reason } });
 }
 
 /**

@@ -8,10 +8,14 @@ import {
   CopilotRecord,
   SYSTEM_ACTOR,
   STAGES,
+  acceptProposalRisk,
   advance,
+  approveProposal,
+  criteriaOf,
   openFixChange,
   openQuestions,
   problemOf,
+  proposalDecisions,
   proposalsOf,
   questionOptions,
   recheck,
@@ -655,6 +659,67 @@ describe("workflow", () => {
     expect(await advance(deps, c.id)).toEqual({ stage: "intake", held: [], stoppedForBudget: false });
     expect(await recheck(deps, project.id, "manual")).toEqual({ runIds: [], stoppedForBudget: false });
     expect(models.calls).toHaveLength(0);
+  });
+
+  describe("deciding on a proposed change", () => {
+    const withProposals = async () => {
+      const s = setup();
+      const base = s.models.handlers["ba.understandApp"]!;
+      const baFinding = { title: "Cancel never frees the slot", plain: "Cancelling leaves the slot taken.", costIfIgnored: "Lost bookings.", fixPrompt: "Free the slot on cancel.", triggerType: "code", file: "src/booking.js", line: 2, quote: null };
+      s.models.handlers["ba.understandApp"] = (req) => ({ ...(base(req) as object), findings: [baFinding] });
+      const c = startCheck(s.record, { projectId: s.project.id, problem: "Cancelling does not free the slot." });
+      await advance(s.deps, c.id);
+      return { ...s, c, p: proposalsOf(s.record, c.id)! };
+    };
+
+    it("approving a proposal parks a fix change at build with its criteria", async () => {
+      const { record, c, p } = await withProposals();
+      const fix = approveProposal(record, c.id, 0, "Ada");
+      const ch = p.changes[0]!;
+      expect(fix.kind).toBe("fix");
+      expect(fix.title).toBe(ch.title);
+      expect(record.getChange(fix.id).stage).toBe("build");
+      expect(criteriaOf(record, fix).filter((k) => k.changeId === fix.id).map((k) => k.text)).toEqual(ch.criteria.map((k) => k.text));
+      for (const id of ch.findingIds) expect(record.linksTo({ type: "change", id: fix.id })).toContainEqual({ from: { type: "finding", id }, rel: "raised_on" });
+      expect(proposalDecisions(record, c.id)).toEqual([{ index: 0, decision: "approved", actor: "Ada", fixChangeId: fix.id }]);
+    });
+
+    it("approving twice returns the same fix change", async () => {
+      const { record, c, project } = await withProposals();
+      const first = approveProposal(record, c.id, 0, "Ada");
+      const n = record.listChanges(project.id).length;
+      expect(approveProposal(record, c.id, 0, "Ada").id).toBe(first.id);
+      expect(record.listChanges(project.id)).toHaveLength(n);
+    });
+
+    it("accepting the risk closes the proposal's findings under the actor", async () => {
+      const { record, c, p } = await withProposals();
+      acceptProposalRisk(record, c.id, 0, "Ada", "We will live with it for now.");
+      for (const id of p.changes[0]!.findingIds) {
+        const f = record.listFindings({ changeId: c.id }).find((x) => x.id === id)!;
+        expect(f.status).toBe("accepted_risk");
+      }
+      expect(JSON.stringify(record.listFindings({ changeId: c.id }).map((f) => record.findingHistory(f.id)))).toContain("Ada");
+      expect(proposalDecisions(record, c.id)[0]).toMatchObject({ index: 0, decision: "accepted_risk", actor: "Ada", reason: "We will live with it for now." });
+    });
+
+    it("rejects an unknown index, an empty actor and an empty reason", async () => {
+      const { record, c } = await withProposals();
+      expect(() => approveProposal(record, c.id, 9, "Ada")).toThrow("No such proposed change");
+      expect(() => approveProposal(record, c.id, 0, " ")).toThrow();
+      expect(() => acceptProposalRisk(record, c.id, 0, "Ada", " ")).toThrow();
+      const other = startCheck(record, { projectId: record.getChange(c.id).projectId, problem: null });
+      expect(() => approveProposal(record, other.id, 0, "Ada")).toThrow("No such proposed change");
+    });
+
+    it("recheck moves an approved fix change to verification", async () => {
+      const { record, deps, c, project, origin } = await withProposals();
+      const fix = approveProposal(record, c.id, 0, "Ada");
+      origin.put("src/booking.js", "export const free = true;\n");
+      origin.commit("free the slot on cancel");
+      await recheck(deps, project.id, "push");
+      expect(STAGES.indexOf(record.getChange(fix.id).stage)).toBeGreaterThanOrEqual(STAGES.indexOf("verification"));
+    });
   });
 
   it("a fix change carries findings raised after delivery and holds until they are settled", async () => {
