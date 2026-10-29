@@ -60,6 +60,11 @@ describe("writeChanges", () => {
     expect(system).toContain("names only the law entries its findings cite from the pack");
   });
 
+  it("a whole repo check has no findings answering a problem", async () => {
+    const out = await writeChanges({ problem: null, findings }, stub({ answersProblem: ["F1"], duplicates: [], changes: [change("a", ["F1", "F2"])] }), "PACK");
+    expect(out.answersProblem).toEqual([]);
+  });
+
   it("maps answersProblem and duplicates back to ids", async () => {
     const out = await writeChanges(
       { problem: "p", findings },

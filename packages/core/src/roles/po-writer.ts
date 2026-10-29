@@ -110,7 +110,7 @@ export async function writeChanges(
     if (!taken.has(f.id)) changes.push({ title: f.title, forWhom: "Anyone using the app", why: f.plain, findingIds: [f.id], criteria: [] });
   }
   return {
-    answersProblem: toIds(data.answersProblem),
+    answersProblem: input.problem ? toIds(data.answersProblem) : [],
     duplicates: (Array.isArray(data.duplicates) ? data.duplicates : []).map(toIds).filter((g) => g.length > 1),
     changes,
   };
