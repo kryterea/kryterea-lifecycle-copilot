@@ -124,9 +124,11 @@ export function Start({ id }: { id: string }) {
           </p>
         )}
         <div className="row">
-          <button type="submit" className="btn primary" disabled={busy || !!files.error || (byHand && !picked.length)}>
+          {/* The check syncs the same repo, so it waits for the files to load. */}
+          <button type="submit" className="btn primary" disabled={busy || !files.data || (byHand && !picked.length)} aria-busy={!files.data && !files.error}>
             Check <ChevronIcon size={16} />
           </button>
+          {!files.data && !files.error && <span className="hint">Reading the repo</span>}
           {byHand && !picked.length && <span className="hint">Pick at least one</span>}
         </div>
       </form>

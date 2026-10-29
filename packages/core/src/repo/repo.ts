@@ -101,18 +101,36 @@ export function checkRepoUrl(repoUrl: string, allowLocal: boolean): { url: strin
  * Full clone into cacheDir the first time, then fetch and hard-reset to the remote HEAD.
  * Writes only to cacheDir. The token goes (as Basic auth, via env) only to github.com.
  * `allowLocal` permits local paths and file:// remotes: tests only, the server never sets it.
+ * A call made while a sync of the same repo into the same cacheDir is in flight gets that sync's promise.
  */
-export async function syncRepo(
+export function syncRepo(
   repoUrl: string,
   cacheDir: string,
   token?: string,
   opts: { allowLocal?: boolean } = {},
 ): Promise<{ dir: string; commit: string }> {
   const allowLocal = opts.allowLocal === true;
-  const { url, github } = checkRepoUrl(repoUrl, allowLocal);
-  const base = { token, auth: github, allowLocal };
+  let checked: { url: string; github: boolean };
+  try {
+    checked = checkRepoUrl(repoUrl, allowLocal);
+  } catch (e) {
+    return Promise.reject(e);
+  }
+  const { url, github } = checked;
   const name = basename(url.replace(/[\\/]+$/, "")).replace(/\.git$/, "").replace(/[^\w.-]/g, "_") || "repo";
   const dir = resolve(cacheDir, `${name}-${createHash("sha1").update(url).digest("hex").slice(0, 8)}`);
+  let p = syncing.get(dir);
+  if (!p) {
+    p = syncInto(dir, url, { token, auth: github, allowLocal }).finally(() => syncing.delete(dir));
+    syncing.set(dir, p);
+  }
+  return p;
+}
+
+/** Syncs in flight, by clone dir: two callers of one repo await one sync instead of racing in one clone. */
+const syncing = new Map<string, Promise<{ dir: string; commit: string }>>();
+
+async function syncInto(dir: string, url: string, base: { token?: string; auth: boolean; allowLocal: boolean }): Promise<{ dir: string; commit: string }> {
   if (existsSync(join(dir, ".git"))) {
     await git(["fetch", "--prune", "origin", "HEAD"], { ...base, cwd: dir, timeoutMs: GIT_NET_MS });
     await git(["reset", "--hard", "FETCH_HEAD"], { ...base, cwd: dir });

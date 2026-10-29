@@ -119,6 +119,18 @@ describe("repo reader", () => {
     expect(again.commit).toBe(c3);
   });
 
+  it("two syncs of one repo share one fetch", async () => {
+    const cache = join(root, "cache-shared");
+    const a = syncRepo(origin, cache, undefined, LOCAL);
+    const b = syncRepo(origin, cache, undefined, LOCAL);
+    expect(b).toBe(a);
+    expect((await b).commit).toBe(c3);
+    // Once it settles, the next sync fetches again.
+    const later = syncRepo(origin, cache, undefined, LOCAL);
+    expect(later).not.toBe(a);
+    expect((await later).commit).toBe(c3);
+  });
+
   it("fails fast on a missing remote and never leaks the token", async () => {
     const err = await syncRepo(join(root, "nope"), join(root, "cache2"), "tok-secret", LOCAL).catch((e: Error) => e);
     expect(err).toBeInstanceOf(Error);
