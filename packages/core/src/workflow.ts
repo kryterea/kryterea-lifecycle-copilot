@@ -412,6 +412,20 @@ async function verify(s: Session, change: Change, stage: StageId, criteria: Crit
   });
 }
 
+/** Open failure paths raised on the change. Document gaps are left to the analyst's gate. */
+const openPathsOn = (record: CopilotRecord, changeId: string) => {
+  const gaps = new Set(docGapsOn(record, changeId).map((f) => f.id));
+  return record.listFindings({ changeId, status: "open" }).filter((f) => f.kind === "failure_path" && !gaps.has(f.id)).length;
+};
+
+/** QA holds on its criteria's latest checks, and while a failure path raised on the change is open. */
+function releaseQaGate(record: CopilotRecord, c: Change): { state: GateState; reason: string } {
+  const g = qaGate(latestChecks(record, criteriaOf(record, c)));
+  const n = openPathsOn(record, c.id);
+  if (g.state === "held" || n === 0) return g;
+  return { state: "held", reason: `${n} failure path finding${n === 1 ? "" : "s"} to deal with before release. Fix each one or accept the risk with a reason.` };
+}
+
 /**
  * The release gates, recomputed and recorded with no model call: open findings raised on this change and the
  * latest checks of its criteria. Returns the roles that hold.
@@ -425,7 +439,7 @@ function releaseHeld(record: CopilotRecord, c: Change): RoleId[] {
     ["ba", baNow],
     ["compliance", complianceGate(legalUnresolved(record, c.id))],
     ["architect", architectGate(openOn(record, c.id, "operations"))],
-    ["qa", qaGate(latestChecks(record, criteriaOf(record, c)))],
+    ["qa", releaseQaGate(record, c)],
   ];
   return gates.filter(([role, g]) => !gate(record, c.id, role, g)).map(([role]) => role);
 }
@@ -629,11 +643,14 @@ export function approveProposal(record: CopilotRecord, changeId: string, index: 
     kind: "fix",
   });
   record.setStage(fix.id, "build");
+  const carried = findings.filter((f) => f.status === "open");
   for (const c of ch.criteria) {
     const k = record.addCriterion({ projectId: from.projectId, changeId: fix.id, text: c.text, isFailurePath: c.isFailurePath });
     record.link({ type: "change", id: fix.id }, "satisfies", { type: "criterion", id: k.id });
+    // Evidence found on the change's criteria then closes the findings it carries, whichever role raised them.
+    for (const f of carried) record.link({ type: "finding", id: f.id }, "affects", { type: "criterion", id: k.id });
   }
-  linkFixChange(record, from, fix, findings.filter((f) => f.status === "open"));
+  linkFixChange(record, from, fix, carried);
   record.addArtifact({ changeId, role: "po", stage: from.stage, kind: "proposal_decision", body: { index, decision: "approved", actor, fixChangeId: fix.id } });
   return fix;
 }
@@ -750,7 +767,8 @@ export async function recheck(
       },
     });
     if (driftRun) record.finishRun(driftRun, "done");
-    for (const c of changes) {
+    // Changes at build go first: their verification can close findings that hold an older change at release.
+    for (const c of [...atBuild, ...changes.filter((x) => x.stage !== "build")]) {
       if (c.stage === "build") record.setStage(c.id, "verification");
       if (c.stage === "build" || c.stage === "release" || c.stage === "acceptance") {
         if ((await advanceIn(s, c.id)).stoppedForBudget) return { runIds: s.runIds, stoppedForBudget: true };

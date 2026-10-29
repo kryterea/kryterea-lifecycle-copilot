@@ -688,11 +688,16 @@ describe("workflow", () => {
   });
 
   describe("deciding on a proposed change", () => {
-    const withProposals = async () => {
+    const withProposals = async (criteria: Array<{ text: string; isFailurePath: boolean }> = []) => {
       const s = setup();
       const base = s.models.handlers["ba.understandApp"]!;
       const baFinding = { title: "Cancel never frees the slot", plain: "Cancelling leaves the slot taken.", costIfIgnored: "Lost bookings.", fixPrompt: "Free the slot on cancel.", triggerType: "code", file: "src/booking.js", line: 2, quote: null };
       s.models.handlers["ba.understandApp"] = (req) => ({ ...(base(req) as object), findings: [baFinding] });
+      const write = s.models.handlers["po.writeChanges"]!;
+      s.models.handlers["po.writeChanges"] = (req) => {
+        const out = write(req) as { changes: object[] };
+        return { ...out, changes: out.changes.map((c) => ({ ...c, criteria })) };
+      };
       const c = startCheck(s.record, { projectId: s.project.id, problem: "Cancelling does not free the slot." });
       await advance(s.deps, c.id);
       return { ...s, c, p: proposalsOf(s.record, c.id)! };
@@ -745,6 +750,28 @@ describe("workflow", () => {
       origin.commit("free the slot on cancel");
       await recheck(deps, project.id, "push");
       expect(STAGES.indexOf(record.getChange(fix.id).stage)).toBeGreaterThanOrEqual(STAGES.indexOf("verification"));
+    });
+
+    it("an approved change closes its business analyst finding once its criteria have evidence", async () => {
+      const { record, deps, c, p, project, origin } = await withProposals([{ text: "CRIT-FIX A cancelled booking frees its slot", isFailurePath: true }]);
+      const [baId] = p.changes[0]!.findingIds;
+      expect(record.listFindings({ changeId: c.id }).find((f) => f.id === baId)).toMatchObject({ role: "ba", kind: "failure_path" });
+      const fix = approveProposal(record, c.id, 0, "Ada");
+      origin.put("src/booking.js", "export function cancel(id) {\n  return free(id);\n}\n");
+      origin.commit("free the slot on cancel");
+      await recheck(deps, project.id, "push");
+      expect(record.findingStatus(baId!)).toBe("fixed");
+      expect(record.gates(fix.id).qa?.state).toBe("cleared");
+      expect(record.gates(c.id).qa?.state).toBe("cleared");
+    });
+
+    it("release stays Held while a failure path finding is open", async () => {
+      const { record, deps, c } = await withProposals();
+      expect(record.getChange(c.id).stage).toBe("release");
+      expect(record.gates(c.id).qa).toMatchObject({ state: "held", reason: "1 failure path finding to deal with before release. Fix each one or accept the risk with a reason." });
+      acceptProposalRisk(record, c.id, 0, "Ada", "We refund by hand for now.");
+      await advance(deps, c.id);
+      expect(record.gates(c.id).qa?.state).toBe("cleared");
     });
   });
 
