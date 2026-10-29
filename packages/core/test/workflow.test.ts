@@ -252,6 +252,18 @@ describe("workflow", () => {
     expect(g.qa?.state).toBe("cleared");
   });
 
+  it("a re-check runs every profession after a hand-picked check", async () => {
+    const { models, deps, project, record } = setup();
+    const c = startCheck(record, { projectId: project.id, problem: null, roles: ["ba"] });
+    await advance(deps, c.id);
+    expect(models.names()).not.toContain("qa.verifyCriteria");
+    models.calls.length = 0;
+    await recheck(deps, project.id, "manual");
+    expect(models.names()).toEqual(expect.arrayContaining(["compliance.reviewCompliance", "architect.reviewOperations", "qa.verifyCriteria"]));
+    // Scope is a choice about the check itself: its gates still say what was not checked.
+    expect(record.gates(c.id).qa).toMatchObject({ state: "held", reason: "Not checked" });
+  });
+
   it("an understand change gets proposed changes at release", async () => {
     const { record, models, deps, project } = setup();
     const base = models.handlers["ba.understandApp"]!;

@@ -53,6 +53,8 @@ interface Session {
   project: Project;
   repo: () => Promise<Repo>;
   runIds: string[];
+  /** A recheck: the project's operate duty, so every profession runs whatever scope the newest check was given. */
+  operate?: boolean;
 }
 
 function session(deps: WorkflowDeps, projectId: string): Session {
@@ -179,7 +181,7 @@ function asBuiltFor(record: CopilotRecord, change: Change, projectWide = change.
  */
 async function runRole(s: Session, change: Change, role: RoleId, work: (ctx: RoleContext) => Promise<void>): Promise<void> {
   const { record } = s.deps;
-  if (skipped(record, change.id, role)) return;
+  if (!s.operate && skipped(record, change.id, role)) return;
   const repo = await s.repo();
   const runId = record.startRun({ changeId: change.id, role, commit: repo.commit });
   s.runIds.push(runId);
@@ -694,7 +696,7 @@ export async function recheck(
   reason: "push" | "mcp" | "manual",
 ): Promise<{ runIds: string[]; stoppedForBudget: boolean }> {
   const { record } = deps;
-  const s = session(deps, projectId);
+  const s: Session = { ...session(deps, projectId), operate: true };
   // Withdrawn changes are left alone: nothing is charged to them and they never move again.
   const changes = record.listChanges(projectId).filter((c) => !withdrawal(record, c.id));
   const newest = changes.at(-1);
