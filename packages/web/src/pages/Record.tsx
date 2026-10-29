@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AcceptanceRecord, RunStatus } from "@lifecycle/core";
+import type { AcceptanceRecord, Proposals, RunStatus } from "@lifecycle/core";
 import { api, message, type ChangeView } from "../api";
 import { TriggerLine, lawTag } from "../components/FindingItem";
 import { BackIcon, PrintIcon } from "../components/Icon";
@@ -20,14 +20,18 @@ const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyl
 export function Record({ id }: { id: string }) {
   const [rec, setRec] = useState<AcceptanceRecord | null>(null);
   const [view, setView] = useState<ChangeView | null>(null);
+  const [proposals, setProposals] = useState<Proposals | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // The change view carries the law each legal finding cites; the record carries decisions and runs.
+    // A fix change's decisions were made on the proposals of the check it follows, so those titles come from there.
     Promise.all([api.record(id), api.change(id)]).then(
-      ([r, v]) => {
+      async ([r, v]) => {
+        const from = v.follows ? await api.change(v.follows.id).catch(() => null) : v;
         setRec(r);
         setView(v);
+        setProposals(from?.proposals ?? null);
       },
       (e) => setError(message(e)),
     );
@@ -76,6 +80,48 @@ export function Record({ id }: { id: string }) {
           </p>
         ))}
       </header>
+
+      {rec.problem && (
+        <section>
+          <h2>Problem</h2>
+          <p>{rec.problem}</p>
+        </section>
+      )}
+
+      {rec.answers.length > 0 && (
+        <section>
+          <h2>Answers</h2>
+          <ul className="criteria">
+            {rec.answers.map((a, i) => (
+              <li key={i}>
+                <span>
+                  <strong>{a.question}</strong>
+                  <br />
+                  {a.assumed ? `Assumed: ${a.answer}${a.actor ? `, by ${a.actor}` : ""}` : a.answer}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {rec.proposalDecisions.length > 0 && (
+        <section>
+          <h2>Changes decided</h2>
+          <ul className="criteria">
+            {rec.proposalDecisions.map((d, i) => (
+              <li key={i}>
+                <span>
+                  <strong>{proposals?.changes[d.index]?.title ?? `Change ${d.index + 1}`}</strong>
+                  <br />
+                  {d.decision === "approved" ? "Approved" : "Risk accepted"} by {d.actor}
+                  {d.reason ? `: ${d.reason}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <h2>Asked</h2>
@@ -138,6 +184,37 @@ export function Record({ id }: { id: string }) {
                   {k.text}
                   {k.isFailurePath && <span className="muted"> Failure path.</span>}
                 </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2>Trace</h2>
+        {rec.trace.length === 0 ? (
+          <p className="empty">No requirement is linked to these criteria.</p>
+        ) : (
+          <ul className="record-findings">
+            {rec.trace.map((r) => (
+              <li key={r.key}>
+                <p className="record-finding-head">
+                  <span className="key">{r.key}</span>
+                  <strong>{r.text}</strong>
+                </p>
+                <ul className="criteria">
+                  {r.criteria.map((k, i) => (
+                    <li key={i}>
+                      <EvidenceStamp state={k.state} />
+                      <span>{k.text}</span>
+                    </li>
+                  ))}
+                </ul>
+                {r.decisions.map((d, i) => (
+                  <p key={i} className="muted small">
+                    <StatusStamp status={d.status} /> {d.title}. {d.by}: {d.reason}
+                  </p>
+                ))}
               </li>
             ))}
           </ul>
@@ -244,6 +321,7 @@ export function Record({ id }: { id: string }) {
           </>
         )}
       </section>
+      <p className="hint">Not legal advice. Kryterea advises and records; people decide.</p>
     </article>
   );
 }

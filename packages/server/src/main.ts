@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -7,6 +7,9 @@ import { CopilotRecord, createFakeModel, createModel, loadPacks, type ModelFacto
 import { Jobs, createApp, isLoopback } from "./app.js";
 import { startPoller } from "./poller.js";
 import { playwrightBrowser } from "./browser.js";
+import { githubClient, parseGithubRepo } from "./github.js";
+import { linearClient } from "./linear.js";
+import { syncAfterJob, type SyncStatus } from "./sync.js";
 
 /** The repo root is the nearest folder up from this file with pnpm-workspace.yaml (works from src and dist). */
 function repoRoot(): string {
@@ -58,7 +61,8 @@ if (fake) {
   modelFor = (ledger) => createModel({ ...options, ledger });
 }
 
-const dataDir = join(root, "data");
+// COPILOT_DATA_DIR keeps a scratch record apart from the real one (UI checks, demos).
+const dataDir = env.COPILOT_DATA_DIR ? resolve(env.COPILOT_DATA_DIR) : join(root, "data");
 mkdirSync(dataDir, { recursive: true });
 const deps = {
   record: CopilotRecord.open(join(dataDir, "copilot.db")),
@@ -90,8 +94,33 @@ if (!isLoopback(hostname) && !apiToken) {
   process.exit(1);
 }
 
-const jobs = new Jobs();
-const app = createApp(liveDeps, { budgetUsd, jobs, port, host: hostname, apiToken, model: modelName, fake });
+// Warnings follow the work: after each job, open items go to linked Linear tickets and to GitHub. A missing key
+// turns that side off; it is never an error.
+const linearKey = env.LINEAR_API_KEY?.trim();
+const githubToken = env.GITHUB_TOKEN?.trim();
+const syncStatus = new Map<string, SyncStatus>();
+const syncDeps = {
+  record: deps.record,
+  linear: linearKey ? linearClient(linearKey) : null,
+  github: (repoUrl: string) => {
+    const repo = parseGithubRepo(repoUrl);
+    return githubToken && repo ? githubClient(githubToken, repo) : null;
+  },
+  status: syncStatus,
+};
+const jobs = new Jobs(console.error, syncAfterJob(syncDeps));
+const app = createApp(liveDeps, {
+  budgetUsd,
+  jobs,
+  port,
+  host: hostname,
+  apiToken,
+  model: modelName,
+  fake,
+  linear: syncDeps.linear,
+  githubConnected: Boolean(githubToken),
+  syncStatus,
+});
 const webDir = join(root, "packages", "web", "dist", "app");
 if (existsSync(webDir)) app.get("*", serveStatic({ root: webDir }));
 

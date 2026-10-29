@@ -1,14 +1,19 @@
 {
   "summary": "Pay again reuses the verify route and the pending status. It raises the chance of repeated verify calls on one booking and of payments for bookings that were cancelled meanwhile. The My bookings table gains a button, and demo mode behaves the same.",
-  "affected": ["C1", "C3"],
+  "affected": [
+    "C1",
+    "C3"
+  ],
   "criteria": [
     {
       "text": "In demo mode, Pay again still asks for the simulated payment and the booking shows as confirmed afterwards.",
-      "isFailurePath": false
+      "isFailurePath": false,
+      "requirementKeys": []
     },
     {
       "text": "A payment reference that already confirmed one booking is refused when it is used for another booking.",
-      "isFailurePath": true
+      "isFailurePath": true,
+      "requirementKeys": []
     }
   ],
   "findings": [

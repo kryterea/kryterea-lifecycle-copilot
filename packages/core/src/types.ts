@@ -93,7 +93,7 @@ export type FindingStatus = "open" | "fixed" | "accepted_risk" | "deferred";
 
 export type Trigger =
   | { type: "code"; file: string; line: number; commit: string }
-  | { type: "doc"; quote: string }
+  | { type: "doc"; quote: string; document?: string; line?: number }
   | { type: "screen"; url: string; screenshotPath: string };
 
 export interface FindingInput {
@@ -141,6 +141,9 @@ export interface Check {
 
 export type GateMap = Partial<Record<RoleId, { state: GateState; reason: string; at: string }>>;
 
+/** A decision made on one of a check's proposed changes. */
+export type ProposalDecision = { index: number; decision: "approved" | "accepted_risk"; actor: string; reason?: string; fixChangeId?: string };
+
 export interface AcceptanceRecord {
   change: Change;
   criteria: Array<Criterion & { latest: EvidenceState | null }>;
@@ -148,8 +151,74 @@ export interface AcceptanceRecord {
   gates: GateMap;
   decisions: Array<{ findingId: string; status: FindingStatus; reason: string; actor: string; at: string }>;
   runs: Array<{ id: string; role: RoleId; commit: string; status: RunStatus; costUsd: number }>;
+  /** Her problem in her own words: for a fix change, from the check it follows. Null when none was given. */
+  problem: string | null;
+  /** The latest questions paired with the answers saved after them. */
+  answers: Array<{ question: string; answer: string; assumed: boolean; actor: string | null }>;
+  /** The decisions made on the proposed changes of the check this record starts from. */
+  proposalDecisions: ProposalDecision[];
   /** From the latest `acceptance_summary` artifact, null when none. */
   summary: string | null;
+  /** Each requirement linked to these criteria: its criteria with their latest state, and the decisions people made on findings about it. */
+  trace: Array<{
+    key: string;
+    text: string;
+    criteria: Array<{ text: string; state: EvidenceState | null }>;
+    decisions: Array<{ title: string; status: FindingStatus; by: string; reason: string; at: string }>;
+  }>;
+}
+
+/** A PRD, spec or other project document: a repo file, or one uploaded or pasted (kept in the record only). */
+export interface Document {
+  id: string;
+  projectId: string;
+  name: string;
+  source: "repo" | "upload";
+  createdAt: string;
+}
+
+export interface DocumentVersion {
+  id: string;
+  documentId: string;
+  contentHash: string;
+  commit: string | null;
+  body: string;
+  createdAt: string;
+}
+
+/** One requirement read from a document line. Its key is its identity across document versions. */
+export interface Requirement {
+  id: string;
+  projectId: string;
+  documentId: string;
+  key: string;
+  text: string;
+  quote: string;
+  line: number;
+  status: "active" | "removed";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RequirementEvent {
+  requirementId: string;
+  kind: "added" | "changed" | "removed";
+  text: string;
+  versionId: string;
+  at: string;
+}
+
+export interface RequirementLink {
+  requirementId: string;
+  toType: "criterion" | "linear_issue";
+  toId: string;
+  createdAt: string;
+}
+
+/** Glob patterns added to and removed from the default document discovery. */
+export interface DocSettings {
+  include: string[];
+  exclude: string[];
 }
 
 export interface LegalDuty {

@@ -101,18 +101,36 @@ export function checkRepoUrl(repoUrl: string, allowLocal: boolean): { url: strin
  * Full clone into cacheDir the first time, then fetch and hard-reset to the remote HEAD.
  * Writes only to cacheDir. The token goes (as Basic auth, via env) only to github.com.
  * `allowLocal` permits local paths and file:// remotes: tests only, the server never sets it.
+ * A call made while a sync of the same repo into the same cacheDir is in flight gets that sync's promise.
  */
-export async function syncRepo(
+export function syncRepo(
   repoUrl: string,
   cacheDir: string,
   token?: string,
   opts: { allowLocal?: boolean } = {},
 ): Promise<{ dir: string; commit: string }> {
   const allowLocal = opts.allowLocal === true;
-  const { url, github } = checkRepoUrl(repoUrl, allowLocal);
-  const base = { token, auth: github, allowLocal };
+  let checked: { url: string; github: boolean };
+  try {
+    checked = checkRepoUrl(repoUrl, allowLocal);
+  } catch (e) {
+    return Promise.reject(e);
+  }
+  const { url, github } = checked;
   const name = basename(url.replace(/[\\/]+$/, "")).replace(/\.git$/, "").replace(/[^\w.-]/g, "_") || "repo";
   const dir = resolve(cacheDir, `${name}-${createHash("sha1").update(url).digest("hex").slice(0, 8)}`);
+  let p = syncing.get(dir);
+  if (!p) {
+    p = syncInto(dir, url, { token, auth: github, allowLocal }).finally(() => syncing.delete(dir));
+    syncing.set(dir, p);
+  }
+  return p;
+}
+
+/** Syncs in flight, by clone dir: two callers of one repo await one sync instead of racing in one clone. */
+const syncing = new Map<string, Promise<{ dir: string; commit: string }>>();
+
+async function syncInto(dir: string, url: string, base: { token?: string; auth: boolean; allowLocal: boolean }): Promise<{ dir: string; commit: string }> {
   if (existsSync(join(dir, ".git"))) {
     await git(["fetch", "--prune", "origin", "HEAD"], { ...base, cwd: dir, timeoutMs: GIT_NET_MS });
     await git(["reset", "--hard", "FETCH_HEAD"], { ...base, cwd: dir });
@@ -170,7 +188,47 @@ export async function changedFiles(
   return { changed, deleted };
 }
 
-const hasBlockedSegment = (rel: string) => rel.split(sep).some((seg) => NO_EVIDENCE_DIRS.has(seg.toLowerCase()));
+/**
+ * Changed line ranges on the new side, from `git diff -U0`. A pure deletion covers the lines either side of where
+ * it was; a deleted file covers every line.
+ */
+export async function diffHunks(dir: string, from: string, to: string): Promise<Array<{ file: string; start: number; end: number }>> {
+  if (!COMMIT_ID.test(from) || !COMMIT_ID.test(to)) throw new Error("diffHunks: from and to must be commit ids");
+  const raw = await git(["-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--no-color", from, to, "--"], { cwd: dir });
+  const out: Array<{ file: string; start: number; end: number }> = [];
+  let oldFile = "";
+  let file: string | null = null;
+  // File headers are read only between "diff --git" and the first "@@": a body line can start with "---" or "+++".
+  let header = false;
+  for (const line of raw.split("\n")) {
+    if (line.startsWith("diff --git ")) {
+      header = true;
+      file = null;
+    } else if (header && line.startsWith("--- ")) oldFile = line.slice(4).replace(/^a\//, "");
+    else if (header && line.startsWith("+++ ")) {
+      file = line === "+++ /dev/null" ? null : line.slice(4).replace(/^b\//, "");
+      if (file === null) out.push({ file: oldFile, start: 1, end: Number.MAX_SAFE_INTEGER });
+    } else if (line.startsWith("@@")) {
+      header = false;
+      if (!file) continue;
+      const m = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+      if (!m) continue;
+      const start = Number(m[1]);
+      const count = m[2] === undefined ? 1 : Number(m[2]);
+      out.push(count === 0 ? { file, start, end: start + 1 } : { file, start, end: start + count - 1 });
+    }
+  }
+  return out;
+}
+
+/** Subjects of the commits after `from` up to `to`, oldest first. */
+export async function commitMessages(dir: string, from: string, to: string): Promise<string[]> {
+  if (!COMMIT_ID.test(from) || !COMMIT_ID.test(to)) throw new Error("commitMessages: from and to must be commit ids");
+  const raw = await git(["log", "--reverse", "--format=%s", `${from}..${to}`], { cwd: dir });
+  return raw.split("\n").filter((l) => l.trim() !== "");
+}
+
+const hasBlockedSegment =(rel: string) => rel.split(sep).some((seg) => NO_EVIDENCE_DIRS.has(seg.toLowerCase()));
 
 /**
  * Absolute path of a citable file inside dir, or null if the path is absolute, escapes dir

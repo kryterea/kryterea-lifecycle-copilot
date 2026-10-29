@@ -8,10 +8,18 @@ import {
   CopilotRecord,
   SYSTEM_ACTOR,
   STAGES,
+  acceptProposalRisk,
   advance,
+  approveProposal,
+  criteriaOf,
   openFixChange,
   openQuestions,
+  problemOf,
+  proposalDecisions,
+  proposalsOf,
+  questionOptions,
   recheck,
+  startCheck,
   withdrawal,
   type Change,
   type Model,
@@ -114,6 +122,12 @@ function stubModels() {
       return { state: "evidence_found", evidence: [cite], note: "Done.", title: null, plain: null, costIfIgnored: null, fixPrompt: null };
     },
     "po.acceptanceSummary": () => ({ summary: "All agreed work has evidence found." }),
+    // One change per finding label in the prompt.
+    "po.writeChanges": (req) => ({
+      answersProblem: [],
+      duplicates: [],
+      changes: [...req.user.matchAll(/^(F\d+):/gm)].map((m) => ({ title: `Change for ${m[1]}`, forWhom: "Customers", why: "Reason.", findingIds: [m[1]], criteria: [] })),
+    }),
   };
   const factory: ModelFactory = (ledger) =>
     (async (req: ModelRequest) => {
@@ -195,24 +209,121 @@ describe("workflow", () => {
     });
   });
 
+  it("startCheck with a sentence stores the problem and titles the change", () => {
+    const { record, project } = setup();
+    const c = startCheck(record, { projectId: project.id, problem: "Customers get charged twice." });
+    expect(c.kind).toBe("understand");
+    expect(c.title.startsWith("Check: ")).toBe(true);
+    expect(c.description).toBe("Customers get charged twice. Then check the whole repo.");
+    expect(problemOf(record, c.id)).toBe("Customers get charged twice.");
+  });
+
+  it("startCheck with no sentence is a whole repo check", () => {
+    const { record, project } = setup();
+    const c = startCheck(record, { projectId: project.id, problem: null });
+    expect(c.title).toBe("Whole repo check");
+    expect(c.description).toBe("Check the whole repo.");
+    expect(problemOf(record, c.id)).toBeNull();
+  });
+
+  it("a skipped profession does not run", async () => {
+    const { models, deps, project, runs, record } = setup();
+    const c = startCheck(record, { projectId: project.id, problem: null, roles: ["ba", "qa"] });
+    await advance(deps, c.id);
+    const roles = runs(c.id).map((x) => x.role);
+    expect(roles).toContain("ba");
+    expect(roles).toContain("qa");
+    expect(roles).not.toContain("compliance");
+    expect(roles).not.toContain("architect");
+    expect(models.names()).not.toContain("compliance.reviewCompliance");
+    expect(models.names()).not.toContain("architect.reviewOperations");
+  });
+
+  it("release stays Held while a profession is not checked", async () => {
+    const { deps, project, record } = setup();
+    const c = startCheck(record, { projectId: project.id, problem: null, roles: ["ba", "qa"] });
+    const r = await advance(deps, c.id);
+    expect(r.held).toEqual(["compliance", "architect"]);
+    expect(record.getChange(c.id).stage).toBe("release");
+    const g = record.gates(c.id);
+    expect(g.compliance).toMatchObject({ state: "held", reason: "Not checked" });
+    expect(g.architect).toMatchObject({ state: "held", reason: "Not checked" });
+    expect(g.ba?.state).toBe("cleared");
+    expect(g.qa?.state).toBe("cleared");
+  });
+
+  it("a re-check runs every profession after a hand-picked check", async () => {
+    const { models, deps, project, record } = setup();
+    const c = startCheck(record, { projectId: project.id, problem: null, roles: ["ba"] });
+    await advance(deps, c.id);
+    expect(models.names()).not.toContain("qa.verifyCriteria");
+    models.calls.length = 0;
+    await recheck(deps, project.id, "manual");
+    expect(models.names()).toEqual(expect.arrayContaining(["compliance.reviewCompliance", "architect.reviewOperations", "qa.verifyCriteria"]));
+    // Scope is a choice about the check itself: its gates still say what was not checked.
+    expect(record.gates(c.id).qa).toMatchObject({ state: "held", reason: "Not checked" });
+  });
+
+  it("an understand change gets proposed changes at release", async () => {
+    const { record, models, deps, project } = setup();
+    const base = models.handlers["ba.understandApp"]!;
+    const baFinding = { title: "Cancel never frees the slot", plain: "Cancelling leaves the slot taken.", costIfIgnored: "Lost bookings.", fixPrompt: "Free the slot on cancel.", triggerType: "code", file: "src/booking.js", line: 2, quote: null };
+    models.handlers["ba.understandApp"] = (req) => ({ ...(base(req) as object), findings: [baFinding] });
+    const c = startCheck(record, { projectId: project.id, problem: "Cancelling does not free the slot." });
+    await advance(deps, c.id);
+    const open = record.listFindings({ changeId: c.id, status: "open" }).map((f) => f.id);
+    expect(open.length).toBeGreaterThan(0);
+    const p = proposalsOf(record, c.id);
+    expect(p).not.toBeNull();
+    expect(p!.changes.flatMap((x) => x.findingIds).sort()).toEqual([...open].sort());
+    expect(models.names().filter((n) => n === "po.writeChanges")).toHaveLength(1);
+    await advance(deps, c.id);
+    expect(models.names().filter((n) => n === "po.writeChanges")).toHaveLength(1);
+  });
+
   it("analysis does not move on while BA questions are unanswered", async () => {
     const { record, models, deps, change } = setup();
-    const base = models.handlers["ba.understandApp"]!;
-    models.handlers["ba.understandApp"] = (req) => ({ ...(base(req) as object), questions: ["Is the booking list meant to be admin only?"] });
-    const c = change("understand");
+    const c = change("feature", "Deposits");
+    record.addArtifact({ changeId: c.id, role: "ba", stage: "intake", kind: "questions", body: { questions: ["Is the booking list meant to be admin only?"] } });
+    record.setStage(c.id, "analysis");
     expect(await advance(deps, c.id)).toEqual({ stage: "analysis", held: ["ba"], stoppedForBudget: false });
     expect(await advance(deps, c.id)).toEqual({ stage: "analysis", held: ["ba"], stoppedForBudget: false });
-    expect(models.names()).toEqual(["ba.understandApp"]);
+    expect(models.names()).toEqual([]);
     expect(record.gates(c.id).ba?.state).toBe("held");
-    const q = record.listArtifacts(c.id).find((a) => a.kind === "questions");
-    expect(q?.body).toEqual({ questions: ["Is the booking list meant to be admin only?"] });
 
     record.addArtifact({ changeId: c.id, role: "ba", stage: "analysis", kind: "answers", body: { answers: ["Yes, admin only."] } });
-    const r = await advance(deps, c.id);
-    expect(r.stage).toBe("acceptance");
+    await advance(deps, c.id);
     const analyse = models.calls.find((x) => x.name === "ba.analyseChange");
     expect(analyse?.user).toContain("Yes, admin only.");
     expect(record.gates(c.id).ba?.state).toBe("cleared");
+  });
+
+  it("an understand change moves past analysis with questions open", async () => {
+    const { record, models, deps, change } = setup();
+    const base = models.handlers["ba.understandApp"]!;
+    models.handlers["ba.understandApp"] = (req) => ({
+      ...(base(req) as object),
+      questions: [{ question: "Can anyone see the booking list?", options: ["Only the owner", "Anyone"], defaultIndex: 0 }],
+    });
+    const c = change("understand");
+    expect(await advance(deps, c.id)).toEqual({ stage: "release", held: ["ba"], stoppedForBudget: false });
+    expect(models.names()).toContain("ba.analyseChange");
+    expect(openQuestions(record, c.id)).toEqual(["Can anyone see the booking list?"]);
+    expect(questionOptions(record, c.id)).toEqual([{ options: ["Only the owner", "Anyone"], defaultIndex: 0 }]);
+    expect(record.gates(c.id).ba?.state).toBe("held");
+
+    // Answers saved after the run clear the BA gate on the next advance.
+    record.addArtifact({ changeId: c.id, role: "ba", stage: "analysis", kind: "answers", body: { answers: ["Only the owner"] } });
+    const r = await advance(deps, c.id);
+    expect(r.held).not.toContain("ba");
+    expect(record.gates(c.id).ba?.state).toBe("cleared");
+  });
+
+  it("questionOptions reads old questions artifacts as null", () => {
+    const { record, change } = setup();
+    const c = change("feature", "Deposits");
+    record.addArtifact({ changeId: c.id, role: "ba", stage: "intake", kind: "questions", body: { questions: ["Q"] } });
+    expect(questionOptions(record, c.id)).toEqual([null]);
   });
 
   it("design review records a held compliance gate but still moves on", async () => {
@@ -220,7 +331,7 @@ describe("workflow", () => {
     models.handlers["compliance.reviewCompliance"] = () => ({ findings: [legalFinding] });
     const c = change("understand");
     const r = await advance(deps, c.id);
-    expect(models.names().slice(3)).toEqual(["architect.reviewOperations", "qa.verifyCriteria", "qa.verifyCriteria"]);
+    expect(models.names().slice(3)).toEqual(["architect.reviewOperations", "qa.verifyCriteria", "qa.verifyCriteria", "po.writeChanges"]);
     expect(r).toEqual({ stage: "release", held: ["compliance"], stoppedForBudget: false });
     const legal = record.listFindings({ changeId: c.id });
     expect(legal.map((f) => [f.kind, f.stage, f.status])).toEqual([["legal", "design_review", "open"]]);
@@ -588,6 +699,94 @@ describe("workflow", () => {
     expect(models.calls).toHaveLength(0);
   });
 
+  describe("deciding on a proposed change", () => {
+    const withProposals = async (criteria: Array<{ text: string; isFailurePath: boolean }> = []) => {
+      const s = setup();
+      const base = s.models.handlers["ba.understandApp"]!;
+      const baFinding = { title: "Cancel never frees the slot", plain: "Cancelling leaves the slot taken.", costIfIgnored: "Lost bookings.", fixPrompt: "Free the slot on cancel.", triggerType: "code", file: "src/booking.js", line: 2, quote: null };
+      s.models.handlers["ba.understandApp"] = (req) => ({ ...(base(req) as object), findings: [baFinding] });
+      const write = s.models.handlers["po.writeChanges"]!;
+      s.models.handlers["po.writeChanges"] = (req) => {
+        const out = write(req) as { changes: object[] };
+        return { ...out, changes: out.changes.map((c) => ({ ...c, criteria })) };
+      };
+      const c = startCheck(s.record, { projectId: s.project.id, problem: "Cancelling does not free the slot." });
+      await advance(s.deps, c.id);
+      return { ...s, c, p: proposalsOf(s.record, c.id)! };
+    };
+
+    it("approving a proposal parks a fix change at build with its criteria", async () => {
+      const { record, c, p } = await withProposals();
+      const fix = approveProposal(record, c.id, 0, "Ada");
+      const ch = p.changes[0]!;
+      expect(fix.kind).toBe("fix");
+      expect(fix.title).toBe(ch.title);
+      expect(record.getChange(fix.id).stage).toBe("build");
+      expect(criteriaOf(record, fix).filter((k) => k.changeId === fix.id).map((k) => k.text)).toEqual(ch.criteria.map((k) => k.text));
+      for (const id of ch.findingIds) expect(record.linksTo({ type: "change", id: fix.id })).toContainEqual({ from: { type: "finding", id }, rel: "raised_on" });
+      expect(proposalDecisions(record, c.id)).toEqual([{ index: 0, decision: "approved", actor: "Ada", fixChangeId: fix.id }]);
+    });
+
+    it("approving twice returns the same fix change", async () => {
+      const { record, c, project } = await withProposals();
+      const first = approveProposal(record, c.id, 0, "Ada");
+      const n = record.listChanges(project.id).length;
+      expect(approveProposal(record, c.id, 0, "Ada").id).toBe(first.id);
+      expect(record.listChanges(project.id)).toHaveLength(n);
+    });
+
+    it("accepting the risk closes the proposal's findings under the actor", async () => {
+      const { record, c, p } = await withProposals();
+      acceptProposalRisk(record, c.id, 0, "Ada", "We will live with it for now.");
+      for (const id of p.changes[0]!.findingIds) {
+        const f = record.listFindings({ changeId: c.id }).find((x) => x.id === id)!;
+        expect(f.status).toBe("accepted_risk");
+      }
+      expect(JSON.stringify(record.listFindings({ changeId: c.id }).map((f) => record.findingHistory(f.id)))).toContain("Ada");
+      expect(proposalDecisions(record, c.id)[0]).toMatchObject({ index: 0, decision: "accepted_risk", actor: "Ada", reason: "We will live with it for now." });
+    });
+
+    it("rejects an unknown index, an empty actor and an empty reason", async () => {
+      const { record, c } = await withProposals();
+      expect(() => approveProposal(record, c.id, 9, "Ada")).toThrow("No such proposed change");
+      expect(() => approveProposal(record, c.id, 0, " ")).toThrow();
+      expect(() => acceptProposalRisk(record, c.id, 0, "Ada", " ")).toThrow();
+      const other = startCheck(record, { projectId: record.getChange(c.id).projectId, problem: null });
+      expect(() => approveProposal(record, other.id, 0, "Ada")).toThrow("No such proposed change");
+    });
+
+    it("recheck moves an approved fix change to verification", async () => {
+      const { record, deps, c, project, origin } = await withProposals();
+      const fix = approveProposal(record, c.id, 0, "Ada");
+      origin.put("src/booking.js", "export const free = true;\n");
+      origin.commit("free the slot on cancel");
+      await recheck(deps, project.id, "push");
+      expect(STAGES.indexOf(record.getChange(fix.id).stage)).toBeGreaterThanOrEqual(STAGES.indexOf("verification"));
+    });
+
+    it("an approved change closes its business analyst finding once its criteria have evidence", async () => {
+      const { record, deps, c, p, project, origin } = await withProposals([{ text: "CRIT-FIX A cancelled booking frees its slot", isFailurePath: true }]);
+      const [baId] = p.changes[0]!.findingIds;
+      expect(record.listFindings({ changeId: c.id }).find((f) => f.id === baId)).toMatchObject({ role: "ba", kind: "failure_path" });
+      const fix = approveProposal(record, c.id, 0, "Ada");
+      origin.put("src/booking.js", "export function cancel(id) {\n  return free(id);\n}\n");
+      origin.commit("free the slot on cancel");
+      await recheck(deps, project.id, "push");
+      expect(record.findingStatus(baId!)).toBe("fixed");
+      expect(record.gates(fix.id).qa?.state).toBe("cleared");
+      expect(record.gates(c.id).qa?.state).toBe("cleared");
+    });
+
+    it("release stays Held while a failure path finding is open", async () => {
+      const { record, deps, c } = await withProposals();
+      expect(record.getChange(c.id).stage).toBe("release");
+      expect(record.gates(c.id).qa).toMatchObject({ state: "held", reason: "1 failure path finding to deal with before release. Fix each one or accept the risk with a reason." });
+      acceptProposalRisk(record, c.id, 0, "Ada", "We refund by hand for now.");
+      await advance(deps, c.id);
+      expect(record.gates(c.id).qa?.state).toBe("cleared");
+    });
+  });
+
   it("a fix change carries findings raised after delivery and holds until they are settled", async () => {
     const { record, deps, change } = setup();
     const c = change("understand");
@@ -656,6 +855,232 @@ describe("workflow", () => {
     expect(models.names()).toContain("qa.judgeFlow");
     expect(record.latestCheck(book.id)?.state).toBe("gap");
     expect(record.listFindings({ projectId: project.id, status: "open" }).some((f) => f.criterionId === book.id)).toBe(true);
+  });
+
+  it("QA adds no finding on a criterion that already has an open finding from any role", async () => {
+    const { record, models, deps, change, crit, project } = setup();
+    const gapOn = (title: string) => ({ state: "gap", evidence: [{ file: "src/app.js", line: 3 }], note: "Slot stays held.", title, plain: "The slot is not freed.", costIfIgnored: "Lost bookings.", fixPrompt: "Free the slot." });
+    models.qa["CRIT-CANCEL"] = gapOn("Cancelled booking keeps the slot");
+    await advance(deps, change("understand").id);
+    const cancel = crit("CRIT-CANCEL");
+    // A later check words the same gap differently: still one warning.
+    models.qa["CRIT-CANCEL"] = gapOn("Cancelling does not free the slot");
+    await recheck(deps, project.id, "manual");
+    expect(record.listFindings({ projectId: project.id, status: "open" }).filter((f) => f.criterionId === cancel.id)).toHaveLength(1);
+    expect(record.latestCheck(cancel.id)?.state).toBe("gap");
+  });
+
+  it("QA adds no finding where the analyst already raised the failure path, and evidence found later closes it", async () => {
+    const { record, models, deps, change, crit, project } = setup();
+    const base = models.handlers["ba.understandApp"]!;
+    const baFinding = { title: "Cancel never frees the slot", plain: "Cancelling leaves the slot taken.", costIfIgnored: "Lost bookings.", fixPrompt: "Free the slot on cancel.", triggerType: "code", file: "src/booking.js", line: 2, quote: null };
+    models.handlers["ba.understandApp"] = (req) => ({ ...(base(req) as object), findings: [baFinding] });
+    models.qa["CRIT-CANCEL"] = { state: "gap", evidence: [{ file: "src/booking.js", line: 2 }], note: "Slot stays held.", title: "Cancelled booking keeps the slot", plain: "The slot is not freed.", costIfIgnored: "Lost bookings.", fixPrompt: "Free the slot." };
+    await advance(deps, change("understand").id);
+    const cancel = crit("CRIT-CANCEL");
+    const open = record.listFindings({ projectId: project.id, status: "open" }).filter((f) => f.kind === "failure_path");
+    expect(open.map((f) => [f.role, f.title])).toEqual([["ba", "Cancel never frees the slot"]]);
+    expect(record.latestCheck(cancel.id)?.state).toBe("gap");
+
+    delete models.qa["CRIT-CANCEL"];
+    await recheck(deps, project.id, "manual");
+    expect(record.listFindings({ projectId: project.id, status: "open" }).filter((f) => f.kind === "failure_path")).toHaveLength(0);
+  });
+
+  it("QA's gap is kept beside a drift finding on the same criterion, and outlives it", async () => {
+    const { record, models, deps, change, crit, project, origin } = setup();
+    await advance(deps, change("understand").id);
+    const f = change("feature", "Take a deposit");
+    await advance(deps, f.id);
+    const book = crit("CRIT-BOOK");
+    models.qa["CRIT-BOOK"] = { state: "gap", evidence: [{ file: "src/app.js", line: 2 }], note: "No slot check.", title: "Booking accepts an empty slot", plain: "An empty slot is saved.", costIfIgnored: "Broken bookings.", fixPrompt: "Check the slot." };
+    origin.put("src/app.js", "export function book(slot) {\n  return save(slot);\n}\n");
+    origin.commit("drop the slot check");
+    await recheck(deps, project.id, "push");
+    const onBook = () => record.listFindings({ projectId: project.id, status: "open" }).filter((x) => x.criterionId === book.id).map((x) => x.title);
+    expect(onBook()).toContain("Booking accepts an empty slot");
+    await recheck(deps, project.id, "manual");
+    expect(onBook()).toContain("Booking accepts an empty slot");
+  });
+
+  describe("documents", () => {
+    const PRD = "# Salon PRD\n\nFR-1: Customers book a slot online.\nCancelling should be easy.\n";
+    const docGap = { document: "docs/PRD.md", kind: "quality", title: "Easy cancelling cannot be checked", plain: "Nobody can tell what easy means.", costIfIgnored: "Arguments about cancelling.", fixPrompt: "Say how cancelling works.", quote: "Cancelling should be easy.", line: 4 };
+    const withPrd = () => {
+      const t = setup();
+      t.origin.put("docs/PRD.md", PRD);
+      t.origin.commit("prd");
+      t.models.handlers["ba.reviewDocuments"] = (req) => ({
+        requirements: req.user.includes("FR-1: Customers book a slot online.") ? [{ document: "docs/PRD.md", key: "FR-1", text: "Customers book a slot online.", quote: "FR-1: Customers book a slot online.", line: 3 }] : [],
+        gaps: req.user.includes("Cancelling should be easy.") ? [docGap] : [],
+      });
+      t.models.handlers["ba.undocumentedFlows"] = () => ({ findings: [] });
+      const base = t.models.handlers["ba.analyseChange"]!;
+      t.models.handlers["ba.analyseChange"] = (req) => {
+        const out = base(req) as { criteria: Array<{ text: string; requirementKeys?: string[] }> };
+        return { ...out, criteria: out.criteria.map((c) => ({ ...c, requirementKeys: c.text.startsWith("CRIT-BOOK") ? ["FR-1"] : [] })) };
+      };
+      return t;
+    };
+
+    it("reads documents at intake, stores requirements and links criteria to them", async () => {
+      const { record, models, deps, change, project, crit } = withPrd();
+      const c = change("understand");
+      await advance(deps, c.id);
+      expect(models.names().slice(0, 2)).toEqual(["ba.reviewDocuments", "ba.understandApp"]);
+      expect(models.calls.find((x) => x.name === "compliance.reviewCompliance")?.user).toContain("<<<BEGIN DOCUMENT docs/PRD.md>>>");
+      const [req] = record.listRequirements(project.id);
+      expect(req).toMatchObject({ key: "FR-1", line: 3 });
+      expect(record.requirementLinks(req!.id)).toMatchObject([{ toType: "criterion", toId: crit("CRIT-BOOK").id }]);
+      const read = record.listArtifacts(c.id).find((a) => a.kind === "documents_read");
+      expect(read?.body).toMatchObject({ documents: [{ name: "docs/PRD.md", requirements: 1, gaps: 1 }] });
+    });
+
+    it("does not call the model for documents whose content did not change", async () => {
+      const { models, deps, change } = withPrd();
+      await advance(deps, change("understand").id);
+      expect(models.names()).toContain("ba.reviewDocuments");
+      models.calls.length = 0;
+      await advance(deps, change("feature", "Add deposits").id);
+      expect(models.names()).not.toContain("ba.reviewDocuments");
+    });
+
+    it("document gaps hold the analyst's gate until fixed or accepted", async () => {
+      const { record, deps, change } = withPrd();
+      const c = change("understand");
+      expect(await advance(deps, c.id)).toEqual({ stage: "release", held: ["ba"], stoppedForBudget: false });
+      expect(record.gates(c.id).ba).toMatchObject({ state: "held", reason: "1 document gap to fix or accept with a reason." });
+      const [gap] = record.listFindings({ changeId: c.id });
+      record.setFindingStatus(gap!.id, "accepted_risk", "Agreed with the client on a call", "owner");
+      expect((await advance(deps, c.id)).stage).toBe("acceptance");
+      expect(record.gates(c.id).ba?.state).toBe("cleared");
+    });
+
+    it("a document gap clears only when a re-read no longer raises it", async () => {
+      const { record, deps, change, project, origin } = withPrd();
+      const c = change("understand");
+      await advance(deps, c.id);
+      const [gap] = record.listFindings({ changeId: c.id });
+      expect(gap!.trigger).toEqual({ type: "doc", quote: "Cancelling should be easy.", document: "docs/PRD.md", line: 4 });
+      record.addArtifact({ changeId: c.id, role: "ba", stage: "release", kind: "fix_report", body: { findingId: gap!.id, summary: "Clarified" } });
+      await recheck(deps, project.id, "manual");
+      expect(record.findingStatus(gap!.id)).toBe("open");
+
+      origin.put("docs/PRD.md", PRD.replace("Cancelling should be easy.", "A customer cancels from My bookings up to 24 hours before."));
+      origin.commit("clarify cancel");
+      await recheck(deps, project.id, "push");
+      expect(record.findingStatus(gap!.id)).toBe("fixed");
+      expect(record.findingHistory(gap!.id).at(-1)).toMatchObject({ actor: "ba" });
+      expect(record.findingHistory(gap!.id).at(-1)!.reason).toMatch(/^Not raised again on re-read at [0-9a-f]{7}$/);
+    });
+
+    it("a push that rewords a requirement raises drift on recheck", async () => {
+      const { record, models, deps, change, project, origin } = withPrd();
+      const c = change("understand");
+      await advance(deps, c.id);
+      models.handlers["ba.reviewDocuments"] = () => ({
+        requirements: [{ document: "docs/PRD.md", key: "FR-1", text: "Customers book and pay for a slot online.", quote: "FR-1: Customers book and pay for a slot online.", line: 3 }],
+        gaps: [],
+      });
+      await new Promise((r) => setTimeout(r, 5));
+      origin.put("docs/PRD.md", PRD.replace("FR-1: Customers book a slot online.", "FR-1: Customers book and pay for a slot online."));
+      origin.commit("reword FR-1");
+      await recheck(deps, project.id, "push");
+      const titles = record.listFindings({ projectId: project.id, status: "open" }).map((f) => f.title);
+      expect(titles).toContain("Requirement FR-1 changed but its criteria did not");
+    });
+
+    it("runs the undocumented check when the baseline has documents", async () => {
+      const { record, models, deps, change, project } = withPrd();
+      models.handlers["ba.undocumentedFlows"] = (req) => {
+        expect(req.user).toContain("- Book a slot");
+        return { findings: [{ title: "Cancel a booking", plain: "Customers can cancel, but no document says so.", costIfIgnored: "Nobody decided the refund rule.", fixPrompt: "x", triggerType: "code", file: "src/booking.js", line: 1, quote: null }] };
+      };
+      await advance(deps, change("understand").id);
+      expect(models.names().slice(0, 3)).toEqual(["ba.reviewDocuments", "ba.understandApp", "ba.undocumentedFlows"]);
+      expect(record.listFindings({ projectId: project.id }).map((f) => f.title)).toContain("Not in any document: Cancel a booking");
+    });
+
+    it("skips the undocumented check when there are no documents", async () => {
+      const { models, deps, change } = setup();
+      await advance(deps, change("understand").id);
+      expect(models.names()).not.toContain("ba.undocumentedFlows");
+    });
+
+    it("documents past the reading limit are read in a later call, not dropped", async () => {
+      const { record, models, deps, change, project, origin } = withPrd();
+      const big = ["# Big", ...Array.from({ length: 2000 }, (_, i) => `Line ${i} ${"x".repeat(40)}`)].join("\n");
+      origin.put("docs/A-big.md", big);
+      origin.commit("big doc");
+      const c = change("understand");
+      await advance(deps, c.id);
+      expect(models.names().filter((n) => n === "ba.reviewDocuments")).toHaveLength(2);
+      expect(record.listRequirements(project.id, { status: "active" }).map((r) => r.key)).toEqual(["FR-1"]);
+      const read = record.listArtifacts(c.id).filter((a) => a.kind === "documents_read").flatMap((a) => (a.body as { documents: Array<{ name: string }> }).documents.map((d) => d.name));
+      expect(read.sort()).toEqual(["docs/A-big.md", "docs/PRD.md"]);
+    });
+
+    it("a requirement and a gap past the reading limit stay as they were", async () => {
+      const { record, deps, change, project, origin } = withPrd();
+      await advance(deps, change("understand").id);
+      const filler = Array.from({ length: 2000 }, (_, i) => `Note ${i} ${"x".repeat(40)}`).join("\n");
+      origin.put("docs/PRD.md", PRD.replace("# Salon PRD\n", `# Salon PRD\n${filler}\n`));
+      origin.commit("long PRD");
+      await recheck(deps, project.id, "push");
+      expect(record.listRequirements(project.id, { status: "active" }).map((r) => r.key)).toEqual(["FR-1"]);
+      expect(record.listFindings({ projectId: project.id, status: "open" }).map((f) => f.title)).toContain(docGap.title);
+    });
+
+    it("a gap whose quoted line is still there stays open when a re-read does not raise it", async () => {
+      const { record, models, deps, change, project, origin } = withPrd();
+      await advance(deps, change("understand").id);
+      models.handlers["ba.reviewDocuments"] = () => ({ requirements: [{ document: "docs/PRD.md", key: "FR-1", text: "Customers book a slot online.", quote: "FR-1: Customers book a slot online.", line: 3 }], gaps: [] });
+      origin.put("docs/PRD.md", `${PRD}Prices are in naira.\n`);
+      origin.commit("add prices");
+      await recheck(deps, project.id, "push");
+      expect(record.listFindings({ projectId: project.id, status: "open" }).map((f) => f.title)).toContain(docGap.title);
+    });
+
+    it("a gap reworded on re-read replaces the old one on the same line", async () => {
+      const { record, models, deps, change, project, origin } = withPrd();
+      await advance(deps, change("understand").id);
+      models.handlers["ba.reviewDocuments"] = () => ({ requirements: [], gaps: [{ ...docGap, title: "Cancelling has no rule" }] });
+      origin.put("docs/PRD.md", `${PRD}Prices are in naira.\n`);
+      origin.commit("add prices");
+      await recheck(deps, project.id, "push");
+      const open = record.listFindings({ projectId: project.id, status: "open" }).filter((f) => f.trigger.type === "doc" && f.trigger.quote === docGap.quote);
+      expect(open.map((f) => f.title)).toEqual(["Cancelling has no rule"]);
+    });
+
+    it("drift findings on a document survive a re-read and never hold the analyst's gate", async () => {
+      const { record, models, deps, change, project, origin } = withPrd();
+      const base = models.handlers["ba.reviewDocuments"]!;
+      models.handlers["ba.reviewDocuments"] = (req) => {
+        const out = base(req) as { requirements: unknown[]; gaps: unknown[] };
+        return { ...out, requirements: [...out.requirements, { document: "docs/PRD.md", key: "FR-2", text: "Customers cancel online.", quote: "Cancelling should be easy.", line: 4 }] };
+      };
+      const c = change("understand");
+      await advance(deps, c.id);
+      const [gap] = record.listFindings({ changeId: c.id, status: "open" });
+      record.setFindingStatus(gap!.id, "accepted_risk", "Agreed with the client", "owner");
+      await recheck(deps, project.id, "manual");
+      const drift = record.listFindings({ projectId: project.id, status: "open" }).find((f) => f.title === "Requirement FR-2 has no acceptance criteria");
+      expect(drift).toBeDefined();
+      expect(record.gates(c.id).ba?.state).toBe("cleared");
+
+      models.handlers["ba.reviewDocuments"] = () => ({ requirements: [], gaps: [] });
+      origin.put("docs/PRD.md", PRD.replace("Cancelling should be easy.", "Cancelling is free."));
+      origin.commit("reword cancel");
+      await advance(deps, change("feature", "Add deposits").id);
+      expect(record.findingStatus(drift!.id)).toBe("open");
+    });
+
+    it("no documents: no document model call and no document findings", async () => {
+      const { record, models, deps, change, project } = setup();
+      await advance(deps, change("understand").id);
+      expect(models.names()).not.toContain("ba.reviewDocuments");
+      expect(record.listDocuments(project.id)).toEqual([]);
+    });
   });
 
   it("acceptance waits without the artifact and clears with it; costs reach the record only through the ledger", async () => {

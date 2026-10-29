@@ -8,6 +8,7 @@ import type {
   Model,
   Packs,
   Project,
+  Requirement,
 } from "../types.js";
 
 export interface RoleContext {
@@ -22,15 +23,21 @@ export interface RoleContext {
   existingFindings: Array<{ id: string; title: string; kind: FindingKind }>;
   /** From the latest 'answers' artifact, empty if none. */
   answers: string[];
+  /** The project's PRD, specs and other documents, latest version of each. */
+  documents?: Array<{ name: string; body: string }>;
+  /** Active requirements read from those documents. */
+  requirements?: Requirement[];
 }
 
 export type RoleFinding = Omit<FindingInput, "projectId" | "changeId" | "runId" | "role" | "stage">;
 
 export interface RoleResult {
   artifacts: Array<{ kind: string; body: unknown }>;
-  criteria: Array<{ text: string; isFailurePath: boolean }>;
+  criteria: Array<{ text: string; isFailurePath: boolean; requirementKeys?: string[] }>;
   findings: RoleFinding[];
   questions: string[];
+  /** Plain answers to pick from, one entry per question (same length as `questions`), with the safe one named. */
+  questionOptions?: Array<{ options: string[]; defaultIndex: number }>;
   affectedCriterionIds: string[];
   /** Reviews only: each file the model was shown, with the last line it saw. Confirms reported fixes. */
   shown?: Map<string, number>;
@@ -141,6 +148,46 @@ export function renderDocText(asBuilt: unknown, description: string): string {
   return lines.join("\n");
 }
 
+/**
+ * The project's documents with numbered lines, each inside BEGIN/END DOCUMENT markers, cut off at maxChars in
+ * total. `lines` holds, per document, the lines the model was shown, so a quote can be checked against them.
+ */
+export function documentsBlock(docs: Array<{ name: string; body: string }>, maxChars = 80_000): { text: string; lines: Map<string, string[]> } {
+  const lines = new Map<string, string[]>();
+  let out = "";
+  for (const d of docs) {
+    const all = d.body.replaceAll("\r\n", "\n").split("\n");
+    let block = `<<<BEGIN DOCUMENT ${defang(d.name)}>>>`;
+    const kept: string[] = [];
+    for (const l of all) {
+      const row = `\n${kept.length + 1}: ${defang(l)}`;
+      if (out.length + block.length + row.length > maxChars) break;
+      block += row;
+      kept.push(l);
+    }
+    if (kept.length < all.length) block += "\n[truncated]";
+    out += `${out ? "\n\n" : ""}${block}\n<<<END DOCUMENT>>>`;
+    lines.set(d.name, kept);
+    if (kept.length < all.length) break;
+  }
+  return { text: out, lines };
+}
+
+/** Added to a role's instructions when the project has documents. */
+export const DOC_TRIGGER_RULE = `The project documents in the user message are also evidence: a doc trigger may quote one of them, with triggerType "doc", file set to the document name exactly as in its BEGIN DOCUMENT marker, line set to the line number as shown, and quote copied word for word from that line.`;
+
+/** The project's documents as role material (text, lines shown, the trigger rule), or null when there are none. */
+export function projectDocuments(ctx: RoleContext): { text: string; lines: Map<string, string[]>; rule: string } | null {
+  if (!ctx.documents?.length) return null;
+  return { ...documentsBlock(ctx.documents), rule: DOC_TRIGGER_RULE };
+}
+
+/** True when the quote appears word for word on the given line or within 3 lines of it. */
+export function quoteNear(lines: string[], quote: string, line: number): boolean {
+  if (!quote.trim() || !Number.isInteger(line) || line < 1 || line > lines.length) return false;
+  return lines.slice(Math.max(0, line - 4), line + 3).join("\n").includes(quote);
+}
+
 /** A finding as the model returns it (flat trigger fields; optional ones are null). */
 export interface RawFinding {
   title: string;
@@ -164,11 +211,19 @@ export function checkTriggers(
   dir: string,
   findings: RawFinding[],
   docText: string,
-  opts: { commit: string; shown: Map<string, number>; kind: FindingKind; fallbackQuote?: string },
+  opts: { commit: string; shown: Map<string, number>; kind: FindingKind; fallbackQuote?: string; docs?: Map<string, string[]> },
 ): RoleFinding[] {
   const out: RoleFinding[] = [];
   for (const f of findings) {
     const base = { kind: opts.kind, title: f.title, plain: f.plain, costIfIgnored: f.costIfIgnored, fixPrompt: f.fixPrompt };
+    // A doc trigger that names a project document: the quote must be on or near that line of it.
+    const lines = f.triggerType === "doc" && f.file !== null ? opts.docs?.get(f.file) : undefined;
+    if (lines && f.file !== null) {
+      if (f.quote && f.line !== null && quoteNear(lines, f.quote, f.line)) {
+        out.push({ ...base, trigger: { type: "doc", quote: f.quote, document: f.file, line: f.line } });
+      }
+      continue;
+    }
     if (f.triggerType === "code") {
       const last = f.file ? opts.shown.get(f.file) : undefined;
       if (f.file && f.line !== null && last !== undefined && f.line <= last && verifyCodeTrigger(dir, { file: f.file, line: f.line })) {

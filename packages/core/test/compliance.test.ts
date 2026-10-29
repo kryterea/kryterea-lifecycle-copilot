@@ -87,6 +87,17 @@ const finding = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("reviewCompliance", () => {
+  it("can cite a PRD line as the trigger for a legal finding", async () => {
+    const seen: ModelRequest[] = [];
+    const PRD = { name: "docs/PRD.md", body: "# PRD\nWe store each customer phone number forever.\nThe app must stay up during sales." };
+    const quoted = finding({ triggerType: "doc", file: "docs/PRD.md", line: 2, quote: "We store each customer phone number forever." });
+    const made = finding({ title: "Check this: made up", triggerType: "doc", file: "docs/PRD.md", line: 2, quote: "We sell phone numbers." });
+    const r = await reviewCompliance(ctx(stub(() => ({ findings: [quoted, made] }), seen), { documents: [PRD] }), asBuilt);
+    expect(seen[0]!.user).toContain("<<<BEGIN DOCUMENT docs/PRD.md>>>");
+    expect(r.findings).toHaveLength(1);
+    expect(r.findings[0]!.trigger).toEqual({ type: "doc", quote: "We store each customer phone number forever.", document: "docs/PRD.md", line: 2 });
+  });
+
   it("keeps a finding citing a pack id, as a legal finding with a verified code trigger", async () => {
     const r = await reviewCompliance(ctx(stub(() => ({ findings: [finding()] }))), asBuilt);
     expect(r.findings).toHaveLength(1);

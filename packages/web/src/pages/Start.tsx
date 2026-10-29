@@ -1,0 +1,137 @@
+import { useState, type FormEvent } from "react";
+import { api, message, useLoad } from "../api";
+import { CheckIcon, ChevronIcon } from "../components/Icon";
+
+/** The professions she can leave out. The product owner always looks. */
+const PICKABLE = ["ba", "architect", "qa", "compliance"];
+
+const GROUP_LABEL = { code: "Code", documents: "Documents", config: "Config", tests: "Tests", skipped: "Skipped" } as const;
+
+/** After linking a repo: what was read, what is wrong in her words, who should look. */
+export function Start({ id }: { id: string }) {
+  const project = useLoad(() => api.project(id), id);
+  const files = useLoad(() => api.files(id), id);
+  const professions = useLoad(() => api.professions(), "professions");
+  const [problem, setProblem] = useState("");
+  const [byHand, setByHand] = useState(false);
+  const [picked, setPicked] = useState<string[]>(PICKABLE);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const check = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.check(id, problem.trim(), byHand ? PICKABLE.filter((x) => picked.includes(x)) : undefined);
+      location.hash = `#/changes/${encodeURIComponent(r.changeId)}/assessment/${encodeURIComponent(r.jobId)}`;
+    } catch (err) {
+      setError(message(err));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="page">
+      <header className="page-head">
+        <div>
+          <h1>{project.data?.project.name ?? "New project"}</h1>
+        </div>
+      </header>
+
+      <section className="start-block">
+        <h2>Files picked up</h2>
+        {!files.data && !files.error && <p className="muted">Reading the repo</p>}
+        {files.error && <p className="error">Could not read the repo. {files.error}</p>}
+        {files.data && (
+          <>
+            <ul className="rows" aria-label="Files picked up">
+              {files.data.groups
+                .filter((g) => g.files.length > 0)
+                .map((g) => (
+                  <li key={g.kind}>
+                    <div className="item">
+                      <strong>{GROUP_LABEL[g.kind]}</strong>
+                      <span className="mono muted">{g.files.length}</span>
+                    </div>
+                  </li>
+                ))}
+            </ul>
+            {files.data.documents.length > 0 && (
+              <ul className="rows" aria-label="Documents">
+                {files.data.documents.map((d) => (
+                  <li key={d.path}>
+                    <div className="item">
+                      <span className="mono start-path">{d.path}</span>
+                      <span className="mono muted nowrap">{d.lines} lines</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </section>
+
+      <form className="card form" onSubmit={check}>
+        <label>
+          <span>What is wrong?</span>
+          <input
+            value={problem}
+            onChange={(e) => setProblem(e.target.value)}
+            maxLength={500}
+            placeholder="Describe the problem in your own words, or leave it empty to check the whole repo."
+          />
+        </label>
+        <div className="start-block">
+          <h2>Who should look?</h2>
+          <p className="start-auto">
+            <span className="start-auto-icon">{!byHand && <CheckIcon size={16} />}</span>
+            <strong>{byHand ? "Picked by hand" : "Auto (recommended)"}</strong>
+            <button type="button" className="btn ghost" onClick={() => setByHand(!byHand)}>
+              {byHand ? "Use Auto" : "Pick by hand"}
+            </button>
+          </p>
+          {professions.data && (
+            <ul className="rows" aria-label="Professionals">
+              {professions.data.map((p) => {
+                const pickable = byHand && PICKABLE.includes(p.role);
+                const body = (
+                  <>
+                    <span className="row-main">
+                      <strong>{p.name}</strong>
+                      <span className="hint">{p.why}</span>
+                    </span>
+                    {pickable && (
+                      <input
+                        type="checkbox"
+                        className="start-pick"
+                        checked={picked.includes(p.role)}
+                        onChange={(e) => setPicked(e.target.checked ? [...picked, p.role] : picked.filter((r) => r !== p.role))}
+                      />
+                    )}
+                    {byHand && p.role === "po" && <span className="muted nowrap">Always looks</span>}
+                  </>
+                );
+                return <li key={p.role}>{pickable ? <label className="item">{body}</label> : <div className="item">{body}</div>}</li>;
+              })}
+            </ul>
+          )}
+        </div>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="row">
+          {/* The check syncs the same repo, so it waits for the files to load. */}
+          <button type="submit" className="btn primary" disabled={busy || !files.data || (byHand && !picked.length)} aria-busy={!files.data && !files.error}>
+            Check <ChevronIcon size={16} />
+          </button>
+          {!files.data && !files.error && <span className="hint">Reading the repo</span>}
+          {byHand && !picked.length && <span className="hint">Pick at least one</span>}
+        </div>
+      </form>
+    </div>
+  );
+}

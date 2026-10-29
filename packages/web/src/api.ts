@@ -3,17 +3,29 @@ import type {
   AcceptanceRecord,
   Change,
   ChangeKind,
+  CommitCompare,
+  CommitState,
+  CommitTrace,
+  DocSettings,
+  Document,
+  DocumentVersion,
+  EvidenceState,
   Finding,
   FindingStatus,
   GateMap,
   LegalDuty,
+  OpenItem,
   Project,
+  ProposalDecision,
+  Proposals,
+  Requirement,
   RunStatus,
   StageId,
+  TraceChain,
 } from "@lifecycle/core";
 
 export type Run = AcceptanceRecord["runs"][number];
-export type Criterion = AcceptanceRecord["criteria"][number];
+export type Criterion = AcceptanceRecord["criteria"][number] & { requirementKeys?: string[] };
 /** A finding as the change endpoint returns it: legal ones carry the law or standard they cite. */
 export type FindingView = Finding & {
   status: FindingStatus;
@@ -21,7 +33,37 @@ export type FindingView = Finding & {
   section?: string;
   /** The coding agent's fix report, while it waits on a re-check to confirm it. */
   fixReported?: { summary: string; at: string } | null;
+  /** The drift rule it was raised under, when Kryterea raised it on drift. */
+  drift?: string | null;
+  /** The last decision a person or a re-check made on it. */
+  decision?: { status: FindingStatus; reason: string; actor: string; at: string } | null;
 };
+
+export type DocumentRow = Document & { latest: DocumentVersion; versions: number; requirements: number; gaps: number };
+export interface DocumentDetail {
+  document: Document;
+  versions: DocumentVersion[];
+  requirements: Requirement[];
+  findings: Array<Finding & { status: FindingStatus }>;
+}
+export type RequirementRow = Requirement & {
+  criteria: number;
+  tickets: string[];
+  evidence: EvidenceState | null;
+  open: number;
+  drifted: boolean;
+};
+export interface ConnectionState {
+  state: "connected" | "off" | "error";
+  detail: string | null;
+  lastComment: string | null;
+}
+export interface Connections {
+  github: ConnectionState;
+  linear: ConnectionState & { tickets: number };
+  mcp: { command: string };
+}
+export type { CommitCompare, CommitState, CommitTrace, OpenItem, TraceChain };
 
 /** Another change this one points at: the change it follows, or a fix change opened from it. */
 export interface LinkedChange {
@@ -42,6 +84,14 @@ export interface ChangeView {
   withdrawn: { reason: string; actor: string } | null;
   follows: LinkedChange | null;
   fixChanges: Array<LinkedChange & { withdrawn: boolean; findingIds: string[] }>;
+  documentsRead?: Array<{ name: string; requirements: number; gaps: number }>;
+  /** Her problem in her own words, null for a whole repo check. */
+  problem: string | null;
+  /** The answers on offer for each open question, aligned with `questions`; null where none were stored. */
+  questionOptions: Array<{ options: string[]; defaultIndex: number } | null>;
+  /** The changes Kryterea wrote for a check, null until they are written. */
+  proposals: Proposals | null;
+  decisions: ProposalDecision[];
 }
 
 export interface Spend {
@@ -49,6 +99,13 @@ export interface Spend {
   budgetUsd: number;
   model: string | null;
   fake: boolean;
+}
+
+/** What the repo sync picked up, grouped; documents carry their line counts. */
+export interface RepoFiles {
+  commit: string;
+  groups: Array<{ kind: "code" | "documents" | "config" | "tests" | "skipped"; files: string[] }>;
+  documents: Array<{ path: string; lines: number }>;
 }
 
 export interface JobState {
@@ -67,7 +124,7 @@ export class ApiError extends Error {
 }
 
 /** Every write is JSON (the server refuses anything else), even when there is nothing to send. */
-async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+async function call<T>(method: "GET" | "POST" | "PUT", path: string, body?: unknown): Promise<T> {
   const res = await fetch(
     path,
     method === "GET" ? {} : { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) },
@@ -80,8 +137,15 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
 const id = encodeURIComponent;
 
 export const api = {
+  professions: () =>
+    call<{ professions: Array<{ role: string; name: string; frameworks: string[]; checks: string; why: string }> }>("GET", "/api/professions").then(
+      (r) => r.professions,
+    ),
   projects: () => call<{ projects: Project[] }>("GET", "/api/projects").then((r) => r.projects),
-  createProject: (b: { name: string; repoUrl: string; appUrl?: string }) => call<Project>("POST", "/api/projects", b),
+  createProject: (b: { repoUrl: string; name?: string; appUrl?: string }) => call<Project>("POST", "/api/projects", b),
+  files: (p: string) => call<RepoFiles>("GET", `/api/projects/${id(p)}/files`),
+  check: (p: string, problem: string, roles?: string[]) =>
+    call<{ changeId: string; jobId: string }>("POST", `/api/projects/${id(p)}/check`, { problem, ...(roles ? { roles } : {}) }),
   project: (p: string) => call<{ project: Project; changes: Array<Change & { withdrawn: boolean }> }>("GET", `/api/projects/${id(p)}`),
   createChange: (p: string, b: { title: string; description: string; kind: ChangeKind }) =>
     call<Change>("POST", `/api/projects/${id(p)}/changes`, b),
@@ -89,7 +153,10 @@ export const api = {
   change: (c: string) => call<ChangeView>("GET", `/api/changes/${id(c)}`),
   record: (c: string) => call<AcceptanceRecord>("GET", `/api/changes/${id(c)}/record`),
   advance: (c: string) => call<{ jobId: string }>("POST", `/api/changes/${id(c)}/advance`).then((r) => r.jobId),
-  answer: (c: string, answers: string[]) => call<unknown>("POST", `/api/changes/${id(c)}/answers`, { answers }),
+  answer: (c: string, b: { answers: string[]; assumed?: boolean[]; actor?: string }) => call<unknown>("POST", `/api/changes/${id(c)}/answers`, b),
+  approveProposal: (c: string, index: number, actor: string) => call<Change>("POST", `/api/changes/${id(c)}/proposals/${index}/approve`, { actor }),
+  acceptProposalRisk: (c: string, index: number, b: { actor: string; reason: string }) =>
+    call<{ decisions: ProposalDecision[] }>("POST", `/api/changes/${id(c)}/proposals/${index}/accept-risk`, b),
   accept: (c: string, actor: string) => call<{ jobId: string }>("POST", `/api/changes/${id(c)}/accept`, { actor }).then((r) => r.jobId),
   withdraw: (c: string, b: { reason: string; actor: string }) => call<unknown>("POST", `/api/changes/${id(c)}/withdraw`, b),
   reanalyse: (c: string) => call<{ jobId: string }>("POST", `/api/changes/${id(c)}/reanalyse`).then((r) => r.jobId),
@@ -98,7 +165,50 @@ export const api = {
     call<unknown>("POST", `/api/findings/${id(f)}/status`, b),
   job: (j: string) => call<JobState>("GET", `/api/jobs/${id(j)}`),
   spend: () => call<Spend>("GET", "/api/spend"),
+  openItems: (p: string) => call<{ total: number; items: OpenItem[] }>("GET", `/api/projects/${id(p)}/open-items`),
+  documents: (p: string) => call<{ documents: DocumentRow[] }>("GET", `/api/projects/${id(p)}/documents`).then((r) => r.documents),
+  document: (d: string) => call<DocumentDetail>("GET", `/api/documents/${id(d)}`),
+  uploadDocument: (p: string, b: { name: string; body: string }) => call<{ document: Document; changed: boolean }>("POST", `/api/projects/${id(p)}/documents`, b),
+  docSettings: (p: string, b: DocSettings) => call<DocSettings>("PUT", `/api/projects/${id(p)}/doc-settings`, b),
+  requirements: (p: string) => call<{ requirements: RequirementRow[] }>("GET", `/api/projects/${id(p)}/requirements`).then((r) => r.requirements),
+  trace: (r: string) => call<TraceChain>("GET", `/api/requirements/${id(r)}/trace`),
+  linkLinear: (r: string, identifier: string) => call<{ identifier: string; url: string }>("POST", `/api/requirements/${id(r)}/linear`, { identifier }),
+  commitTrace: (p: string, sha: string) => call<CommitTrace>("GET", `/api/projects/${id(p)}/commits/${id(sha)}/trace`),
+  commits: (p: string) => call<{ commits: Array<{ sha: string; at: string }> }>("GET", `/api/projects/${id(p)}/commits`).then((r) => r.commits),
+  compare: (p: string, from: string, to: string) =>
+    call<CommitCompare>("GET", `/api/projects/${id(p)}/compare?from=${id(from)}&to=${id(to)}`),
+  connections: (p: string) => call<Connections>("GET", `/api/projects/${id(p)}/connections`),
 };
+
+/** Loads once per key; `reload` fetches again. Errors become a readable message. */
+export function useLoad<T>(load: () => Promise<T>, key: string) {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+  const latest = useRef(load);
+  latest.current = load;
+  useEffect(() => {
+    let alive = true;
+    latest.current().then(
+      (d) => alive && (setData(d), setError(null)),
+      (e) => alive && setError(message(e)),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [key, tick]);
+  return { data, error, reload: () => setTick((t) => t + 1) };
+}
+
+/** "3 days ago" style age for an ISO time. */
+export function age(iso: string): string {
+  const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  if (!Number.isFinite(s)) return "";
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  const d = Math.round(s / 86400);
+  return d === 1 ? "1 day ago" : `${d} days ago`;
+}
 
 /** The URL when it is http or https, else null: model or user text never becomes a javascript: link. */
 export function safeHref(url: string): string | null {

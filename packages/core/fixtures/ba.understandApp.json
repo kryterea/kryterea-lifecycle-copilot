@@ -80,8 +80,20 @@
     }
   ],
   "questions": [
-    "Pending bookings keep a date and time marked taken and there is no expiry or cleanup. Should a pending hold expire after a short time so others can book?",
-    "In demo mode any reference text confirms a booking as paid with no real charge. Is demo mode meant for public visitors or only for internal testing?",
-    "My bookings shows Cancel for pending and confirmed bookings but no Pay again button even though the closed payment message says retry from My bookings. Should customers be able to retry payment and should admin be able to confirm or cancel bookings?"
+    {
+      "question": "A customer who starts a booking and never pays keeps that time blocked. Should an unpaid booking let go of its time after a short wait?",
+      "options": ["Yes, free the time after 30 minutes", "No, keep it blocked until I cancel it"],
+      "defaultIndex": 0
+    },
+    {
+      "question": "When the payment keys are missing, anyone can confirm a booking without paying. Is that only for your own testing?",
+      "options": ["Yes, testing only, so switch it off for customers", "No, customers may confirm without paying"],
+      "defaultIndex": 0
+    },
+    {
+      "question": "A customer cannot retry a payment from My bookings, and you cannot confirm or cancel for them. Which should be possible?",
+      "options": ["Customers can pay again", "You can confirm or cancel for them", "Both"],
+      "defaultIndex": 2
+    }
   ]
 }

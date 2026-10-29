@@ -1,0 +1,25 @@
+{
+  "answersProblem": ["F1"],
+  "duplicates": [],
+  "changes": [
+    {
+      "title": "A customer is never charged twice for one booking",
+      "forWhom": "Customers who pay a deposit",
+      "why": "A repeated payment takes money for a booking that was already confirmed.",
+      "findingIds": ["F1"],
+      "criteria": [
+        { "text": "Paying with a reference that was already used does not confirm a second booking", "isFailurePath": true },
+        { "text": "A booking is confirmed once its payment is verified", "isFailurePath": false }
+      ]
+    },
+    {
+      "title": "Check this: customers are asked for consent before their details are saved",
+      "forWhom": "Customers who give a name and phone number",
+      "why": "Saving personal details without asking can lead to a complaint to the regulator.",
+      "findingIds": ["F2"],
+      "criteria": [
+        { "text": "A customer sees the privacy notice and agrees before the booking is saved", "isFailurePath": false }
+      ]
+    }
+  ]
+}

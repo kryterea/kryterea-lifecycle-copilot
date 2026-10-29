@@ -1,13 +1,24 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { SpendMeter, SpendProvider } from "./components/SpendMeter";
+import { Assessment } from "./pages/Assessment";
 import { Change } from "./pages/Change";
-import { Project } from "./pages/Project";
+import { CommitTrace } from "./pages/CommitTrace";
+import { Compare } from "./pages/Compare";
+import { DocumentDetail } from "./pages/DocumentDetail";
+import { Guides } from "./pages/Guides";
+import { Project, type Section } from "./pages/Project";
 import { Projects } from "./pages/Projects";
 import { Record } from "./pages/Record";
+import { Requirement } from "./pages/Requirement";
+import { Start } from "./pages/Start";
+import { Templates } from "./pages/Templates";
+import { Welcome } from "./pages/Welcome";
+import { api } from "./api";
+import { getName } from "./me";
 import "./styles.css";
 
-/** Hash routes, so the server serves one index.html: #/, #/projects/:id, #/changes/:id, #/changes/:id/record. */
+/** Hash routes, so the server serves one index.html: projects (and their sections), changes, records, requirements. */
 function useHash() {
   const [hash, setHash] = useState(location.hash);
   useEffect(() => {
@@ -21,12 +32,57 @@ function useHash() {
   return hash;
 }
 
+/** Projects, except a first visit (no saved name, no projects) goes to the welcome page. */
+function Home() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let live = true;
+    api.projects().then(
+      (list) => {
+        if (!live) return;
+        if (!getName() && list.length === 0) location.hash = "#/welcome";
+        else setReady(true);
+      },
+      () => live && setReady(true),
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  return ready ? <Projects /> : null;
+}
+
+const TABS = [
+  ["#/", "Projects"],
+  ["#/templates", "Templates"],
+  ["#/guides", "Guides"],
+] as const;
+
 function Page({ hash }: { hash: string }) {
-  const m = /^#\/(projects|changes)\/([^/]+)(\/record)?$/.exec(hash);
-  if (!m) return <Projects />;
-  const id = decodeURIComponent(m[2]!);
-  if (m[1] === "projects") return <Project key={id} id={id} />;
-  return m[3] ? <Record key={id} id={id} /> : <Change key={id} id={id} />;
+  const d = decodeURIComponent;
+  let m = /^#\/projects\/([^/]+)\/documents\/([^/]+)$/.exec(hash);
+  if (m) return <DocumentDetail key={m[2]} projectId={d(m[1]!)} docId={d(m[2]!)} />;
+  m = /^#\/projects\/([^/]+)\/commits\/([^/]+)$/.exec(hash);
+  if (m) return <CommitTrace key={m[2]} projectId={d(m[1]!)} sha={d(m[2]!)} />;
+  m = /^#\/projects\/([^/]+)\/compare(?:\/([^/]+)(?:\/([^/]+))?)?$/.exec(hash);
+  if (m) return <Compare key={m[1]} projectId={d(m[1]!)} from={m[2] && d(m[2])} to={m[3] && d(m[3])} />;
+  m = /^#\/requirements\/([^/]+)$/.exec(hash);
+  if (m) return <Requirement key={m[1]} id={d(m[1]!)} />;
+  m = /^#\/projects\/([^/]+)\/start$/.exec(hash);
+  if (m) return <Start key={m[1]} id={d(m[1]!)} />;
+  m = /^#\/projects\/([^/]+)(?:\/(needs-you|documents|trace|connections))?$/.exec(hash);
+  if (m) return <Project key={m[1]} id={d(m[1]!)} section={(m[2] as Section | undefined) ?? "changes"} />;
+  m = /^#\/changes\/([^/]+)\/assessment(?:\/([^/]+))?$/.exec(hash);
+  if (m) return <Assessment key={m[1]} id={d(m[1]!)} jobId={m[2] && d(m[2])} />;
+  m = /^#\/changes\/([^/]+)(\/record)?$/.exec(hash);
+  if (!m) {
+    if (hash === "#/welcome") return <Welcome />;
+    if (hash === "#/templates") return <Templates />;
+    if (hash === "#/guides") return <Guides />;
+    return <Home />;
+  }
+  const id = d(m[1]!);
+  return m[2] ? <Record key={id} id={id} /> : <Change key={id} id={id} />;
 }
 
 function App() {
@@ -47,6 +103,16 @@ function App() {
           </a>
           <SpendMeter />
         </div>
+        <nav className="tabs" aria-label="Sections">
+          {TABS.map(([href, label]) => {
+            const current = href === "#/" ? !/^#\/(welcome|templates|guides)$/.test(hash) : hash === href;
+            return (
+              <a key={href} href={href} aria-current={current ? "page" : undefined}>
+                {label}
+              </a>
+            );
+          })}
+        </nav>
       </header>
       <main>
         <Page hash={hash} />

@@ -3,23 +3,28 @@
   "criteria": [
     {
       "text": "On My bookings, a booking with the status pending shows a Pay again button, and confirmed or cancelled bookings do not.",
-      "isFailurePath": false
+      "isFailurePath": false,
+      "requirementKeys": []
     },
     {
       "text": "Pressing Pay again opens the payment step for the deposit of that booking, and after a successful payment the booking shows as confirmed.",
-      "isFailurePath": false
+      "isFailurePath": false,
+      "requirementKeys": []
     },
     {
       "text": "If the customer closes the payment window again, the booking stays pending and the customer sees the same message and can press Pay again once more.",
-      "isFailurePath": true
+      "isFailurePath": true,
+      "requirementKeys": []
     },
     {
       "text": "If the booking was cancelled in another tab, Pay again does not confirm it and the customer sees that the booking is cancelled.",
-      "isFailurePath": true
+      "isFailurePath": true,
+      "requirementKeys": []
     },
     {
       "text": "If the customer presses Pay again twice quickly, only one payment is started for the booking.",
-      "isFailurePath": true
+      "isFailurePath": true,
+      "requirementKeys": []
     }
   ],
   "findings": [

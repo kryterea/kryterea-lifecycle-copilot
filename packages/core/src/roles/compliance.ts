@@ -1,6 +1,7 @@
 import type { GateState, JsonSchema } from "../types.js";
 import {
   checkTriggers,
+  projectDocuments,
   contextBlock,
   defang,
   renderDocText,
@@ -56,15 +57,16 @@ export async function reviewCompliance(ctx: RoleContext, asBuiltOrChange: unknow
   const seenDoc = defang(docText); // the model quotes the text it saw, so verify against that
   const fallbackQuote = seenDoc.split("\n").find((l) => l.trim() !== "");
   const mat = await repoMaterial(ctx.repo.dir, QUERY, { maxFiles: 20, maxChars: 40_000, onlyFiles });
+  const docs = projectDocuments(ctx);
   const entries = pack.map((d) => `${d.id} | ${d.law} | ${d.section} | ${soften(d.title)} | ${soften(d.duty)} | ${soften(d.triggers.join("; "))}`).join("\n");
 
   const { data } = await ctx.model<{ findings: RawLegalFinding[] }>({
     name: "compliance.reviewCompliance",
     system: systemPrompt(
       ctx.packs.role.compliance,
-      `Task: review what the app does with people's data and card payments against the legal pack in the user message, and raise a finding for each pack entry the material supports. Set citationId to the id of the pack entry, exactly as listed. Cite only entries from the pack; if none fits, return no findings. Start every title and every plain text with "Check this: ". Say what the app does today, which duty it may touch and what to check. Never say the app is in breach, is illegal or breaks the law. Return at most 8 findings, most important first. The PCI DSS entries are a standard, not law. This is not legal advice. Every finding needs evidence: either a code trigger (triggerType "code", file and line exactly as numbered in the material, quote null) or a doc trigger (triggerType "doc", file and line null, quote copied word for word from the app description or the change description). Never cite a file, line or quote you were not given.`,
+      `Task: review what the app does with people's data and card payments against the legal pack in the user message, and raise a finding for each pack entry the material supports. Set citationId to the id of the pack entry, exactly as listed. Cite only entries from the pack; if none fits, return no findings. Start every title and every plain text with "Check this: ". Say what the app does today, which duty it may touch and what to check. Never say the app is in breach, is illegal or breaks the law. Return at most 8 findings, most important first. The PCI DSS entries are a standard, not law. This is not legal advice. Every finding needs evidence: either a code trigger (triggerType "code", file and line exactly as numbered in the material, quote null) or a doc trigger (triggerType "doc", file and line null, quote copied word for word from the app description or the change description). Never cite a file, line or quote you were not given.${docs ? ` ${docs.rule}` : ""}`,
     ),
-    user: `${contextBlock(ctx)}\n\n<<<BEGIN APP DESCRIPTION>>>\n${seenDoc}\n<<<END APP DESCRIPTION>>>\n\nLegal pack (id | law | section | title | duty | triggers):\n${entries}\n\n${mat.text}`,
+    user: `${contextBlock(ctx)}\n\n<<<BEGIN APP DESCRIPTION>>>\n${seenDoc}\n<<<END APP DESCRIPTION>>>\n\nLegal pack (id | law | section | title | duty | triggers):\n${entries}\n\n${mat.text}${docs ? `\n\n${docs.text}` : ""}`,
     schema: obj({
       findings: {
         type: "array",
@@ -91,7 +93,7 @@ export async function reviewCompliance(ctx: RoleContext, asBuiltOrChange: unknow
       console.warn(`compliance: dropped a finding citing "${f.citationId}", which is not in the legal pack ("${f.title}")`);
       continue;
     }
-    const [k] = checkTriggers(ctx.repo.dir, [f], seenDoc, { commit: ctx.repo.commit, shown: mat.shown, kind: "legal", fallbackQuote });
+    const [k] = checkTriggers(ctx.repo.dir, [f], seenDoc, { commit: ctx.repo.commit, shown: mat.shown, kind: "legal", fallbackQuote, docs: docs?.lines });
     if (!k) continue;
     const out: RoleFinding = {
       ...k,

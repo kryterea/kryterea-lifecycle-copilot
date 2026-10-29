@@ -78,13 +78,33 @@ const finding = (over: Record<string, unknown> = {}) => ({
 const asBuilt = { flows: ["Book a slot"], dataCollected: ["Name"], payments: ["Paystack"], roles: ["Admin"] };
 
 describe("understandApp", () => {
+  it("keeps options and a safe default for each question", async () => {
+    const model = stub({
+      "ba.understandApp": () => ({
+        asBuilt,
+        questions: [
+          { question: "Q", options: ["A", "B"], defaultIndex: 1 },
+          { question: "Bad", options: ["only"], defaultIndex: 0 },
+          { question: "Out", options: ["A", "B", "C"], defaultIndex: 9 },
+        ],
+        findings: [],
+      }),
+    });
+    const r = await understandApp(ctx(model));
+    expect(r.questions).toEqual(["Q", "Out"]);
+    expect(r.questionOptions).toEqual([
+      { options: ["A", "B"], defaultIndex: 1 },
+      { options: ["A", "B", "C"], defaultIndex: 2 },
+    ]);
+  });
+
   it("returns questions and an as_built artifact, and no criteria", async () => {
     const seen: ModelRequest[] = [];
     const model = stub(
       {
         "ba.understandApp": () => ({
           asBuilt,
-          questions: ["q1", "q2", "q3", "q4"],
+          questions: ["q1", "q2", "q3", "q4"].map((question) => ({ question, options: ["A", "B"], defaultIndex: 0 })),
           findings: [finding(), finding({ title: "Bad cite", file: "src/missing.ts" }), finding({ title: "Bad line", line: 99 })],
         }),
       },
@@ -93,6 +113,7 @@ describe("understandApp", () => {
     const r = await understandApp(ctx(model));
     expect(r.criteria).toEqual([]);
     expect(r.questions).toEqual(["q1", "q2", "q3"]);
+    expect(r.questionOptions).toHaveLength(3);
     expect(r.artifacts).toEqual([{ kind: "as_built", body: asBuilt }]);
     expect(r.findings.map((f) => f.title)).toEqual(["A finding"]);
     expect(r.findings[0]!.kind).toBe("failure_path");
@@ -152,7 +173,7 @@ describe("analyseImpact", () => {
     );
     const r = await analyseImpact(ctx(model), existing);
     expect(r.affectedCriterionIds).toEqual(["id-b"]);
-    expect(r.criteria).toEqual([{ text: "Deposit is shown", isFailurePath: false }]);
+    expect(r.criteria).toEqual([{ text: "Deposit is shown", isFailurePath: false, requirementKeys: [] }]);
     expect(seen[0]!.user).toContain("C1: Booking confirms");
     expect(seen[0]!.user).toContain("C2: Declined card shows a message");
     expect(seen[0]!.maxOutputTokens).toBe(8000);
@@ -160,6 +181,28 @@ describe("analyseImpact", () => {
 });
 
 describe("analyseChange", () => {
+  it("returns the requirement keys each criterion covers", async () => {
+    const seen: ModelRequest[] = [];
+    const model = stub(
+      {
+        "ba.analyseChange": () => ({
+          summary: "s",
+          criteria: [
+            { text: "Customer sees the deposit amount", isFailurePath: false, requirementKeys: ["PRD-1"] },
+            { text: "A declined card keeps the slot free", isFailurePath: true, requirementKeys: [] },
+          ],
+          findings: [],
+        }),
+      },
+      seen,
+    );
+    const requirements = [{ id: "r1", projectId: "p1", documentId: "d1", key: "PRD-1", text: "Customers pay a deposit", quote: "q", line: 2, status: "active" as const, createdAt: "t", updatedAt: "t" }];
+    const r = await analyseChange(ctx(model, { requirements }));
+    expect(seen[0]!.user).toContain("PRD-1: Customers pay a deposit");
+    expect(JSON.stringify(seen[0]!.schema)).toContain("requirementKeys");
+    expect(r.criteria.map((c) => c.requirementKeys)).toEqual([["PRD-1"], []]);
+  });
+
   it("flags failure path criteria with isFailurePath", async () => {
     const model = stub({
       "ba.analyseChange": () => ({

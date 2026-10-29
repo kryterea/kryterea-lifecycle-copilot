@@ -246,6 +246,74 @@ code,
   flex: none;
 }
 
+/* Top tabs: Projects, Templates, Guides. The current one is underlined in the brand colour. */
+.tabs {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+}
+.tabs a {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: var(--t-label);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.tabs a:hover {
+  color: var(--ink);
+}
+.tabs a[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--brand);
+}
+
+.templates,
+.guide {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  list-style: none;
+}
+.templates li {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--secondary);
+  font: 500 0.6875rem / 1.2 var(--mono);
+}
+.guide {
+  counter-reset: step;
+}
+.guide li {
+  padding: 16px 18px;
+  counter-increment: step;
+}
+.guide h2 {
+  font-size: var(--t-section);
+  font-weight: 600;
+}
+.guide h2::before {
+  content: counter(step) ". ";
+  color: var(--muted);
+}
+.guide p {
+  margin-top: 4px;
+  color: var(--secondary);
+}
+
 main {
   max-width: 1200px;
   margin: 0 auto;
@@ -1345,6 +1413,7 @@ tbody tr + tr td {
 
 @media (max-width: 560px) {
   .top-inner,
+  .tabs,
   main {
     padding-left: 16px;
     padding-right: 16px;
@@ -1397,6 +1466,471 @@ tbody tr + tr td {
   }
 }
 
+/* Governed trace: project sections, Needs you, documents, trace chain, connections */
+
+.page.wide {
+  max-width: 980px;
+}
+.stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+.eyebrow {
+  margin-bottom: 6px;
+  color: var(--brand);
+  font: 600 var(--t-meta) / 1.2 var(--mono);
+  letter-spacing: 0.04em;
+}
+.mono-name {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  word-break: break-all;
+}
+.key {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  background: var(--brand-tint);
+  color: var(--brand);
+  font: 600 0.75rem / 1.6 var(--mono);
+  white-space: nowrap;
+}
+.plain-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-label);
+}
+.plain-list.small {
+  margin-top: 8px;
+  font-size: var(--t-meta);
+}
+.lead-line {
+  color: var(--secondary);
+  font-size: var(--t-label);
+}
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+  font-size: var(--t-section);
+  font-weight: 600;
+}
+.section-head .muted {
+  font-size: var(--t-meta);
+  font-weight: 400;
+}
+
+/* The section switcher under a project's title */
+.sections {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 20px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--hairline);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sections a {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -3px;
+  padding: 10px 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--secondary);
+  font-size: var(--t-label);
+  text-decoration: none;
+  transition: color var(--d-state) var(--ease-out), border-color var(--d-state) var(--ease-out);
+}
+.sections a:hover {
+  color: var(--ink);
+}
+.sections a[aria-current="page"] {
+  border-bottom-color: var(--brand);
+  color: var(--ink);
+  font-weight: 550;
+}
+.sections .num,
+.segmented .num {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font: 600 0.6875rem / 1.5 var(--mono);
+  text-align: center;
+}
+.sections a.has-open .num {
+  background: var(--caution-tint);
+  color: var(--caution);
+}
+
+/* Needs you */
+.open-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 18px;
+}
+.open-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.open-item-why {
+  color: var(--secondary);
+  font-size: var(--t-label);
+}
+.open-item .row-sub code,
+.connection code {
+  font-size: 0.75rem;
+}
+.open-item .links {
+  margin-top: 2px;
+}
+.open-item .links .btn.ghost:first-child {
+  margin-left: -12px;
+}
+
+/* Documents */
+.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.doc-lines {
+  margin: 0;
+  padding: 10px 0;
+  list-style: none;
+  font: 0.8125rem / 1.65 var(--mono);
+  overflow-x: auto;
+}
+.doc-lines li {
+  display: grid;
+  grid-template-columns: 3.25rem 1fr;
+}
+.doc-lines .ln {
+  padding-right: 14px;
+  color: var(--muted);
+  text-align: right;
+  user-select: none;
+}
+.doc-lines .lt {
+  padding-right: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.doc-lines .has-req {
+  background: var(--brand-tint);
+}
+.doc-lines .has-gap {
+  background: var(--caution-tint);
+}
+.gap-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 6px;
+  color: var(--caution);
+  font-family: var(--sans);
+  white-space: normal;
+}
+.version-pick select {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-input);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--t-label);
+}
+.diff li {
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  font: 0.8125rem / 1.5 var(--mono);
+}
+.diff li::before {
+  margin-right: 8px;
+  font-weight: 600;
+}
+.diff .ins {
+  background: var(--cleared-tint);
+}
+.diff .ins::before {
+  content: "+";
+  color: var(--cleared);
+}
+.diff .del {
+  background: var(--danger-tint);
+  text-decoration: line-through;
+}
+.diff .del::before {
+  content: "\2212";
+  color: var(--danger);
+}
+.doc-gaps + .doc-gaps {
+  margin-top: 12px;
+}
+.decision {
+  color: var(--secondary);
+  font-size: var(--t-label);
+}
+
+/* Trace table */
+.trace-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.trace-tools .segmented {
+  position: relative;
+  overflow-x: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.trace-tools .segmented label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.sha-search {
+  display: flex;
+  gap: 6px;
+}
+.sha-search input {
+  width: 11rem;
+  font-family: var(--mono);
+}
+.trace-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-label);
+}
+.trace-table th,
+.trace-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: top;
+}
+.trace-table thead th {
+  color: var(--muted);
+  font-size: var(--t-meta);
+  font-weight: 500;
+}
+.trace-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.trace-table tbody th {
+  font-weight: 400;
+  min-width: 16rem;
+}
+.trace-table tbody th a {
+  color: var(--ink);
+  text-decoration: none;
+}
+.trace-table tbody th a:hover {
+  color: var(--brand);
+}
+.trace-table .where {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.trace-table .stamp {
+  margin-top: 6px;
+}
+.num-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Requirement chain: document line to sign off */
+.chain {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chain .node {
+  position: relative;
+  padding: 0 0 22px 28px;
+}
+.chain .node::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 4px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--brand);
+  border-radius: 50%;
+  background: var(--surface);
+}
+.chain .node::after {
+  content: "";
+  position: absolute;
+  top: 20px;
+  bottom: 0;
+  left: 10px;
+  width: 2px;
+  background: var(--hairline);
+}
+.chain .node:last-child::after {
+  display: none;
+}
+.chain .node.is-gap::before {
+  border-color: var(--caution);
+  border-style: dashed;
+}
+.chain .node-form::before {
+  display: none;
+}
+.node-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: var(--t-meta);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.node-form input {
+  width: 9rem;
+  font-family: var(--mono);
+}
+
+/* Before and after */
+.compare-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.compare-pick {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.compare-pick select {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-input);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--t-label) var(--mono);
+}
+.compare-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.metric {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+}
+.metric-label {
+  color: var(--muted);
+  font-size: var(--t-meta);
+}
+.metric-values {
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.metric-delta {
+  font-size: var(--t-meta);
+  font-weight: 600;
+}
+.metric-delta.is-good {
+  color: var(--cleared);
+}
+.metric-delta.is-bad {
+  color: var(--caution);
+}
+.metric-delta.is-same {
+  color: var(--muted);
+}
+.compare-list li {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+}
+.compare-stamps {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Connections */
+.connection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 16px 18px;
+}
+.connection-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  border-radius: var(--r-input);
+  background: var(--surface-muted);
+}
+.command code {
+  flex: 1;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .two {
+    grid-template-columns: 1fr;
+  }
+  .trace-tools {
+    align-items: stretch;
+  }
+  .sha-search input {
+    flex: 1;
+    width: auto;
+  }
+  .doc-lines li {
+    grid-template-columns: 2.5rem 1fr;
+  }
+  .open-item {
+    padding: 14px;
+  }
+  .compare-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .compare-list li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1430,4 +1964,116 @@ tbody tr + tr td {
     color: #000 !important;
     border-color: #000 !important;
   }
+}
+
+/* Start: what was read, then the problem and who looks */
+
+.start-block {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.form .start-block {
+  margin-bottom: 0;
+}
+.start-block h2 {
+  font-size: var(--t-section);
+}
+.rows li > .item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+}
+.start-path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.start-auto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--brand);
+}
+.start-auto strong {
+  color: var(--ink);
+}
+.start-auto-icon {
+  display: inline-flex;
+  width: 16px;
+  flex: none;
+}
+.start-auto .btn {
+  margin-left: auto;
+}
+label.item {
+  cursor: pointer;
+}
+.form label.item > span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.start-pick {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  accent-color: var(--brand);
+}
+
+/* Assessment: her problem first, the rest as rows, the changes written for her */
+
+.assess-head {
+  flex: 1;
+  gap: 8px;
+}
+.assess-head h1 {
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.assess-head .btn.ghost {
+  margin-left: auto;
+}
+.assess-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+}
+.assess-card h3 {
+  font-size: var(--t-section);
+  font-weight: 600;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+.assess-card .eyebrow {
+  margin-bottom: -6px;
+}
+.assess-options {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+.assess-options .btn {
+  height: auto;
+  min-height: 38px;
+  padding: 8px 16px;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+}
+.assess-grow {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.assess-name {
+  max-width: 280px;
+  margin-bottom: 12px;
+}
+.assess-rows .finding summary {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.assess-rows .caret {
+  grid-column: 2;
+  grid-row: 1;
 }

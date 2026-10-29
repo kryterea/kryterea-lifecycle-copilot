@@ -1,6 +1,6 @@
 # Governed Trace Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Kryterea reads a project's PRD and specs like a professional, links every document line through requirements, criteria, Linear tickets, commits, evidence, findings and named decisions to sign-off, catches drift on every commit and document edit, and keeps warning (never blocking) in the coding agent, on GitHub, in Linear and in the panel until each item is confirmed fixed or accepted by a named person.
 
@@ -101,11 +101,11 @@ The live run on the demo app raised the same four failure paths twice (BA at int
 **Interfaces:**
 - Produces: no new exports.
 
-- [ ] **Step 1: Write the failing test** `it("QA adds no finding on a criterion that already has an open finding from any role")`: BA understand fixture raises a failure-path finding tied to criterion CRIT-CANCEL; QA fixture returns a gap with its own finding on CRIT-CANCEL. After `advance` to release: `record.listFindings({ projectId, status: "open" }).filter(f => f.criterionId === cancel.id)` has length 1, and the QA check on CRIT-CANCEL is still recorded as `gap`.
-- [ ] **Step 2:** Run `pnpm vitest run packages/core/test/workflow.test.ts -t "QA adds no finding"`; expect FAIL (length 2).
-- [ ] **Step 3:** In `verify`, before saving, drop QA findings whose `criterionId` already has an open finding in `record.listFindings({ projectId, status: "open" })`. Checks are kept.
-- [ ] **Step 4:** Run the test file; expect PASS.
-- [ ] **Step 5:** Commit `fix(core): QA does not repeat a finding the analyst already raised`.
+- [x] **Step 1: Write the failing test** `it("QA adds no finding on a criterion that already has an open finding from any role")`: BA understand fixture raises a failure-path finding tied to criterion CRIT-CANCEL; QA fixture returns a gap with its own finding on CRIT-CANCEL. After `advance` to release: `record.listFindings({ projectId, status: "open" }).filter(f => f.criterionId === cancel.id)` has length 1, and the QA check on CRIT-CANCEL is still recorded as `gap`.
+- [x] **Step 2:** Run `pnpm vitest run packages/core/test/workflow.test.ts -t "QA adds no finding"`; expect FAIL (length 2).
+- [x] **Step 3:** In `verify`, before saving, drop QA findings whose `criterionId` already has an open finding in `record.listFindings({ projectId, status: "open" })`. Checks are kept.
+- [x] **Step 4:** Run the test file; expect PASS.
+- [x] **Step 5:** Commit `fix(core): QA does not repeat a finding the analyst already raised`.
 
 ### Task 2: Record documents, requirements and settings; discover documents
 
@@ -136,15 +136,15 @@ The live run on the demo app raised the same four failure paths twice (BA at int
   - `externalPost(target: string, targetId: string): { commentId: string; bodyHash: string } | null`, `saveExternalPost(target: string, targetId: string, commentId: string, bodyHash: string): void`
 - Produces (discover): `discoverDocuments(files: string[], settings: DocSettings): string[]` in `docs/discover.ts`. Default: `.md` or `.mdx` files whose path matches `/(^|\/)docs\//i` or whose name matches `/prd|spec|requirement/i`; minus `isSecretFile`; minus `node_modules`; then settings.include globs added and settings.exclude globs removed.
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
   - `record.test.ts` `it("keeps one version per content and reports changes")`: saving the same body twice gives one version and `changed: false` the second time; a new body gives two versions.
   - `it("applies requirements by key: added, changed, removed, with events")`: apply `[FR-1 a, FR-2 b]` then `[FR-1 a2, FR-3 c]` gives added `[FR-3]`, changed `[FR-1]`, removed `[FR-2]`; `requirementEvents(FR-1)` kinds `["added","changed"]`; `listRequirements(p, {status:"active"})` keys `["FR-1","FR-3"]`.
   - `it("links requirements idempotently")`.
   - `discover.test.ts` `it("finds PRD and spec files and skips secrets and node_modules")`: input `["docs/PRD.md","SPEC.md","README.md","node_modules/x/docs/a.md",".env","docs/secrets.key","src/a.ts"]` gives `["docs/PRD.md","SPEC.md"]`; with `exclude: ["SPEC.md"]` gives `["docs/PRD.md"]`; with `include: ["README.md"]` adds it.
-- [ ] **Step 2:** Run both test files; expect FAIL.
-- [ ] **Step 3:** Add the tables (`CREATE TABLE IF NOT EXISTS`, unique `(project_id, name)` on documents, unique `(document_id, key)` on requirements, unique `(requirement_id, to_type, to_id)` on links, primary key `(target, target_id)` on `external_posts`), the types, the methods, and `discoverDocuments` (use `node:path` `matchesGlob` for include and exclude). Export from `index.ts`.
-- [ ] **Step 4:** Run; expect PASS. Run `pnpm test` (all green).
-- [ ] **Step 5:** Commit `feat(core): record documents, requirements and their links`.
+- [x] **Step 2:** Run both test files; expect FAIL.
+- [x] **Step 3:** Add the tables (`CREATE TABLE IF NOT EXISTS`, unique `(project_id, name)` on documents, unique `(document_id, key)` on requirements, unique `(requirement_id, to_type, to_id)` on links, primary key `(target, target_id)` on `external_posts`), the types, the methods, and `discoverDocuments` (use `node:path` `matchesGlob` for include and exclude). Export from `index.ts`.
+- [x] **Step 4:** Run; expect PASS. Run `pnpm test` (all green).
+- [x] **Step 5:** Commit `feat(core): record documents, requirements and their links`.
 
 ### Task 3: The analyst reads documents like a professional
 
@@ -162,15 +162,15 @@ The live run on the demo app raised the same four failure paths twice (BA at int
   - Findings: kind `conformance` (quality, contradiction, missing need) or `failure_path`; trigger `{ type: "doc", quote, document, line }`; titles start with what is wrong in plain words.
   - Guard: any requirement or finding whose quote is not found verbatim in the named document at or within 3 lines of the given line is dropped.
 
-- [ ] **Step 1: Write failing tests** with a fake model:
+- [x] **Step 1: Write failing tests** with a fake model:
   - `it("extracts requirements with their quote and line, keeping written IDs")`.
   - `it("maps a reworded requirement to its previous key and adds a new one")` (Review Focus 1): previous `[PRD-1 "Merchants create payment links"]`, model returns key `PRD-1` for the reworded line and `PRD-2` for a new one; result keys `["PRD-1","PRD-2"]`.
   - `it("drops a gap or requirement whose quote is not in the document")` (Review Focus 2): returns 0 findings for a made-up quote and for a document name not given.
   - `it("raises at most 8 gaps")`.
-- [ ] **Step 2:** Run `pnpm vitest run packages/core/test/ba-docs.test.ts`; expect FAIL.
-- [ ] **Step 3:** Implement `reviewDocuments` and extend `checkTriggers` with an optional `docs: Map<string, string[]>` argument used for doc triggers that name a document.
-- [ ] **Step 4:** Run; expect PASS.
-- [ ] **Step 5:** Commit `feat(core): the analyst reads PRDs and specs and raises gaps`.
+- [x] **Step 2:** Run `pnpm vitest run packages/core/test/ba-docs.test.ts`; expect FAIL.
+- [x] **Step 3:** Implement `reviewDocuments` and extend `checkTriggers` with an optional `docs: Map<string, string[]>` argument used for doc triggers that name a document.
+- [x] **Step 4:** Run; expect PASS.
+- [x] **Step 5:** Commit `feat(core): the analyst reads PRDs and specs and raises gaps`.
 
 ### Task 4: Compliance and the architect read the documents too; criteria cover requirements
 
@@ -186,11 +186,11 @@ The live run on the demo app raised the same four failure paths twice (BA at int
   - `renderDocText` includes each document (numbered, fenced) when `ctx.documents` is set, so doc triggers from compliance and the architect can quote it.
   - BA criteria output gains `requirementKeys: string[]`; `RoleResult.criteria[n].requirementKeys?: string[]`.
 
-- [ ] **Step 1: Write failing tests:** compliance `it("can cite a PRD line as the trigger for a legal finding")`; architect `it("can cite a spec line as the trigger for an operations finding")`; BA `it("returns the requirement keys each criterion covers")`.
-- [ ] **Step 2:** Run the three files; expect FAIL.
-- [ ] **Step 3:** Pass documents into the material and the doc-trigger check; add `requirementKeys` to the BA criteria schema with the instruction "list the requirement keys this criterion covers; empty if none".
-- [ ] **Step 4:** Run; expect PASS.
-- [ ] **Step 5:** Commit `feat(core): compliance and the architect read the documents; criteria name their requirements`.
+- [x] **Step 1: Write failing tests:** compliance `it("can cite a PRD line as the trigger for a legal finding")`; architect `it("can cite a spec line as the trigger for an operations finding")`; BA `it("returns the requirement keys each criterion covers")`.
+- [x] **Step 2:** Run the three files; expect FAIL.
+- [x] **Step 3:** Pass documents into the material and the doc-trigger check; add `requirementKeys` to the BA criteria schema with the instruction "list the requirement keys this criterion covers; empty if none".
+- [x] **Step 4:** Run; expect PASS.
+- [x] **Step 5:** Commit `feat(core): compliance and the architect read the documents; criteria name their requirements`.
 
 ### Task 5: Documents in the workflow
 
@@ -208,15 +208,15 @@ The live run on the demo app raised the same four failure paths twice (BA at int
   - Gates: `baGate` also holds while any open BA `conformance` or `failure_path` finding with a doc trigger is raised on the change, with reason `<n> document gaps to fix or accept with a reason.` Nothing outside Kryterea is stopped. Test: `it("document gaps hold the analyst's gate until fixed or accepted")`.
   - Confirmation of a document gap: after a re-read of a document version, open BA findings with a doc trigger naming that document whose quote is no longer in the new body, or that were not raised again, are set `fixed` with reason `Not raised again on re-read at <hash 7>` by `ba`. Findings whose quote is still present and were raised again stay open.
 
-- [ ] **Step 1: Write failing tests:**
+- [x] **Step 1: Write failing tests:**
   - `it("reads documents at intake, stores requirements and links criteria to them")`.
   - `it("does not call the model for documents whose content did not change")`: second `advance` on a new change with the same PRD makes no `ba.reviewDocuments` call.
   - `it("a document gap clears only when a re-read no longer raises it")`: edit the PRD body to fix the quoted line, recheck, finding status `fixed`; a reported fix alone leaves it `open`.
   - `it("no documents: no document model call and no document findings")` (Review Focus 4).
-- [ ] **Step 2:** Run; expect FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Run `pnpm test`; expect PASS.
-- [ ] **Step 5:** Commit `feat(core): documents are read at intake and re-read when they change`.
+- [x] **Step 2:** Run; expect FAIL.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Run `pnpm test`; expect PASS.
+- [x] **Step 5:** Commit `feat(core): documents are read at intake and re-read when they change`.
 
 ### Task 6: Code and documents checked both ways
 
@@ -230,11 +230,11 @@ The live run on the demo app raised the same four failure paths twice (BA at int
 - Promise not kept: already covered by QA gaps on criteria linked to requirements; no new code.
 - Requirement with no criteria: handled as a drift rule in Task 7.
 
-- [ ] **Step 1: Write failing tests:** `it("raises behaviour no document asked for, at most 8, each with a code trigger")`; workflow `it("runs the undocumented check when the baseline has documents")` and `it("skips it when there are no documents")`.
-- [ ] **Step 2:** Run; expect FAIL.
-- [ ] **Step 3:** Implement; call it in the understand path after `understandApp`, using `asBuilt.flows`, only when requirements exist.
-- [ ] **Step 4:** Run; expect PASS.
-- [ ] **Step 5:** Commit `feat(core): flag behaviour no document asked for`.
+- [x] **Step 1: Write failing tests:** `it("raises behaviour no document asked for, at most 8, each with a code trigger")`; workflow `it("runs the undocumented check when the baseline has documents")` and `it("skips it when there are no documents")`.
+- [x] **Step 2:** Run; expect FAIL.
+- [x] **Step 3:** Implement; call it in the understand path after `understandApp`, using `asBuilt.flows`, only when requirements exist.
+- [x] **Step 4:** Run; expect PASS.
+- [x] **Step 5:** Commit `feat(core): flag behaviour no document asked for`.
 
 ### Task 7: Drift rules and the trace
 
@@ -253,11 +253,11 @@ The live run on the demo app raised the same four failure paths twice (BA at int
   - `traceRequirement(record: CopilotRecord, requirementId: string): TraceChain` and `traceCommit(record: CopilotRecord, projectId: string, sha: string): CommitTrace | null`, where `TraceChain = { document: { id; name; line; quote }; requirement: Requirement & { events: RequirementEvent[] }; criteria: Array<Criterion & { latest: Check | null }>; tickets: string[]; evidence: Array<{ file: string; line: number; commit: string }>; findings: Array<Finding & { status: FindingStatus; history: Array<{ status; reason; actor; at }> }>; signOff: { by: string; at: string } | null; gaps: string[] }` and `gaps` names each missing link in plain words (for example `No acceptance criteria`). `CommitTrace = { sha: string; files: string[]; criteria: Array<{ id: string; text: string; requirementKeys: string[] }>; documents: string[]; findings: Array<{ id: string; title: string; status: FindingStatus }> }`.
   - Rule roles: `requirement_changed`, `requirement_no_criteria`, `accepted_risk_changed` are raised by `ba`; `evidence_lines_changed` and `requirement_no_evidence` by `qa`.
 
-- [ ] **Step 1: Write failing tests (drift.test.ts):** one test per rule raising its exact title; `it("confirms a drift finding when its rule no longer holds")`; `it("a diff that does not overlap cited lines raises nothing")`; `it("an accepted risk whose trigger lines change gets a review finding and keeps its acceptance")`. **(trace.test.ts):** `it("follows a requirement to sign off and names missing links as gaps")`; `it("traces a commit back to criteria, requirements and documents")`; `it("unknown commit returns null")`.
-- [ ] **Step 2:** Run; expect FAIL.
-- [ ] **Step 3:** Implement; call `applyDrift` at the end of `recheck` (after QA) with hunks from the last checked commit to head.
-- [ ] **Step 4:** Run `pnpm test`; expect PASS.
-- [ ] **Step 5:** Commit `feat(core): drift rules confirmed by Kryterea, and the trace both ways`.
+- [x] **Step 1: Write failing tests (drift.test.ts):** one test per rule raising its exact title; `it("confirms a drift finding when its rule no longer holds")`; `it("a diff that does not overlap cited lines raises nothing")`; `it("an accepted risk whose trigger lines change gets a review finding and keeps its acceptance")`. **(trace.test.ts):** `it("follows a requirement to sign off and names missing links as gaps")`; `it("traces a commit back to criteria, requirements and documents")`; `it("unknown commit returns null")`.
+- [x] **Step 2:** Run; expect FAIL.
+- [x] **Step 3:** Implement; call `applyDrift` at the end of `recheck` (after QA) with hunks from the last checked commit to head.
+- [x] **Step 4:** Run `pnpm test`; expect PASS.
+- [x] **Step 5:** Commit `feat(core): drift rules confirmed by Kryterea, and the trace both ways`.
 
 ### Task 8: Open items
 
@@ -268,9 +268,9 @@ The live run on the demo app raised the same four failure paths twice (BA at int
 **Interfaces:**
 - Produces: `interface OpenItem { id: string; findingId: string | null; kind: FindingKind | "setup"; role: RoleId; title: string; why: string; where: string; requirementKey: string | null; createdAt: string }` and `openItems(record: CopilotRecord, projectId: string): { total: number; items: OpenItem[] }`. Items are open findings (status `open`) plus the setup item `No PRD or spec found` when the project has no documents. Ranked: legal, failure_path, drift titles (Task 7), other conformance, operations, setup; newest first within a rank. `where` is `document:line`, `file:line`, or the screen URL.
 
-- [ ] **Step 1: Write failing tests:** ranking order; `it("accepted and fixed findings are not open items")`; `it("a project with no documents has the setup item")` (Review Focus 4).
-- [ ] **Step 2:** Run; expect FAIL. **Step 3:** Implement and export. **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat(core): ranked open items per project`.
+- [x] **Step 1: Write failing tests:** ranking order; `it("accepted and fixed findings are not open items")`; `it("a project with no documents has the setup item")` (Review Focus 4).
+- [x] **Step 2:** Run; expect FAIL. **Step 3:** Implement and export. **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat(core): ranked open items per project`.
 
 ### Task 9: The coding agent always hears what is open
 
@@ -282,9 +282,9 @@ The live run on the demo app raised the same four failure paths twice (BA at int
 - Consumes: `GET /api/projects/:id/open-items` (Task 12) returning `{ total, items }`; finding and change responses carry `projectId`.
 - Produces: every tool result starts with `Kryterea: <N> open on this project.` then up to three lines `- <kind> | <title> | <findingId or where>`, or `Kryterea: nothing open on this project.`. Tools taking a finding or change id resolve the project from that response. If the open-items call fails the tool still answers, with `Kryterea: open items could not be read.`
 
-- [ ] **Step 1: Write failing tests:** one per tool asserting the preamble; `it("still answers when open items cannot be read")`.
-- [ ] **Step 2:** FAIL. **Step 3:** Implement in the shared tool wrapper. **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat(mcp): every answer opens with what is still open`.
+- [x] **Step 1: Write failing tests:** one per tool asserting the preamble; `it("still answers when open items cannot be read")`.
+- [x] **Step 2:** FAIL. **Step 3:** Implement in the shared tool wrapper. **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat(mcp): every answer opens with what is still open`.
 
 ### Task 10: Linear comments
 
@@ -297,9 +297,9 @@ The live run on the demo app raised the same four failure paths twice (BA at int
 - Produces: `linearBody(key: string, requirement: string, items: OpenItem[], criteriaStates: string[], sha: string): string` with the copy in screen E3.
 - Produces: `findIssueKeys(text: string): string[]` matching `/\b[A-Z][A-Z0-9]{1,9}-\d+\b/g`.
 
-- [ ] **Step 1: Write failing tests** with a fake fetch: create then update reuses the comment id; unknown identifier returns null; `it("a network error or 401 rejects with a readable message and nothing else breaks")` (Review Focus 3); `findIssueKeys("fix ENG-12 and PAY-3")` gives `["ENG-12","PAY-3"]`.
-- [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat(server): Linear comments, created once and edited in place`.
+- [x] **Step 1: Write failing tests** with a fake fetch: create then update reuses the comment id; unknown identifier returns null; `it("a network error or 401 rejects with a readable message and nothing else breaks")` (Review Focus 3); `findIssueKeys("fix ENG-12 and PAY-3")` gives `["ENG-12","PAY-3"]`.
+- [x] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat(server): Linear comments, created once and edited in place`.
 
 ### Task 11: GitHub comments and the sync after each check
 
@@ -313,9 +313,9 @@ The live run on the demo app raised the same four failure paths twice (BA at int
 - Produces: `githubBody(items: OpenItem[], total: number, sha: string, traceUrl: string | null): string` with the copy in screen E2 (at most ten items).
 - Produces: `syncExternal(deps: { record: CopilotRecord; linear: ReturnType<typeof linearClient> | null; github: ((repoUrl: string) => ReturnType<typeof githubClient> | null) }, projectId: string, head: string): Promise<{ linear: "ok" | "off" | string; github: "ok" | "off" | string }>`. Links Linear keys found in commit messages and branch names since the last checked commit to the requirements those commits' criteria cover; writes one comment per linked ticket and one per open pull request (or per head commit when there is no pull request); skips the API call when the body hash is unchanged (`externalPost`); returns the error text on failure and never throws. Status is stored in memory for the Connections screen.
 
-- [ ] **Step 1: Write failing tests:** GitHub upsert creates then edits the same comment; no pull request posts a commit comment; `sync` with unchanged items makes no API call; `it("Linear down and GitHub 401: sync returns both error texts, recheck result unchanged")` (Review Focus 3); missing keys return `off`.
-- [ ] **Step 2:** FAIL. **Step 3:** Implement and wire (`LINEAR_API_KEY`, `GITHUB_TOKEN`, trimmed). **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat(server): warnings follow the work to GitHub and Linear`.
+- [x] **Step 1: Write failing tests:** GitHub upsert creates then edits the same comment; no pull request posts a commit comment; `sync` with unchanged items makes no API call; `it("Linear down and GitHub 401: sync returns both error texts, recheck result unchanged")` (Review Focus 3); missing keys return `off`.
+- [x] **Step 2:** FAIL. **Step 3:** Implement and wire (`LINEAR_API_KEY`, `GITHUB_TOKEN`, trimmed). **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat(server): warnings follow the work to GitHub and Linear`.
 
 ### Task 12: Server routes for documents, trace, open items and connections
 
@@ -337,9 +337,9 @@ The live run on the demo app raised the same four failure paths twice (BA at int
   - `GET /api/projects/:id/connections` → `{ github: { state: "connected" | "off" | "error"; detail: string | null; lastComment: string | null }; linear: same plus { tickets: number }; mcp: { command: string } }`
   - Existing finding and change responses include `projectId`.
 
-- [ ] **Step 1: Write failing tests** for each route's success and listed error cases.
-- [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat(server): documents, trace, open items and connections over the API`.
+- [x] **Step 1: Write failing tests** for each route's success and listed error cases.
+- [x] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat(server): documents, trace, open items and connections over the API`.
 
 ### Task 13: Panel screens S1 to S11
 
@@ -352,10 +352,10 @@ The live run on the demo app raised the same four failure paths twice (BA at int
 - Produces: hash routes `#/projects/:id/(needs-you|documents|trace|connections)`, `#/projects/:id/documents/:docId`, `#/projects/:id/commits/:sha`, `#/requirements/:id`.
 - Role card practice lines (exact): business analyst `Requirements quality, against the qualities in ISO/IEC/IEEE 29148`; architect `Operations and reliability`; QA `Acceptance evidence`; compliance `NDPA 2023 and card security entries in the pack. Not legal advice.`; product owner `Acceptance and sign off`. Under each: `Pushed back on` (count of its findings open or accepted, linked) and `Accepted by` (name and reason of each accepted risk on its findings).
 
-- [ ] **Step 1:** Add the API calls and routes; build S3 Needs you and S9 Connections first (they carry the governance story), then S4, S5, S6, S7, S8, then the S1, S2, S10, S11 changes, each with the states in the Screens table.
-- [ ] **Step 2:** Run `pnpm -C packages/web build`; expect no type errors.
-- [ ] **Step 3:** Verify in the browser pane with `COPILOT_FAKE_MODEL=1`: each route renders, empty states show their exact copy, desktop and 375px wide, light and dark. Fix what the pass shows in one batch, confirm once.
-- [ ] **Step 4:** Commit `feat(web): Needs you, Documents, Trace and Connections`.
+- [x] **Step 1:** Add the API calls and routes; build S3 Needs you and S9 Connections first (they carry the governance story), then S4, S5, S6, S7, S8, then the S1, S2, S10, S11 changes, each with the states in the Screens table.
+- [x] **Step 2:** Run `pnpm -C packages/web build`; expect no type errors.
+- [x] **Step 3:** Verify in the browser pane with `COPILOT_FAKE_MODEL=1`: each route renders, empty states show their exact copy, desktop and 375px wide, light and dark. Fix what the pass shows in one batch, confirm once.
+- [x] **Step 4:** Commit `feat(web): Needs you, Documents, Trace and Connections`.
 
 ### Task 14: Record carries the trace and the disclaimer
 
@@ -366,16 +366,16 @@ The live run on the demo app raised the same four failure paths twice (BA at int
 **Interfaces:**
 - Produces: `AcceptanceRecord.trace: Array<{ key: string; text: string; criteria: Array<{ text: string; state: EvidenceState | null }>; decisions: Array<{ title: string; status: FindingStatus; by: string; reason: string; at: string }> }>`.
 
-- [ ] **Step 1: Write failing test** `it("the acceptance record lists each requirement with its criteria, evidence and decisions")`.
-- [ ] **Step 2:** FAIL. **Step 3:** Implement; Record page renders a Trace section and the line `Not legal advice. Kryterea advises and records; people decide.` **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat: the signed record carries the trace`.
+- [x] **Step 1: Write failing test** `it("the acceptance record lists each requirement with its criteria, evidence and decisions")`.
+- [x] **Step 2:** FAIL. **Step 3:** Implement; Record page renders a Trace section and the line `Not legal advice. Kryterea advises and records; people decide.` **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat: the signed record carries the trace`.
 
 ### Task 15: Demo repo gets an AI-written PRD; live run
 
 **Files:**
 - Modify: `../demo-merchant-payments/PROMPTS.md`; created by the coding agent: `../demo-merchant-payments/docs/PRD.md`
 
-- [ ] **Step 1:** Add prompt 2 to `PROMPTS.md`, exactly: `Write a PRD for this app in docs/PRD.md so my team and clients know what it does and what we plan next. Include monthly subscriptions as the next feature.` Commit `chore: prompt 2`.
+- [x] **Step 1:** Add prompt 2 to `PROMPTS.md`, exactly: `Write a PRD for this app in docs/PRD.md so my team and clients know what it does and what we plan next. Include monthly subscriptions as the next feature.` Commit `chore: prompt 2`.
 - [ ] **Step 2:** Run the coding agent with prompt 2 (same launcher recipe as prompt 1). Commit its output as written, `docs: PRD written by the coding agent from prompt 2`. Never edit it by hand.
 - [ ] **Step 3:** In the panel (real model): create the Linear tickets the founder chooses for the PRD's requirements, then link them in S7; run a recheck on the LagosPay project; confirm documents, requirements, gaps, drift, Needs you and the MCP preamble show real results. Linear comments appear; GitHub waits on the public repo approval.
 - [ ] **Step 4:** Note the real finding titles for the video script (no planting).
@@ -385,6 +385,6 @@ The live run on the demo app raised the same four failure paths twice (BA at int
 **Files:**
 - Modify: `README.md`, `BUILT_DURING_HACKATHON.md`, `docs/hackathon/video-script.md`, `.env.example` (add `LINEAR_API_KEY=` and keep `GITHUB_TOKEN=`), this plan's checkboxes.
 
-- [ ] **Step 1:** README: documents, trace, drift, persistent warnings, connections setup, "Kryterea warns and records; it never blocks". BUILT_DURING: new bullets for each task; reuse list (teams, multiple projects with members, sign-off, Drive and Notion connections from the Kryterea platform) under "What is not ours, or not new". Video script: scenes for PRD gaps, trace, drift on a push, the same warning in agent, GitHub and Linear, confirmed fix, signed record; closing card "Where this sits in Kryterea".
+- [x] **Step 1:** README: documents, trace, drift, persistent warnings, connections setup, "Kryterea warns and records; it never blocks". BUILT_DURING: new bullets for each task; reuse list (teams, multiple projects with members, sign-off, Drive and Notion connections from the Kryterea platform) under "What is not ours, or not new". Video script: scenes for PRD gaps, trace, drift on a push, the same warning in agent, GitHub and Linear, confirmed fix, signed record; closing card "Where this sits in Kryterea".
 - [ ] **Step 2:** Run `pnpm test` and `pnpm typecheck`; push; confirm CI green on the final commit.
-- [ ] **Step 3:** Commit `docs: governed trace in README, disclosure and video script`.
+- [x] **Step 3:** Commit `docs: governed trace in README, disclosure and video script`.

@@ -3,7 +3,7 @@ import type { FindingKind, FindingStatus, Trigger } from "@lifecycle/core";
 import { api, message, safeHref, useActor, type FindingView } from "../api";
 import { CheckIcon, ChevronIcon, ClockIcon, CopyIcon, RefreshIcon, ShieldIcon } from "./Icon";
 import { Reasoned } from "./SpendMeter";
-import { Stamp, StatusStamp } from "./Stamp";
+import { STATUS, Stamp, StatusStamp } from "./Stamp";
 
 export const KIND: Record<FindingKind, string> = {
   legal: "Legal",
@@ -26,7 +26,21 @@ export function TriggerLine({ trigger }: { trigger: Trigger }) {
       </p>
     );
   }
-  if (trigger.type === "doc") return <blockquote className="trigger">{trigger.quote}</blockquote>;
+  if (trigger.type === "doc") {
+    return (
+      <>
+        {trigger.document && (
+          <p className="trigger">
+            <code>
+              {trigger.document}
+              {trigger.line ? `:${trigger.line}` : ""}
+            </code>
+          </p>
+        )}
+        <blockquote className="trigger">{trigger.quote}</blockquote>
+      </>
+    );
+  }
   const href = safeHref(trigger.url);
   return (
     <p className="trigger">
@@ -84,12 +98,17 @@ export function FindingItem({ finding, onChanged }: { finding: FindingView; onCh
   const ready = reason.trim() !== "" && actor.trim() !== "" && !saving;
 
   return (
-    <details className={settled ? "finding is-settled" : "finding"}>
+    <details id={`finding-${finding.id}`} className={settled ? "finding is-settled" : "finding"}>
       <summary>
         <StatusStamp status={finding.status} kind={finding.kind} />
         {finding.fixReported && (
           <Stamp tone="idle" title="Your coding agent reported a fix. It stays open until a re-check confirms it.">
             Fix reported
+          </Stamp>
+        )}
+        {finding.drift && (
+          <Stamp tone="held" title="Kryterea raised this because the work drifted from what was agreed.">
+            Drift
           </Stamp>
         )}
         <span className="finding-title">{finding.title}</span>
@@ -102,6 +121,11 @@ export function FindingItem({ finding, onChanged }: { finding: FindingView; onCh
 
       <div className="finding-body">
         {finding.fixReported && <p className="hint">Fix reported: {finding.fixReported.summary} Waiting on a re-check to confirm it.</p>}
+        {finding.decision && finding.status !== "open" && (
+          <p className="decision">
+            {STATUS[finding.decision.status]} by <strong>{finding.decision.actor}</strong>: {finding.decision.reason}
+          </p>
+        )}
         <p className={more ? "lead" : "lead is-clamped"}>{lead}</p>
         {long && (
           <button type="button" className="btn ghost sm more" onClick={() => setMore(!more)} aria-expanded={more}>
