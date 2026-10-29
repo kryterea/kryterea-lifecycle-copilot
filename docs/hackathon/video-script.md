@@ -12,47 +12,59 @@ Rules for this script:
 
 Slides use the Kryterea brand: cobalt symbol, Geist type, paper background, the Trail as the recurring motif.
 
-## 0:00 to 0:20 Meet Ada
+## 0:00 to 0:12 Hook
 
 Diagram builds one piece at a time on a paper slide.
 
 | Time | Screen | Voice |
 |---|---|---|
 | 0:00 | "Meet Ada." Ada's illustration. | Meet Ada. She runs a two person AI-native agency in Lagos. |
-| 0:05 | Arrow from a client logo (a fictional fintech startup; the founder picks a name and checks no real company uses it) to Ada. | A fintech startup hires her to build payment links for small businesses in Lagos, paid through Paystack. |
-| 0:10 | Ada to a terminal labelled "Coding agent on Muse Spark", then to a laptop showing the app. | Her coding agent writes the code in an afternoon. |
-| 0:15 | A grey question mark appears over the app, then the Kryterea symbol slides in beside it. | But this app moves money. Nobody asked what the business really needs, read the data protection law and the card rules, or checked the work. That is the job Kryterea does. |
+| 0:05 | Arrow from a client logo (a fictional fintech startup; the founder picks a name and checks no real company uses it) to Ada, then to a terminal labelled "Coding agent on Muse Spark" and a laptop showing the app. | Her coding agent shipped a payment links app in an afternoon. |
+| 0:09 | A grey question mark appears over the app, then the Kryterea symbol slides in beside it. | Nobody checked it against what she agreed. That is the job Kryterea does. |
 
-## 0:20 to 1:50 One change, end to end
+The video is four acts: take, detect, find and solve, fix and prove. Times are a target; a visible cut may jump over a wait, and every frame after a cut is real output from a real run on Muse Spark.
+
+## 0:12 to 0:35 Act 1: Take
 
 Screen recording of the panel, fake mode off, real Muse Spark runs on `demo-merchant-payments`. The app and its `docs/PRD.md` were both written by the coding agent from the prompts in its `PROMPTS.md`.
 
 | Time | Screen | Voice |
 |---|---|---|
-| 0:20 | Projects page. Add project with the repo URL. Documents section: `docs/PRD.md`, its requirement count and gaps. | Ada adds the client's repo. Kryterea only reads it, starting with the PRD her agent wrote. |
-| 0:30 | Document view: numbered lines, requirement keys, a gap beside its line. **[from the run]** | The analyst reads the PRD like a reviewer would and marks the lines nobody can build or check as written. |
-| 0:42 | Needs you: the ranked list. Open one legal item: "Check this", the NDPA section, "Not legal advice". **[from the run]** | Everything open on the project, most pressing first. Compliance cites the exact section of the law. |
-| 0:55 | Trace: the requirements table. Open subscriptions: the chain from document line to sign off, with its gaps. Link the Linear ticket. | Every requirement keeps a chain: the line it came from, its criteria, its ticket, the code, the decisions. A missing link shows as a gap. |
-| 1:08 | Coding agent's terminal (OpenCode on Muse Spark): a tool answer that opens with "Kryterea: N open on this project." Then `get_finding`, edits, `report_fix`, commit, `request_recheck`. | Ada's coding agent sees the same open items before every action, and works through them over MCP. |
-| 1:20 | The pull request comment on GitHub, then the comment on the Linear ticket: the same items. **[from the run]** | The same warning reaches GitHub and Linear. Kryterea comments; it never blocks a merge. |
-| 1:30 | Back in the panel: the re-check runs, the finding turns Fixed, the chain fills with evidence. | The agent's word is not proof. Only a re-check of the new commit closes it. |
-| 1:42 | Acceptance: every gate Cleared. Ada types her name, Accept delivery. | Every gate clears, and Ada signs for the work. |
+| 0:12 | Welcome page, Ada enters her name. Then the workspace home. | Ada opens Kryterea. |
+| 0:18 | Link a repo: the project takes the repo's name. | She links the client's repo. Kryterea only reads it. |
+| 0:26 | The files picked up, including `docs/PRD.md`, with their counts. | It shows her exactly which files it picked up. |
 
-## 1:50 to 2:35 After delivery
+## 0:35 to 1:05 Act 2: Detect
 
 | Time | Screen | Voice |
 |---|---|---|
-| 1:50 | "Hi Ada." Diagram: the app goes live, a new push arrives. | A week later, a push changes code the work was signed on. |
-| 1:58 | Needs you: a drift finding, with the Drift stamp and the commit. The GitHub comment updates. **[from the run]** | Kryterea runs its drift rules on every push. The code moved away from what was agreed, and everyone sees it. |
-| 2:10 | The finding: accept it as a risk, with Ada's name and reason. The decision line under the professional's card. | Ada decides. Kryterea warns and records; people decide. |
-| 2:20 | Acceptance record: the Trace section, each requirement with its criteria and decisions, and the closing line "Not legal advice. Kryterea advises and records; people decide." Print. | Every requirement, every decision and every name in one record Ada can hand to her client. |
+| 0:35 | Start page: Ada types what is wrong in her own words. Auto is chosen. **[from the run]** | Ada says what is wrong, in her own words. Kryterea decides which professions check it. |
+| 0:45 | Professionals at work: each profession card as it runs. | Each profession does its part of the job. |
+| 0:55 | A question in plain words with listed answers and a safe default. Ada picks one. A second question: she says "I don't know" and the default is saved as assumed. **[from the run]** | Questions come in plain words. If she does not know, the safe default is recorded as assumed, with her name. |
+
+## 1:05 to 1:50 Act 3: Find and solve
+
+| Time | Screen | Voice |
+|---|---|---|
+| 1:05 | Assessment page: Ada's problem first, with the standard behind it and Release Held. **[from the run]** | The assessment starts with her problem, answered with the standard behind it. |
+| 1:20 | The rest of what was found: a legal item with "Check this", the section cited, "Not legal advice". **[from the run]** | Everything else open, most pressing first. Compliance cites the exact section of the law. |
+| 1:32 | The changes the product owner wrote for her. Ada approves one; a fix change appears with its acceptance criteria. **[from the run]** | Ada never writes a change. The product owner does, and she approves it. |
+
+## 1:50 to 2:35 Act 4: Fix and prove
+
+| Time | Screen | Voice |
+|---|---|---|
+| 1:50 | Coding agent's terminal (OpenCode on Muse Spark): `list_changes`, then the approved change, edits, `report_fix`, commit, `request_recheck`. | Her coding agent starts from the approved change over MCP and fixes it. |
+| 2:04 | Back in the panel: the re-check runs, the finding turns Fixed, the chain fills with evidence. **[from the run]** | The agent's word is not proof. Only a re-check of the new commit closes it. |
+| 2:14 | Before and after page, starting from her problem. | Her problem, before and after. |
+| 2:24 | Acceptance record: her problem first, the assumed answers, every decision and name, and the closing line "Not legal advice. Kryterea advises and records; people decide." Every gate Cleared; Ada types her name, Accept delivery. | Every gate clears, and Ada signs for the work. |
 
 ## 2:35 to 2:45 What changed for Ada
 
 Paper slide, Ada and the client logo, three ticked lines. Each line is something the video showed.
 
-- Every requirement traced from the PRD line to the signed record
-- Drift caught on the push, in the panel, the agent, GitHub and Linear
+- Her own problem named first, in the assessment, the before and after and the record
+- Changes written for her, approved by her, fixed by her coding agent over MCP
 - Every open item ended: fixed and confirmed, or accepted by a named person
 
 ## 2:45 to 2:52 Where this sits in Kryterea

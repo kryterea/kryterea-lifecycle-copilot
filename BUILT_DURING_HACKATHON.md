@@ -36,6 +36,18 @@ Built during the event (update as tasks finish):
   - Before and after: any two checked commits side by side, with open items, evidence and the decisions made at each
   - Panel sections for Needs you, Documents, Trace and Connections; professional cards with their practice and the people who decided
   - The acceptance record carries the trace and ends with "Not legal advice. Kryterea advises and records; people decide."
+- [x] The recordable fix flow (2026-10-28 to 2026-10-29): one path a non-expert walks, from a repo to a signed record, in four acts (take, detect, find and solve, fix and prove):
+  - A professions catalogue (`GET /api/professions`) that drives the templates and which professions a project is checked by
+  - Plain questions with listed options and a safe default; a person answers or says "I don't know", the safe default is saved as assumed with their name, and the business analyst gate clears
+  - The product owner writes the changes from the findings (`po.writeChanges`), with the person's problem first
+  - Approve a proposed change into a parked fix change with real acceptance criteria, or accept the risk with a reason
+  - Projects named after their repo, the files picked up shown back, and `POST /api/projects/:id/check` to start a check
+  - MCP tool `list_changes`, so the coding agent starts from the approved change
+  - Welcome, templates and guides pages, and a workspace home
+  - The Start page: say what is wrong, then let Kryterea decide (Auto) or pick the professions by hand
+  - The assessment page: her problem first, the rest of what was found, and the changes written for her
+  - The record and the before and after start from her problem, with the assumed answers and the decisions
+  - Manual profession pick: a profession left out shows Not checked and keeps release Held
 
 ## What is not ours, or not new
 

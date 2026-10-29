@@ -6,6 +6,15 @@ Coding agents write code fast. The rest of a delivery team gets skipped: the bus
 
 Every change ends in an acceptance record you can put your name to: what was asked, what each professional found, every decision and who made it, and the evidence for each criterion. Work you can sign.
 
+## The flow, in four acts
+
+One path from a repo to a signed record, made for someone who is not an expert in any of these professions.
+
+1. **Take.** Welcome, then your workspace. Link a repo and Kryterea names the project after it and shows back the files it picked up.
+2. **Detect.** Say what is wrong in your own words. Kryterea decides which professions check it (Auto), or you pick them by hand. A profession you leave out shows Not checked and keeps release Held. Questions come in plain words with listed answers and a safe default; answer, or say "I don't know" and the default is recorded as assumed, with your name.
+3. **Find and solve.** The assessment starts with your problem, then what else was found. The product owner writes the changes for you. You approve one into a fix change with acceptance criteria, or accept the risk with a reason.
+4. **Fix and prove.** Your coding agent starts from the approved change over MCP and fixes it. A re-check confirms it. The before and after and the signed record start from your problem and carry the assumed answers and every decision.
+
 ## How a change moves
 
 ```mermaid
@@ -101,6 +110,7 @@ When a change reaches Build, the panel shows the project id and a prompt to past
 |---|---|
 | `list_findings` | Sees what the professionals raised |
 | `get_finding` | Reads one finding, its evidence and its fix prompt |
+| `list_changes` | Sees the approved changes and starts from one |
 | `get_change` | Sees the stage, gates and criteria of a change |
 | `report_fix` | Says what it changed; the finding stays open until a re-check confirms it |
 | `request_recheck` | Asks for a re-check against the latest commit |
