@@ -69,6 +69,7 @@ Rules:
 4. Findings that are the same problem in different words go in one "duplicates" group and in the same change.
 5. "answersProblem" lists the labels of the findings that explain the owner's problem. Leave it empty when the message says there is no problem.
 6. Give each change the criteria that show it is done, marking the ones that cover what happens when something goes wrong.
+7. Legal findings are the [compliance] ones. A change that closes a legal finding starts its title with "Check this: ", never says the owner is in breach or breaks the law, and names only the law entries its findings cite from the pack.
 Return the changes, the duplicates and answersProblem.`;
 
 /** One model call. Labels in, ids out: unknown labels are dropped, empty changes are dropped, a finding left out gets its own change. */

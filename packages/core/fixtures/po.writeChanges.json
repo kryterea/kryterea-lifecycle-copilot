@@ -13,7 +13,7 @@
       ]
     },
     {
-      "title": "Customers are asked for consent before their details are saved",
+      "title": "Check this: customers are asked for consent before their details are saved",
       "forWhom": "Customers who give a name and phone number",
       "why": "Saving personal details without asking can lead to a complaint to the regulator.",
       "findingIds": ["F2"],

@@ -235,6 +235,7 @@ function Proposal({ view, index, byId, actor, onDecided }: { view: ChangeView; i
           </>
         )}
       </dl>
+      {closes.some((f) => lawTag(f.law)) && <p className="hint">Not legal advice. Confirm with a qualified adviser before accepting the risk.</p>}
       {decision?.decision === "approved" ? (
         <p className="decision row">
           <CheckIcon size={15} /> Approved by <strong>{decision.actor}</strong>

@@ -51,6 +51,15 @@ describe("writeChanges", () => {
     expect(req.schema).toMatchObject({ type: "object", additionalProperties: false });
   });
 
+  it("tells the writer to keep a legal finding at Check this and cite only the pack", async () => {
+    const seen: ModelRequest[] = [];
+    await writeChanges({ problem: null, findings }, stub({ answersProblem: [], duplicates: [], changes: [] }, seen), "PACK");
+    const system = seen[0]!.system;
+    expect(system).toContain('A change that closes a legal finding starts its title with "Check this: "');
+    expect(system).toContain("never says the owner is in breach or breaks the law");
+    expect(system).toContain("names only the law entries its findings cite from the pack");
+  });
+
   it("maps answersProblem and duplicates back to ids", async () => {
     const out = await writeChanges(
       { problem: "p", findings },
