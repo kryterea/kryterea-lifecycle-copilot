@@ -376,9 +376,9 @@ The live run on the demo app raised the same four failure paths twice (BA at int
 - Modify: `../demo-merchant-payments/PROMPTS.md`; created by the coding agent: `../demo-merchant-payments/docs/PRD.md`
 
 - [x] **Step 1:** Add prompt 2 to `PROMPTS.md`, exactly: `Write a PRD for this app in docs/PRD.md so my team and clients know what it does and what we plan next. Include monthly subscriptions as the next feature.` Commit `chore: prompt 2`.
-- [ ] **Step 2:** Run the coding agent with prompt 2 (same launcher recipe as prompt 1). Commit its output as written, `docs: PRD written by the coding agent from prompt 2`. Never edit it by hand.
+- [x] **Step 2:** Run the coding agent with prompt 2 (same launcher recipe as prompt 1). Commit its output as written, `docs: PRD written by the coding agent from prompt 2`. Never edit it by hand.
 - [ ] **Step 3:** In the panel (real model): create the Linear tickets the founder chooses for the PRD's requirements, then link them in S7; run a recheck on the LagosPay project; confirm documents, requirements, gaps, drift, Needs you and the MCP preamble show real results. Linear comments appear; GitHub waits on the public repo approval.
-- [ ] **Step 4:** Note the real finding titles for the video script (no planting).
+- [x] **Step 4:** Note the real finding titles for the video script (no planting).
 
 ### Task 16: Docs, disclosure and final checks
 
