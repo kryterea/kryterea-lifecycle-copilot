@@ -1,4 +1,4 @@
-import type { CopilotRecord } from "./record/record.js";
+import { type CopilotRecord, squash } from "./record/record.js";
 import type { Change, Criterion, Finding, Requirement, RoleId, Trigger } from "./types.js";
 
 export type DriftRule =
@@ -159,11 +159,19 @@ function requirementRules(record: CopilotRecord, req: Requirement, linked: Crite
   const rules = new Set<DriftRule>();
   if (!linked.length) return rules.add("requirement_no_criteria");
   const last = record.requirementEvents(req.id).at(-1);
-  if (last?.kind === "changed" && linked.every((k) => k.createdAt <= last.at)) rules.add("requirement_changed");
+  if (last?.kind === "changed" && linked.every((k) => k.createdAt <= last.at) && !lineWasThere(record, req, last.versionId))
+    rules.add("requirement_changed");
   // A gap already warns through QA's own finding, so only criteria with nothing found count here.
   const states = linked.map((k) => record.latestCheck(k.id)?.state ?? null);
   if (!states.includes("evidence_found") && !states.includes("gap")) rules.add("requirement_no_evidence");
   return rules;
+}
+
+// A "changed" event whose line already stood in the earlier version is a reworded summary, not a document change.
+function lineWasThere(record: CopilotRecord, req: Requirement, versionId: string): boolean {
+  const versions = record.documentVersions(req.documentId);
+  const before = versions[versions.findIndex((v) => v.id === versionId) - 1];
+  return !!before && squash(before.body).includes(squash(req.quote));
 }
 
 function stillHolds(record: CopilotRecord, f: Finding, rule: DriftRule, holds: Map<string, Set<DriftRule>>): boolean {
