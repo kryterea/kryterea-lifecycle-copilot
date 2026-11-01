@@ -324,8 +324,10 @@ async function syncDocs(s: Session, change: Change): Promise<{ changed: string[]
         const doc = batch.find((d) => d.name === t.document);
         if (!doc) continue;
         const again = out.findings.find((g) => g.trigger.type === "doc" && g.trigger.document === t.document && g.trigger.quote === t.quote);
+        const at = doc.latest.contentHash.slice(0, 7);
         if (again) record.setFindingStatus(f.id, "fixed", `Raised again on re-read as "${again.title}"`, "ba");
-        else if (!doc.latest.body.includes(t.quote)) record.setFindingStatus(f.id, "fixed", `Not raised again on re-read at ${doc.latest.contentHash.slice(0, 7)}`, "ba");
+        else if (!doc.latest.body.includes(t.quote)) record.setFindingStatus(f.id, "fixed", `Not raised again on re-read at ${at}`, "ba");
+        else if (lineEdited(record, doc.id, t.quote, f.createdAt)) record.setFindingStatus(f.id, "fixed", `Line edited and not raised again on re-read at ${at}`, "ba");
       }
       record.addArtifact({
         changeId: change.id,
@@ -424,6 +426,15 @@ async function verify(s: Session, change: Change, stage: StageId, criteria: Crit
     }
     if (stopped) throw new BudgetExceededError("Copilot budget used during verification");
   });
+}
+
+/** The line holding the quote reads differently now than in the version the finding was raised on. */
+function lineEdited(record: CopilotRecord, documentId: string, quote: string, raisedAt: string): boolean {
+  const versions = record.documentVersions(documentId);
+  const then = versions.filter((v) => v.createdAt <= raisedAt).at(-1);
+  const now = versions.at(-1);
+  const line = (body: string) => body.split(/\r?\n/).find((l) => l.includes(quote))?.trim();
+  return !!then && !!now && then.id !== now.id && line(then.body) !== line(now.body);
 }
 
 /** Open failure paths raised on the change. Document gaps are left to the analyst's gate. */
