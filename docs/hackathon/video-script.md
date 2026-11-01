@@ -54,8 +54,8 @@ Screen recording of the panel, fake mode off, real Muse Spark runs on `demo-merc
 
 | Time | Screen | Voice |
 |---|---|---|
-| 1:50 | Coding agent's terminal (OpenCode on Muse Spark): `list_changes`, then the approved change, edits, `report_fix`, commit, `request_recheck`. | Her coding agent starts from the approved change over MCP and fixes it. |
-| 2:04 | Back in the panel: the re-check runs, the finding turns Fixed, the chain fills with evidence. **[from the run]** | The agent's word is not proof. Only a re-check of the new commit closes it. |
+| 1:50 | Coding agent's terminal (OpenCode on Muse Spark): `list_changes`, then the approved change, edits, `report_fix`, commit, pull request. | Her coding agent starts from the approved change over MCP and fixes it. |
+| 2:04 | Ada merges the pull request. Back in the panel: the re-check runs on the merged commit, the finding turns Fixed, the chain fills with evidence. **[from the run]** | The agent's word is not proof. Only a re-check of the new commit closes it. |
 | 2:14 | Before and after page, starting from her problem. | Her problem, before and after. |
 | 2:24 | Acceptance record: her problem first, the assumed answers, every decision and name, and the closing line "Not legal advice. Kryterea advises and records; people decide." Every gate Cleared; Ada types her name, Accept delivery. | Every gate clears, and Ada signs for the work. |
 
@@ -106,7 +106,7 @@ Facts from the live run on `data/demo-live`, for the **[from the run]** lines. I
 What the voice-over must not smooth over:
 
 - The fix took more than one prompt. Prompts 3 to 10 in the demo repo's `PROMPTS.md` are each a step Ada asked for after a re-check or a review, and prompts 7 and 9 finished runs that stopped early.
-- The agent was told not to call `request_recheck` before merge, because a re-check reads the latest commit on GitHub. Ada ran the re-check after merging. The 1:50 line lists `request_recheck`; cut it or show it after the merge.
+- The agent was told not to call `request_recheck` before merge, because a re-check reads the latest commit on GitHub. Ada ran the re-check after merging, and the 1:50 and 2:04 lines show it that way.
 - Ada's assumed answer (retry guidance) later met her own decision that a customer who paid the wrong amount must not pay again. She accepted that criterion's gap as a risk with a reason.
 - Release reached Cleared after Ada accepted 26 findings as risks with reasons (later features, operations, legal until an adviser looks), and after three copilot fixes found in this run (copilot PRs #3, #4 and #5).
 
