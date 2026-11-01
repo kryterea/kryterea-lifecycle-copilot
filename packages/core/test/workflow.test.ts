@@ -994,6 +994,27 @@ describe("workflow", () => {
       expect(record.findingHistory(gap!.id).at(-1)!.reason).toMatch(/^Not raised again on re-read at [0-9a-f]{7}$/);
     });
 
+    // Live run 2026-11-01: the coding agent fixed a gap by adding to the quoted line, so the quote was still there.
+    it("a document gap clears when its quoted line was edited and a re-read no longer raises it", async () => {
+      const { record, models, deps, change, project, origin } = withPrd();
+      const c = change("understand");
+      await advance(deps, c.id);
+      const [gap] = record.listFindings({ changeId: c.id });
+
+      // A re-read that does not raise the gap, while the line stands unchanged, leaves it open.
+      models.handlers["ba.reviewDocuments"] = () => ({ requirements: [], gaps: [] });
+      origin.put("docs/PRD.md", `${PRD}FR-2: Customers see their bookings.\n`);
+      origin.commit("add bookings");
+      await recheck(deps, project.id, "push");
+      expect(record.findingStatus(gap!.id)).toBe("open");
+
+      origin.put("docs/PRD.md", PRD.replace("Cancelling should be easy.", "Cancelling should be easy. A customer cancels from My bookings up to 24 hours before."));
+      origin.commit("say how cancelling works");
+      await recheck(deps, project.id, "push");
+      expect(record.findingStatus(gap!.id)).toBe("fixed");
+      expect(record.findingHistory(gap!.id).at(-1)!.reason).toMatch(/^Line edited and not raised again on re-read at [0-9a-f]{7}$/);
+    });
+
     it("a push that rewords a requirement raises drift on recheck", async () => {
       const { record, models, deps, change, project, origin } = withPrd();
       const c = change("understand");
