@@ -393,7 +393,7 @@ Skills: business-analysis-os agents `requirements-verifier` and `traceability-au
 - [ ] **Step 4:** Create change "Add monthly subscriptions" (kind `feature`) and walk it through. Let the coding agent fix findings over MCP. Confirm release holds then clears.
 - [ ] **Step 4b:** Put the copilot in one real user's hands (a founder or agency contact the founder picks) on their own repo or the demo repo. Note what they did, where they got stuck and what they valued in `docs/hackathon/user-test.md` (no personal data). Fix anything that blocks them. This is the impact evidence the rubric puts first; skip only if no one is available by 11-02.
 - [x] **Step 5:** Write `docs/hackathon/video-script.md` around the issues that actually appeared (spec section 9 timing). If a planned issue did not appear, change the scene, never the app. Order it for the rubric: impact (who benefits and why) first, then Meta models doing the reasoning, then technical depth. Write it as a voiceover script.
-- [ ] **Step 6:** Run `deliverable-critic` on the script as a Startup-track judge would read it. Revise. Founder approves the script.
+- [ ] **Step 6:** Run `deliverable-critic` on the script as a Startup-track judge would read it. Revise. Founder approves the script. (Founder approved the script 2026-11-01; the `deliverable-critic` pass has not run, so this step stays open.)
 - [x] **Step 7:** Commit `docs: video script`.
 
 ### Task 19: README, disclosure, security pass, video, submission
