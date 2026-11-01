@@ -186,7 +186,8 @@ describe("mcp tools", () => {
     expect(out).toContain('"title":"Change c1"');
     expect(out).toContain('"stage":"build"');
     expect(out).toContain('"findingIds":["f1","f2"]');
-    expect(out).not.toMatch(/c2|c3|c4/);
+    // Match whole ids: the random hex fence around the data can itself contain "c2".
+    expect(out).not.toMatch(/"id":"c[234]"|Change c[234]/);
   });
 
   it("list_changes says when nothing is approved", async () => {

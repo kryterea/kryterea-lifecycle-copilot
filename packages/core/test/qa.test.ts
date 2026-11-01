@@ -317,6 +317,24 @@ describe("qaGate", () => {
   });
 });
 
+// Live run 2026-11-01: a long PRD ranked first and cut server.js at line 144, so QA never saw the code at line 247.
+describe("verifyCriteria shows QA the whole of a mid-sized app", () => {
+  const big = mkdtempSync(join(tmpdir(), "lifecycle-qa-big-"));
+  afterAll(() => rmSync(big, { recursive: true, force: true }));
+
+  it("a long document does not push the matching code out of view", async () => {
+    mkdirSync(join(big, "docs"));
+    const doc = Array.from({ length: 160 }, (_, i) => `Rule ${i}: a second tap on Pay reuses the pending payment and creates no second row.`);
+    writeFileSync(join(big, "docs", "PRD.md"), doc.join("\n"));
+    const filler = Array.from({ length: 240 }, (_, i) => `const route${i} = (req, res) => res.json({ ok: true, at: ${i} });`);
+    writeFileSync(join(big, "server.js"), [...filler, "function initiate() { return reusePendingPayment(); }"].join("\n"));
+    const seen: ModelRequest[] = [];
+    const c = { ...ctx(stub(() => answer({ state: "no_evidence", evidence: [] }), seen)), repo: { dir: big, commit: COMMIT } };
+    await verifyCriteria(c, [crit("k8", "A second tap on Pay reuses the pending payment and creates no second row")]);
+    expect(seen[0]!.user).toContain("reusePendingPayment");
+  });
+});
+
 // The fixture is a saved model output. It must keep its shape and cite a real line of the demo app.
 const demo = join(__dirname, "..", "..", "..", "..", "demo-salon-bookings");
 describe.skipIf(!existsSync(join(demo, "server.js")))("fixture against the demo app", () => {

@@ -3,7 +3,8 @@ import { BudgetExceededError, type Check, type Criterion, type EvidenceState, ty
 import { contextBlock, defang, repoMaterial, systemPrompt, type RoleContext, type RoleResult } from "./context.js";
 
 const MAX_FILES = 6;
-const MAX_CHARS = 20_000;
+// Room for a long document and a whole server file together; at 20,000 the demo's server.js was cut before its pay code.
+const MAX_CHARS = 60_000;
 const CONCURRENCY = 3;
 
 const str: JsonSchema = { type: "string" };
