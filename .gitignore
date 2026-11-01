@@ -7,6 +7,10 @@ dist
 .env.*
 !.env.example
 *.db
+# The recorded demo run that pnpm demo opens; pnpm demo:export checks it for local paths and keys.
+!demo/lagospay.db
+*.db-shm
+*.db-wal
 /data/
 .cache/
 *.tsbuildinfo

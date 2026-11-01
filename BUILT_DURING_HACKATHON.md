@@ -23,8 +23,13 @@ Built during the event (update as tasks finish):
 - [x] Every process has an end (2026-10-27): fix reports wait on a re-check, fix changes carry findings raised after delivery, withdraw with a reason, back to analysis when no criteria were written, later rounds of analyst questions, reopen a settled finding, interrupted runs closed on start, and the Build stage hand-off for the coding agent
 - [x] README
 - [x] QA in the running app (2026-10-27): QA tries criteria in the app with a headless browser (Playwright), choosing each step with Muse Spark and judging from screenshots; opt in with `COPILOT_QA_BROWSER=1`
-- [ ] Demo app ([kryterea/demo-merchant-payments](https://github.com/kryterea/demo-merchant-payments), public), built by a coding agent running on Muse Spark from the prompts in its `PROMPTS.md`
+- [x] Demo app ([kryterea/demo-merchant-payments](https://github.com/kryterea/demo-merchant-payments), public), built by a coding agent running on Muse Spark from the prompts in its `PROMPTS.md`
 - [x] `pnpm demo` opens the recorded demo run with no keys; `pnpm demo:export` saves a live run as the demo record (refusing local paths and anything key-like) and writes `docs/hackathon/before-after.md` from it
+- [x] The live run (2026-11-01): Kryterea on Muse Spark checked the demo app from tag `before` (a1c5df0) to tag `after` (18724e2). The coding agent (OpenCode on Muse Spark) fixed the approved change over MCP in demo PRs #1 to #5, from prompts 3 to 10 in the demo repo's `PROMPTS.md`, and release on that change reached Cleared. The run is the demo record in `demo/lagospay.db` and the report in `docs/hackathon/before-after.md`. Copilot faults the run exposed were fixed with a test each:
+  - QA saw a long document and the whole server file together; before, a long PRD cut `server.js` short (#2)
+  - A requirement counts as changed only when its document line changed, not when the model rewords its summary (#3)
+  - A QA gap the owner accepted as a risk with a reason no longer holds release (#4)
+  - A document gap closes when its quoted line was edited and a re-read no longer raises it (#5)
 - [x] Governed trace (2026-10-27 to 2026-10-28):
   - Documents read from the repo or pasted in, kept as versions, with requirements read line by line
   - Document gaps from the analyst, and acceptance criteria linked to the requirements they cover

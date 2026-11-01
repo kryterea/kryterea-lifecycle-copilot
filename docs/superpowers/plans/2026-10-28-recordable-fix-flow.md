@@ -55,7 +55,7 @@ Values (copy verbatim):
 | compliance | Security and compliance | NDPA 2023, card handling | Personal data, consent and card data | The app collects personal data and takes cards |
 | po | Product owner | Acceptance and sign off | Whether the change is ready to accept | Someone has to sign for what ships |
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // professions.test.ts
@@ -73,10 +73,10 @@ it("GET /api/professions lists the catalogue", async () => {
 });
 ```
 
-- [ ] **Step 2:** `pnpm vitest run packages/core/test/professions.test.ts` → FAIL, `PROFESSIONS` not exported.
-- [ ] **Step 3:** Implement the constant and the route.
-- [ ] **Step 4:** Both tests PASS.
-- [ ] **Step 5:** Commit `feat(core): profession catalogue for templates and scope`.
+- [x] **Step 2:** `pnpm vitest run packages/core/test/professions.test.ts` → FAIL, `PROFESSIONS` not exported.
+- [x] **Step 3:** Implement the constant and the route.
+- [x] **Step 4:** Both tests PASS.
+- [x] **Step 5:** Commit `feat(core): profession catalogue for templates and scope`.
 
 ### Task 2: Plain questions with a safe default; understand runs do not pause
 
@@ -96,15 +96,15 @@ Prompt change for `understandApp`: questions are written for an app owner who is
 
 Analysis stage: for `c.kind === "understand"`, record the BA gate as today but do not `stay`; run `analyseChange` and continue. Other kinds keep pausing.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - ba.test.ts `understandApp keeps options and a safe default for each question`: stub returns `questions: [{ question: "Q", options: ["A","B"], defaultIndex: 1 }, { question: "Bad", options: ["only"], defaultIndex: 0 }]` → result `questions` `["Q"]`, `questionOptions` `[{ options: ["A","B"], defaultIndex: 1 }]`.
   - workflow.test.ts `an understand change moves past analysis with questions open`: advance an understand change whose fixture asks one question → stage is past `analysis` (reaches `release`), BA gate `held`, `openQuestions` length 1.
   - workflow.test.ts `questionOptions reads old questions artifacts as null`: add a `questions` artifact `{ questions: ["Q"] }` → `questionOptions` is `[null]`.
   - app.test.ts `answers keep the assumed flag and the actor`: post `{ answers: ["B"], assumed: [true], actor: "Ada" }` → artifact body equals that object; `assumed` of wrong length → 400.
-- [ ] **Step 2:** Run them → FAIL on the missing field and on stage `analysis`.
-- [ ] **Step 3:** Implement; update the fixture so its questions use the new item shape with plain owner wording.
-- [ ] **Step 4:** `pnpm test` → all PASS (the existing "analysis does not move on while BA questions are unanswered" test still passes for its feature change).
-- [ ] **Step 5:** Commit `feat(core): plain questions with a safe default; understand runs keep going`.
+- [x] **Step 2:** Run them → FAIL on the missing field and on stage `analysis`.
+- [x] **Step 3:** Implement; update the fixture so its questions use the new item shape with plain owner wording.
+- [x] **Step 4:** `pnpm test` → all PASS (the existing "analysis does not move on while BA questions are unanswered" test still passes for its feature change).
+- [x] **Step 5:** Commit `feat(core): plain questions with a safe default; understand runs keep going`.
 
 ### Task 3: Product owner writes the changes
 
@@ -127,17 +127,17 @@ Analysis stage: for `c.kind === "understand"`, record the BA gate as today but d
 - Sanitise after the call: drop ids not in the input; drop changes left with no findings; a finding missing from every change gets its own change titled with the finding title.
 - Workflow: at `release` for an `understand` change, before `releaseHeld`, if `proposalsOf` is null and the change has open findings, run the writer inside `runRole(s, c, "po", ...)` and save the `proposed_changes` artifact. A budget stop leaves it for the next advance.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - po-writer.test.ts `drops unknown ids and empty changes`: input finding ids `f1`, `f2`; stub returns a change with `["F1","F9"]` and one with `["F9"]` → first change has `["f1"]`, the `F9` only change is gone.
   - `gives a finding the writer left out its own change`: input f1, f2; stub covers f1 only → second change has `findingIds ["f2"]` and title of f2.
   - `sends the problem and every finding to the model`: stub captures the request; user text contains the problem sentence and both ids.
   - workflow.test.ts `startCheck with a sentence stores the problem and titles the change`: `problemOf` returns the sentence; title starts `Check: `.
   - workflow.test.ts `startCheck with no sentence is a whole repo check`: title `Whole repo check`, `problemOf` null.
   - workflow.test.ts `an understand change gets proposed changes at release`: advance with fixtures → `proposalsOf` not null and its ids are open findings of the change.
-- [ ] **Step 2:** Run → FAIL, module missing.
-- [ ] **Step 3:** Implement the writer. Finding ids are generated, so the model never sees them: the prompt lists findings as labels `F1`, `F2`, ... in input order, the schema returns labels, and the writer maps labels back to ids (an unknown label is an unknown id and is dropped). The fixture `po.writeChanges.json` uses labels: `answersProblem: ["F1"]`, `duplicates: []`, two changes over `F1` and `F2`, so the fake flow shows a problem card end to end. Tests in Step 1 use labels in the stub output and assert on the mapped ids.
-- [ ] **Step 4:** `pnpm test` → PASS.
-- [ ] **Step 5:** Commit `feat(core): the product owner writes the changes from the findings`.
+- [x] **Step 2:** Run → FAIL, module missing.
+- [x] **Step 3:** Implement the writer. Finding ids are generated, so the model never sees them: the prompt lists findings as labels `F1`, `F2`, ... in input order, the schema returns labels, and the writer maps labels back to ids (an unknown label is an unknown id and is dropped). The fixture `po.writeChanges.json` uses labels: `answersProblem: ["F1"]`, `duplicates: []`, two changes over `F1` and `F2`, so the fake flow shows a problem card end to end. Tests in Step 1 use labels in the stub output and assert on the mapped ids.
+- [x] **Step 4:** `pnpm test` → PASS.
+- [x] **Step 5:** Commit `feat(core): the product owner writes the changes from the findings`.
 
 ### Task 4: Approve a proposal, or accept its risk
 
@@ -154,16 +154,16 @@ Analysis stage: for `c.kind === "understand"`, record the BA gate as today but d
   - `function proposalDecisions(record, changeId): Array<{ index: number; decision: "approved" | "accepted_risk"; actor: string; reason?: string; fixChangeId?: string }>`
 - Errors: unknown index or change without proposals throws `Error("No such proposed change")`; empty actor or (for risk) empty reason throws.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - `approving a proposal parks a fix change at build with its criteria`: stage `build`, kind `fix`, `criteriaOf(fix)` texts equal the proposal's, each finding linked `raised_on` the fix change.
   - `approving twice returns the same fix change`: second call returns the same id and `listChanges` grows by one only.
   - `accepting the risk closes the proposal's findings under the actor`: each finding `accepted_risk`, history actor `Ada`.
   - `openFixChange still carries a delivered change's findings` (existing test stays green).
   - `recheck moves an approved fix change to verification`: after approve, a recheck with a new commit leaves the fix change at `verification` or later.
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** `pnpm test` → PASS.
-- [ ] **Step 5:** Commit `feat(core): approve a written change for the coding agent, or accept its risk`.
+- [x] **Step 2:** Run → FAIL.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** `pnpm test` → PASS.
+- [x] **Step 5:** Commit `feat(core): approve a written change for the coding agent, or accept its risk`.
 
 ### Task 5: Server: auto named project, files picked up, check, proposals
 
@@ -180,17 +180,17 @@ Analysis stage: for `c.kind === "understand"`, record the BA gate as today but d
   - `GET /api/changes/:id` gains `problem`, `questionOptions`, `proposals`, `decisions`.
   - `POST /api/changes/:id/proposals/:index/approve` `{ actor }` → 201 fix change.
   - `POST /api/changes/:id/proposals/:index/accept-risk` `{ actor, reason }` → 200.
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - `creates a project named from the repo`: post `{ repoUrl: "https://github.com/kryterea/demo-merchant-payments" }` → name `Demo merchant payments`.
   - `names a local repo from its folder` (allowLocalRepos): last segment.
   - `lists the files picked up, grouped`: local fixture repo with `src/a.js`, `docs/PRD.md`, `package.json`, `test/a.test.js` → each in its group; documents has `docs/PRD.md` with its line count.
   - `check starts an understand change with the problem`: 202, change kind `understand`, view `problem` equals the sentence.
   - `check with no problem is a whole repo check`.
   - `approve and accept-risk go through`: 400 on missing actor; 404 on unknown index.
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** `pnpm test` → PASS.
-- [ ] **Step 5:** Commit `feat(server): named projects, files picked up, check and proposal routes`.
+- [x] **Step 2:** Run → FAIL.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** `pnpm test` → PASS.
+- [x] **Step 5:** Commit `feat(server): named projects, files picked up, check and proposal routes`.
 
 ### Task 6: MCP lists approved changes
 
@@ -200,9 +200,9 @@ Analysis stage: for `c.kind === "understand"`, record the BA gate as today but d
 
 **Interfaces:**
 - Produces: tool `list_changes`: no input; returns the project's `fix` changes that are not withdrawn and not at `operate`, each `{ id, title, stage, findingIds }` where `findingIds` are findings linked `raised_on` the change. Uses the existing server API (`GET /api/projects/:id` plus `GET /api/changes/:id`) the other tools call. Tool description tells the agent to start here, then `get_change`, fix on a branch, `report_fix` per finding, `request_recheck`.
-- [ ] **Step 1:** Failing test `list_changes returns approved fix changes with their findings` against a stubbed fetch.
-- [ ] **Step 2:** Run → FAIL. **Step 3:** Implement. **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat(mcp): list_changes so the agent starts from the approved change`.
+- [x] **Step 1:** Failing test `list_changes returns approved fix changes with their findings` against a stubbed fetch.
+- [x] **Step 2:** Run → FAIL. **Step 3:** Implement. **Step 4:** PASS.
+- [x] **Step 5:** Commit `feat(mcp): list_changes so the agent starts from the approved change`.
 
 ### Task 7: Web: welcome, home tabs, templates, guides
 
@@ -215,10 +215,10 @@ Analysis stage: for `c.kind === "understand"`, record the BA gate as today but d
 - Welcome copy: heading `Kryterea fixes product problems`, line `Link your repo. Tell us what is wrong, or let us check everything. Professionals find the problems, your coding agent fixes them, and you sign for the result.`, field `Your name` (used on the record), button `Start`. No Build option.
 - Templates: one card per `PROFESSIONS` entry: name, frameworks as tags, checks. Footer line: `Each professional works from a pack in this repo.`
 - Guides: one page `How Kryterea fixes a product problem`, four sections: Take (link your repo, Kryterea reads it), Detect (say what is wrong; the right professionals check), Find and solve (every problem, where, why, the fix; release Held until each is fixed or accepted), Fix and prove (your coding agent fixes over MCP; Kryterea checks again and shows before and after).
-- [ ] **Step 1:** `pnpm vitest run packages/web/test/copy.test.ts` stays green after writing the pages (the guard is this task's automated test).
-- [ ] **Step 2:** `pnpm --filter web build` succeeds.
-- [ ] **Step 3:** Browser check with `COPILOT_FAKE_MODEL=1`: fresh storage lands on Welcome; Start lands on Projects; tabs switch.
-- [ ] **Step 4:** Commit `feat(web): welcome, templates and guides`.
+- [x] **Step 1:** `pnpm vitest run packages/web/test/copy.test.ts` stays green after writing the pages (the guard is this task's automated test).
+- [x] **Step 2:** `pnpm --filter web build` succeeds.
+- [x] **Step 3:** Browser check with `COPILOT_FAKE_MODEL=1`: fresh storage lands on Welcome; Start lands on Projects; tabs switch.
+- [x] **Step 4:** Commit `feat(web): welcome, templates and guides`.
 
 ### Task 8: Web: new project from a repo, files picked up, scope
 
@@ -230,9 +230,9 @@ Analysis stage: for `c.kind === "understand"`, record the BA gate as today but d
 - Consumes: `GET /api/projects/:id/files`, `POST /api/projects/:id/check`, `GET /api/professions`.
 - Projects form: one field `GitHub repo`, a live line under it `Project name: <nameFromRepo preview>` (same rule as the server, duplicated in the client as a 3 line function), button `Link repo`; on success go to `#/projects/:id/start`. App URL moves out of this form.
 - Start page, top to bottom: `Files picked up` with the groups and counts, documents listed with line counts (loading state `Reading the repo`); then `What is wrong?` single line input, placeholder `Describe the problem in your own words, or leave it empty to check the whole repo.`; then `Who should look?` with `Auto (recommended)` selected and, under it, one row per profession: name and `why`; button `Check` → `#/changes/:changeId/assessment`.
-- [ ] **Step 1:** Copy guard green. **Step 2:** Build succeeds.
-- [ ] **Step 3:** Browser check (fake model, local fixture repo): linking shows the auto name; Start lists groups; Check navigates.
-- [ ] **Step 4:** Commit `feat(web): link a repo, see what was read, say what is wrong`.
+- [x] **Step 1:** Copy guard green. **Step 2:** Build succeeds.
+- [x] **Step 3:** Browser check (fake model, local fixture repo): linking shows the auto name; Start lists groups; Check navigates.
+- [x] **Step 4:** Commit `feat(web): link a repo, see what was read, say what is wrong`.
 
 ### Task 9: Web: assessment page
 
@@ -249,9 +249,9 @@ Analysis stage: for `c.kind === "understand"`, record the BA gate as today but d
   4. **Your problem:** one large card per finding in `proposals.answersProblem`: profession, title, Where, Why it matters (`plain`), Cost if ignored, The fix (`fixPrompt`). Reuse `FindingItem` if it renders these fields; otherwise extend it.
   5. **Also found:** heading `While checking, we found N more you did not ask about` (or `We found N problems` with no problem). One row per finding not in `answersProblem`, near duplicates from `proposals.duplicates` shown once with `+1 similar`. A row expands to the full card.
   6. **Changes Kryterea wrote:** one card per proposal: title, For whom, Why, findings it closes, criteria. Buttons `Approve` and `Accept the risk` (asks for a reason). After a decision the card shows `Approved by Ada` with a link to the fix change, or `Risk accepted by Ada: <reason>`. A small link `Add your own change` opens the existing change form.
-- [ ] **Step 1:** Copy guard green. **Step 2:** Build succeeds.
-- [ ] **Step 3:** Browser check with fake model through a full check: running rows update, questions answer with and without `I don't know`, Approve creates a fix change at `build`, Accept the risk needs a reason. Desktop and phone width.
-- [ ] **Step 4:** Commit `feat(web): assessment page: her problem first, the rest, the changes written for her`.
+- [x] **Step 1:** Copy guard green. **Step 2:** Build succeeds.
+- [x] **Step 3:** Browser check with fake model through a full check: running rows update, questions answer with and without `I don't know`, Approve creates a fix change at `build`, Accept the risk needs a reason. Desktop and phone width.
+- [x] **Step 4:** Commit `feat(web): assessment page: her problem first, the rest, the changes written for her`.
 
 ### Task 10: Problem first in before and after, and in the record
 
@@ -263,9 +263,9 @@ Analysis stage: for `c.kind === "understand"`, record the BA gate as today but d
 - `AcceptanceRecord` gains `problem: string | null`, `answers: Array<{ question: string; answer: string; assumed: boolean; actor: string | null }>`, `decisions` (shape of `proposalDecisions`). For a fix change these come from the change it follows.
 - Compare: when the project's latest understand change has `answersProblem`, those findings show first under `Your problem`, closed or still open.
 - Record: shows `Problem`, then answers (`Assumed: <answer>, by <actor>` when assumed), then decisions.
-- [ ] **Step 1:** Failing test `the record carries the problem, assumed answers and decisions`.
-- [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** `pnpm test` PASS, copy guard green, build succeeds.
-- [ ] **Step 5:** Commit `feat: the record and before and after start from her problem`.
+- [x] **Step 1:** Failing test `the record carries the problem, assumed answers and decisions`.
+- [x] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** `pnpm test` PASS, copy guard green, build succeeds.
+- [x] **Step 5:** Commit `feat: the record and before and after start from her problem`.
 
 ### Task 11: Manual profession pick (last; not in the recording)
 
@@ -274,19 +274,19 @@ Analysis stage: for `c.kind === "understand"`, record the BA gate as today but d
 - Modify: `packages/server/src/app.ts` (`roles` on `/check`), `packages/web/src/pages/Start.tsx` (pick list under Auto)
 - Test: `packages/core/test/workflow.test.ts`
 
-- [ ] **Step 1:** Failing tests `a skipped profession does not run` (no run for that role) and `release stays Held while a profession is not checked` (held roles include it, reason `Not checked`).
-- [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** `pnpm test` PASS, build succeeds.
-- [ ] **Step 5:** Commit `feat: pick professions by hand; unpicked ones show Not checked`.
+- [x] **Step 1:** Failing tests `a skipped profession does not run` (no run for that role) and `release stays Held while a profession is not checked` (held roles include it, reason `Not checked`).
+- [x] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** `pnpm test` PASS, build succeeds.
+- [x] **Step 5:** Commit `feat: pick professions by hand; unpicked ones show Not checked`.
 
 ### Task 12: Docs, disclosure and a full fake run
 
 **Files:**
 - Modify: `BUILT_DURING_HACKATHON.md`, `README.md` (the flow in four acts, the new MCP tool), the video script if it lives in the repo (only the shape; `[from the run]` lines stay for the live run)
 
-- [ ] **Step 1:** List every new piece from Tasks 1 to 11 under what was built this week.
-- [ ] **Step 2:** `pnpm test`, `pnpm typecheck`, `pnpm build` all succeed; note any Windows phantom errors for CI.
-- [ ] **Step 3:** Full browser walk with `COPILOT_FAKE_MODEL=1` and a fresh `COPILOT_DATA_DIR`: welcome, home, link, files, check, assessment, answer, approve, MCP `list_changes` via the server API, record. Screenshot each step.
-- [ ] **Step 4:** Commit `docs: the recordable fix flow`.
+- [x] **Step 1:** List every new piece from Tasks 1 to 11 under what was built this week.
+- [x] **Step 2:** `pnpm test`, `pnpm typecheck`, `pnpm build` all succeed; note any Windows phantom errors for CI.
+- [x] **Step 3:** Full browser walk with `COPILOT_FAKE_MODEL=1` and a fresh `COPILOT_DATA_DIR`: welcome, home, link, files, check, assessment, answer, approve, MCP `list_changes` via the server API, record. Screenshot each step.
+- [x] **Step 4:** Commit `docs: the recordable fix flow`.
 
 ## After the plan
 
