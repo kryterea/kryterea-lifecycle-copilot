@@ -89,3 +89,25 @@ Voice: This copilot is the delivery layer of Kryterea, the platform for work tea
 - Read the final voice-over aloud against the timing; cut words, not pauses.
 - After the live run: tag `before` (the agent's code and PRD) and `after` (its last fix) in the demo repo, run `pnpm demo:export` on the live data dir, and take the outcomes card's numbers from `docs/hackathon/before-after.md`.
 - Show the Before and after page once, between the confirmed fix and the signed record.
+
+## From the run (2026-11-01, Muse Spark, `before` a1c5df0 to `after` 18724e2)
+
+Facts from the live run on `data/demo-live`, for the **[from the run]** lines. If the recorded run on camera raises different titles, replace these with its own.
+
+| Time | What the run showed |
+|---|---|
+| 0:35 | Ada's problem: "When a customer taps Pay twice, I see two pending payments for one sale and cannot tell which one is real." |
+| 0:55 | Question 1: "Each tap on Pay creates a new pending payment, so two taps show as two sales. Should one sale keep one payment when tapped twice?" Ada: "Yes, keep one payment for one sale." Question 2, answered "I don't know", saved as assumed with her name: "When the amount does not match, the payment stays not paid and the customer sees a generic note with no retry path. Should the customer see clear retry guidance?" Default: "Yes, show clear retry and contact guidance." A third question asked about refunds that cannot reach Paystack. |
+| 1:05 | Three findings answer her problem: the analyst's "Unclear repeat pay start creates duplicate pending payments with no stated rule", the same rule missing from every document, and the architect's "Double tap creates two pending payments with no way to tell which is real". Release Held. |
+| 1:20 | Legal: "Check this: Lawful basis for merchant and customer data uses", citing NDPA 2023 s.25, with "Not legal advice". Of the seven other legal items, six cite NDPA 2023 and one cites a PCI DSS line. |
+| 1:32 | The product owner's change: "Pay tap twice shows one clear payment with a clear retry path", for "customers paying by link and merchants watching the dashboard". Ada approves it. Four acceptance criteria, the first: "Second tap on Pay while one payment is pending reuses the same pending payment and does not create a second row." |
+| 2:04 | After the agent's fix was merged, the re-check turned the three findings behind her problem Fixed, and the first criterion moved from not checked to Evidence found. |
+
+What the voice-over must not smooth over:
+
+- The fix took more than one prompt. Prompts 3 to 10 in the demo repo's `PROMPTS.md` are each a step Ada asked for after a re-check or a review, and prompts 7 and 9 finished runs that stopped early.
+- The agent was told not to call `request_recheck` before merge, because a re-check reads the latest commit on GitHub. Ada ran the re-check after merging. The 1:50 line lists `request_recheck`; cut it or show it after the merge.
+- Ada's assumed answer (retry guidance) later met her own decision that a customer who paid the wrong amount must not pay again. She accepted that criterion's gap as a risk with a reason.
+- Release reached Cleared after Ada accepted 26 findings as risks with reasons (later features, operations, legal until an adviser looks), and after three copilot fixes found in this run (copilot PRs #3, #4 and #5).
+
+Outcomes card, from `docs/hackathon/before-after.md`: open items 40 to 16, evidence found 5 to 20, no evidence 16 to 5, 29 items closed.
