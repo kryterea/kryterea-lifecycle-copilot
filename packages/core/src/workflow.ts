@@ -19,6 +19,7 @@ import {
   type Criterion,
   type Finding,
   type FindingKind,
+  type FindingStatus,
   type GateState,
   type ModelFactory,
   type Packs,
@@ -166,6 +167,17 @@ export const criteriaOf = (record: CopilotRecord, change: Change): Criterion[] =
 
 const latestChecks = (record: CopilotRecord, criteria: Criterion[]): Check[] =>
   criteria.map((k) => record.latestCheck(k.id)).filter((c): c is Check => c !== null);
+
+/** Criteria whose gap the owner accepted as a risk: an accepted QA finding on the criterion and none still open. */
+function acceptedGaps(record: CopilotRecord, criteria: Criterion[]): Set<string> {
+  const ids = new Set(criteria.map((k) => k.id));
+  const on = (status: FindingStatus) =>
+    new Set(record.listFindings({ projectId: criteria[0]?.projectId ?? "", status }).flatMap((f) => (f.criterionId && ids.has(f.criterionId) ? [f.criterionId] : [])));
+  const open = on("open");
+  return new Set([...on("accepted_risk")].filter((id) => !open.has(id)));
+}
+
+const criteriaGate = (record: CopilotRecord, criteria: Criterion[]) => qaGate(latestChecks(record, criteria), acceptedGaps(record, criteria));
 
 /** understand: the as_built it produced. feature, fix or projectWide: the newest as_built in the project. None: {}. */
 function asBuiltFor(record: CopilotRecord, change: Change, projectWide = change.kind !== "understand"): unknown {
@@ -422,7 +434,7 @@ const openPathsOn = (record: CopilotRecord, changeId: string) => {
 
 /** QA holds on its criteria's latest checks, and while a failure path raised on the change is open. */
 function releaseQaGate(record: CopilotRecord, c: Change): { state: GateState; reason: string } {
-  const g = qaGate(latestChecks(record, criteriaOf(record, c)));
+  const g = criteriaGate(record, criteriaOf(record, c));
   const n = openPathsOn(record, c.id);
   if (g.state === "held" || n === 0) return g;
   return { state: "held", reason: `${n} failure path finding${n === 1 ? "" : "s"} to deal with before release. Fix each one or accept the risk with a reason.` };
@@ -510,7 +522,7 @@ const DISPATCH: Record<StageId, (s: Session, c: Change) => Promise<Outcome>> = {
     const { record } = s.deps;
     const criteria = criteriaOf(record, c);
     if (criteria.length) await verify(s, c, "verification", criteria);
-    gate(record, c.id, "qa", qaGate(latestChecks(record, criteria)));
+    gate(record, c.id, "qa", criteriaGate(record, criteria));
     return NEXT;
   },
 

@@ -138,18 +138,21 @@ export async function verifyCriteria(
 
 const plural = (n: number, one: string, many: string) => (n === 1 ? `1 criterion ${one}` : `${n} criteria ${many}`);
 
-/** Held while any criterion's latest check is a gap or has no evidence. */
-export function qaGate(checks: Check[]): { state: GateState; reason: string } {
+/** Held while any criterion's latest check is a gap or has no evidence. A gap whose finding the owner accepted as a risk is settled. */
+export function qaGate(checks: Check[], acceptedGaps: ReadonlySet<string> = new Set()): { state: GateState; reason: string } {
   if (checks.length === 0) return { state: "held", reason: "No criteria checked yet" };
   const latest = new Map<string, EvidenceState>();
   for (const c of checks) latest.set(c.criterionId, c.state); // last in array order wins
   let gaps = 0;
   let none = 0;
-  for (const s of latest.values()) {
-    if (s === "gap") gaps++;
+  let settled = 0;
+  for (const [id, s] of latest) {
+    if (s === "gap" && acceptedGaps.has(id)) settled++;
+    else if (s === "gap") gaps++;
     else if (s === "no_evidence") none++;
   }
-  if (gaps + none === 0) return { state: "cleared", reason: "Every criterion has evidence found." };
+  if (gaps + none === 0)
+    return { state: "cleared", reason: settled ? "Every criterion has evidence found or an accepted risk." : "Every criterion has evidence found." };
   const parts = [];
   if (gaps) parts.push(plural(gaps, "has a gap", "have a gap"));
   if (none) parts.push(plural(none, "has no evidence yet", "have no evidence yet"));
