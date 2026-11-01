@@ -36,6 +36,20 @@ describe("applyDrift", () => {
     expect(t.open()).toContainEqual(["ba", "Requirement FR-1 changed but its criteria did not"]);
   });
 
+  // Live run 2026-11-01: requirements recorded as changed while their PRD line stayed the same.
+  it("requirement_changed is not raised when the quoted line was already in the earlier version", async () => {
+    const t = fresh();
+    const v1 = t.record.saveDocumentVersion({ projectId: t.project.id, name: "docs/PRD.md", source: "repo", body: "1. Create links.\n2. Links in naira.", commit: null });
+    const [r] = t.record.applyRequirements(v1.document.id, v1.version.id, [{ key: "FR-1", text: "Create links", quote: "1. Create links.", line: 1 }]).added;
+    const k = t.criterion("A merchant creates a link", r!.id);
+    t.record.recordCheck({ criterionId: k.id, runId: t.runId, state: "evidence_found", evidence: [], note: "" });
+    await tick();
+    const v2 = t.record.saveDocumentVersion({ projectId: t.project.id, name: "docs/PRD.md", source: "repo", body: "1. Create links.\n2. Links in naira.\n3. Refunds.", commit: null });
+    t.record.applyRequirements(v2.document.id, v2.version.id, [{ key: "FR-1", text: "Create links in naira", quote: "2. Links in naira.", line: 2 }]);
+    t.drift();
+    expect(t.open()).not.toContainEqual(["ba", "Requirement FR-1 changed but its criteria did not"]);
+  });
+
   it("requirement_no_criteria: a requirement with no acceptance criteria", () => {
     const t = fresh();
     t.reqs([["FR-1", "Merchants refund a payment"]]);

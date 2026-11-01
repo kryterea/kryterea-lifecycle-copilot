@@ -34,6 +34,7 @@ import { SCHEMA } from "./schema.js";
 type Row = Record<string, unknown>;
 
 const now = () => new Date().toISOString();
+export const squash = (s: string) => s.replace(/\s+/g, " ").trim();
 
 /** Actor recorded for status changes the copilot makes itself. */
 export const SYSTEM_ACTOR = "copilot";
@@ -753,7 +754,8 @@ export class CopilotRecord {
           continue;
         }
         const back = cur.status === "removed";
-        const changed = !back && cur.text !== n.text;
+        // The document's own line decides a change: the model rewords its summary of an unchanged line between reads.
+        const changed = !back && squash(cur.quote) !== squash(n.quote);
         this.run(
           "UPDATE requirements SET text = ?, quote = ?, line = ?, status = 'active', updated_at = ? WHERE id = ?",
           n.text,

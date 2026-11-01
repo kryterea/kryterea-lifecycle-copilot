@@ -136,6 +136,23 @@ describe("record: documents and requirements", () => {
     expect(r3.changed).toEqual([]);
   });
 
+  // Live run 2026-11-01: the analyst reworded its own summaries of unchanged PRD lines and raised 8 false changes.
+  it("counts a requirement as changed only when its quoted line changed", () => {
+    const { record, project } = fresh();
+    const v1 = save(record, project.id, "v1");
+    record.applyRequirements(v1.document.id, v1.version.id, [
+      { key: "FR-1", text: "Link in less than 30 seconds", quote: "1. Create a link in under 30 seconds.", line: 21 },
+    ]);
+    const v2 = save(record, project.id, "v2");
+    const r2 = record.applyRequirements(v2.document.id, v2.version.id, [
+      { key: "FR-1", text: "Link in under 30 seconds", quote: "1.  Create a link in under 30 seconds. ", line: 24 },
+    ]);
+    expect(r2.changed).toEqual([]);
+    const fr1 = record.listRequirements(project.id)[0]!;
+    expect(record.requirementEvents(fr1.id).map((e) => e.kind)).toEqual(["added"]);
+    expect(fr1.line).toBe(24);
+  });
+
   it("links requirements idempotently", () => {
     const { record, project } = fresh();
     const v = save(record, project.id, "v1");
