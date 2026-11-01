@@ -310,6 +310,14 @@ describe("qaGate", () => {
     expect(qaGate([check("a", "evidence_found"), check("a", "gap")]).state).toBe("held");
   });
 
+  it("a gap the owner accepted as a risk counts as settled, a missing check does not", () => {
+    expect(qaGate([check("a", "evidence_found"), check("b", "gap")], new Set(["b"]))).toEqual({
+      state: "cleared",
+      reason: "Every criterion has evidence found or an accepted risk.",
+    });
+    expect(qaGate([check("a", "no_evidence")], new Set(["a"])).reason).toBe("1 criterion has no evidence yet.");
+  });
+
   it("is cleared when every latest check has evidence found", () => {
     const g = qaGate([check("a", "evidence_found"), check("b", "evidence_found")]);
     expect(g.state).toBe("cleared");

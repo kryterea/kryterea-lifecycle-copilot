@@ -605,6 +605,26 @@ describe("workflow", () => {
     expect(checked).toHaveLength(1);
   });
 
+  // Live run 2026-11-01: the owner accepted a QA gap that conflicts with their own decision, and release stayed Held.
+  it("a QA gap whose finding the owner accepted as a risk no longer holds release", async () => {
+    const { record, models, deps, change } = setup();
+    models.qa["CRIT-CANCEL"] = {
+      state: "gap",
+      evidence: [{ file: "src/booking.js", line: 2 }],
+      note: "The slot is not freed.",
+      title: "A cancelled booking keeps the slot",
+      plain: "The slot stays taken.",
+      costIfIgnored: "Lost bookings.",
+      fixPrompt: "Free the slot on cancel.",
+    };
+    const c = change("understand");
+    expect(await advance(deps, c.id)).toEqual({ stage: "release", held: ["qa"], stoppedForBudget: false });
+    const [gap] = record.listFindings({ changeId: c.id });
+    record.setFindingStatus(gap!.id, "accepted_risk", "Slots are freed by hand for now", "owner");
+    expect((await advance(deps, c.id)).held).toEqual([]);
+    expect(record.gates(c.id).qa).toMatchObject({ state: "cleared", reason: "Every criterion has evidence found or an accepted risk." });
+  });
+
   it("automated status changes use SYSTEM_ACTOR, and a fix found on re-check is credited to qa", async () => {
     const { record, models, deps, change, project, crit } = setup();
     models.qa["CRIT-CANCEL"] = {
