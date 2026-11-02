@@ -8,7 +8,7 @@ Every change ends in an acceptance record you can put your name to: what was ask
 
 ## Reviewing this entry
 
-1. Watch the three-minute film linked from the submission. It is one live take on Muse Spark against [kryterea/lantana-payment-links](https://github.com/kryterea/lantana-payment-links), a copy of the demo app made for the recording, with waits cut.
+1. Watch the [three-minute film](https://youtu.be/lJ9tJWnc7U0). It is one live take on Muse Spark against [kryterea/lantana-payment-links](https://github.com/kryterea/lantana-payment-links), a copy of the demo app made for the recording, with waits cut.
 2. Run `pnpm install` and then `pnpm demo` to open the recorded live run of 2026-11-01 in the panel. It needs no keys and sends nothing anywhere. Its numbers differ from the film's because it is an earlier run on the original demo app.
 3. Read [BUILT_DURING_HACKATHON.md](BUILT_DURING_HACKATHON.md) for what was built during the event and what existed before it.
 4. Use [What is in this repository](#what-is-in-this-repository) to find the code, and [docs/README.md](docs/README.md) for the designs and plans it was built from.
