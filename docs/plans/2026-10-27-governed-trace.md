@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Node 22 `node:sqlite`, Hono, `@modelcontextprotocol/sdk`, Vite React 18, Vitest. Muse Spark through the existing `createModel`. Linear GraphQL API and GitHub REST API through `fetch` (no new dependencies).
 
-**Spec:** `docs/superpowers/specs/2026-10-27-governed-trace-design.md` (extends `docs/superpowers/specs/2026-10-26-lifecycle-copilot-design.md`).
+**Spec:** `docs/design/2026-10-27-governed-trace-design.md` (extends `docs/design/2026-10-26-lifecycle-copilot-design.md`).
 
 ## Global Constraints
 

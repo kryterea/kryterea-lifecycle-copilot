@@ -8,7 +8,7 @@ This project is a hackathon spin-off of Kryterea, our existing platform for prof
 
 Everything in this repository was written during the build window. The first commit is `dc447bb` on 2026-10-27 (build day 2; the design and plan were written on 2026-10-26). The commit history is the record of the work.
 
-Built during the event (update as tasks finish):
+Built during the event:
 
 - [x] Meta model adapter with spend guard
 - [x] The record: changes, findings, gates, evidence, acceptance
@@ -30,6 +30,7 @@ Built during the event (update as tasks finish):
   - A requirement counts as changed only when its document line changed, not when the model rewords its summary (#3)
   - A QA gap the owner accepted as a risk with a reason no longer holds release (#4)
   - A document gap closes when its quoted line was edited and a re-read no longer raises it (#5)
+- [x] The film take (2026-11-02): a second live run on Muse Spark, shot for the three-minute film. It ran against [kryterea/lantana-payment-links](https://github.com/kryterea/lantana-payment-links), a copy of the demo app at tag `before` under a fictional client name. The coding agent (OpenCode on Muse Spark) fixed the approved change from one prompt in that repo's [pull request #1](https://github.com/kryterea/lantana-payment-links/pull/1), and the re-check took all five of the change's acceptance criteria to Evidence found. Open items went from 37 to 10. One risk was accepted on camera with a typed reason; the other 33 were accepted through the API, each with its own reason. No copilot code changed for the take. How it was shot is in `docs/design/2026-11-02-demo-video-design.md`; the footage and audio are not in this repository.
 - [x] Governed trace (2026-10-27 to 2026-10-28):
   - Documents read from the repo or pasted in, kept as versions, with requirements read line by line
   - Document gaps from the analyst, and acceptance criteria linked to the requirements they cover
@@ -62,6 +63,7 @@ Built during the event (update as tasks finish):
 - The panel's look follows the Kryterea platform's existing visual language so the two read as one family: its colour values, type scale, fonts (Geist, Source Serif 4, JetBrains Mono, loaded from Google Fonts), radii, shadows, motion timings, and the shapes of its stage Trail, status stamps, pill buttons and dark "Instrument" band. Those values and shapes were followed by eye and by number; every component, stylesheet and icon in `packages/web` was written fresh during the event, and no Kryterea code was copied.
 - From Kryterea's brand set: the Kryterea symbol (drawn inline in `packages/web/src/main.tsx`) and `packages/web/public/favicon.svg`, plus Kryterea's positioning line ("Claude and Codex build. Kryterea is the professional they build with.") and its "Work You Can Sign" theme, used in the panel and README.
 - The Impeccable design skill for Claude Code guided the redesign and its finish review.
+- The film was composed with HyperFrames and voiced with the open-source Kokoro text-to-speech model. Its background music is a synthesised pad first made for an earlier Kryterea video.
 - GitHub and Linear APIs, used through their public REST and GraphQL endpoints.
 - Teams, multiple projects with members, named sign off from a stakeholder register, and Drive and Notion connections are features of the existing Kryterea platform. They are named in the video's closing card as where this copilot sits; none of them is built, copied or demoed here.
 - Kryterea's private Business Analysis OS (BA OS) was used as pre-existing development tooling: a pre-mortem on the plan, drafting and verifying the NDPA obligation list against the official text, drawing the workflow diagram, and editing prose. BA OS's own skills, playbooks, rubrics, templates and reports are not in this repository, and BA OS is not part of this entry. The things it helped produce during the event (the legal pack in `packs/legal/`, the README diagram and prose) were created during the build window and are part of the entry.

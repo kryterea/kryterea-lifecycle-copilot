@@ -1,25 +1,30 @@
+# Local working notes, never committed
 HANDOFF.md
+docs/hackathon/submission.md
 docs/meta-intro-transcript.txt
-.superpowers/
+
+# Dependencies and build output
 node_modules
 dist
+*.tsbuildinfo
+coverage/
+.cache/
+
+# Keys stay in .env; only the empty example is committed
 .env
 .env.*
 !.env.example
+
+# Local copilot records. The recorded demo run that `pnpm demo` opens is the one
+# exception; `pnpm demo:export` checks it for local paths and keys before saving.
+/data/
 *.db
-# The recorded demo run that pnpm demo opens; pnpm demo:export checks it for local paths and keys.
 !demo/lagospay.db
 *.db-shm
 *.db-wal
-/data/
-.cache/
-*.tsbuildinfo
-coverage/
 
-# graft's local graph cache — regenerable, not committed (run `graft build`).
+# Local tool caches: graft graph (`graft build`), Impeccable captures, plan workspaces
 /graft/
 .ignore
-graft/
-
-# Impeccable review captures (local only)
 .impeccable/
+.superpowers/

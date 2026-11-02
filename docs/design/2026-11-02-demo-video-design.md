@@ -124,8 +124,9 @@ HyperFrames compositions in the brand: paper `#f1f3f6`, ink `#14161a`, cobalt `#
 
 ## What the take did (2026-11-02, Muse Spark)
 
-- One agent prompt fixed the approved change: 12 findings reported with `report_fix`, one commit, push, pull request #1, merged. No second prompt, so no "Prompt N of M" stamps.
+- The take ran against [kryterea/lantana-payment-links](https://github.com/kryterea/lantana-payment-links), a recording copy of the demo app at tag `before`.
+- One agent prompt fixed the approved change: 12 findings reported with `report_fix`, one commit, push, and [pull request #1](https://github.com/kryterea/lantana-payment-links/pull/1), merged. No second prompt, so no "Prompt N of M" stamps.
 - The re-check on the merged commit took every one of the change's five acceptance criteria to Evidence found.
-- 34 items still held release. Ada accepted one on camera with her typed reason and the other 33 through the API with the founder-approved reasons in `hackathon-video/RELEASE-DECISIONS.md` (legal 8, operations 4, covered by other changes 8, untouched requirements 10, touched requirements 4).
+- 34 items still held release. Ada accepted one on camera with her typed reason and the other 33 through the API, each with a founder-approved reason saved on its decision in the record (legal 8, operations 4, covered by other changes 8, untouched requirements 10, touched requirements 4).
 - Before and after: open items 37 to 10, evidence found 2 to 10, her problem's 4 findings Fixed, 23 closed, 0 new.
 - Copilot spend for the take: $1.17.

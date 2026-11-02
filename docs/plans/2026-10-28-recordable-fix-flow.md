@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, node:sqlite (`CopilotRecord`), Hono server, MCP SDK, Vite React with hash routes, Vitest.
 
-**Spec:** `docs/superpowers/specs/2026-10-28-recordable-fix-flow-design.md`
+**Spec:** `docs/design/2026-10-28-recordable-fix-flow-design.md`
 
 ## Global Constraints
 
