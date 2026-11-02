@@ -18,7 +18,7 @@ Diagram builds one piece at a time on a paper slide.
 
 | Time | Screen | Voice |
 |---|---|---|
-| 0:00 | "Meet Ada." Ada's illustration. | Meet Ada. She runs a two person AI-native agency in Lagos. |
+| 0:00 | "Meet Ada." Ada's illustration. | Meet Ada. She runs an AI-native agency in Lagos. |
 | 0:05 | Arrow from a client logo (a fictional fintech startup; the founder picks a name and checks no real company uses it) to Ada, then to a terminal labelled "Coding agent on Muse Spark" and a laptop showing the app. | Her coding agent shipped a payment links app in an afternoon. |
 | 0:09 | A grey question mark appears over the app, then the Kryterea symbol slides in beside it. | Nobody checked it against what she agreed. That is the job Kryterea does. |
 
