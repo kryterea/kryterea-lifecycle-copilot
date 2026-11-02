@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node 22.13 or later (22.23 installed; `node:sqlite` needs no flag from 22.13), TypeScript 5, pnpm 11 workspaces (installed), Vitest, `node:sqlite`, Hono, `@modelcontextprotocol/sdk`, Vite + React 18, git CLI, Playwright (stretch only).
 
-**Spec:** `docs/superpowers/specs/2026-10-26-lifecycle-copilot-design.md`. Read it before any task. Read `HANDOFF.md` and `CLAUDE.md` at the repo root first.
+**Spec:** `docs/design/2026-10-26-lifecycle-copilot-design.md`. Read it before any task. Read `HANDOFF.md` and `CLAUDE.md` at the repo root first.
 
 ## Global Constraints
 

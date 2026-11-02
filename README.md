@@ -6,6 +6,13 @@ Coding agents write code fast. The rest of a delivery team gets skipped: the bus
 
 Every change ends in an acceptance record you can put your name to: what was asked, what each professional found, every decision and who made it, and the evidence for each criterion. Work you can sign.
 
+## Reviewing this entry
+
+1. Watch the three-minute film linked from the submission. It is one live take on Muse Spark against [kryterea/lantana-payment-links](https://github.com/kryterea/lantana-payment-links), a copy of the demo app made for the recording, with waits cut.
+2. Run `pnpm install` and then `pnpm demo` to open the recorded live run of 2026-11-01 in the panel. It needs no keys and sends nothing anywhere. Its numbers differ from the film's because it is an earlier run on the original demo app.
+3. Read [BUILT_DURING_HACKATHON.md](BUILT_DURING_HACKATHON.md) for what was built during the event and what existed before it.
+4. Use [What is in this repository](#what-is-in-this-repository) to find the code, and [docs/README.md](docs/README.md) for the designs and plans it was built from.
+
 ## The flow, in four acts
 
 One path from a repo to a signed record, made for someone who is not an expert in any of these professions.
@@ -125,6 +132,20 @@ The same open items reach the places the team already works. Each is optional; t
 - **Linear.** Set `LINEAR_API_KEY` in `.env` and link a ticket to a requirement in the panel. Kryterea keeps one comment on that ticket with the requirement's open items and the state of its criteria.
 
 Restart the server after changing `.env`. A comment is rewritten only when its content changes.
+
+## What is in this repository
+
+| Path | What it holds |
+|---|---|
+| `packages/core` | The product logic. The record lives in SQLite through Node's built-in `node:sqlite`. The professional roles are in `src/roles`, and the change workflow, trace, drift rules and open items sit beside them. `src/model.ts` is the Meta model adapter with its spend guard. `fixtures/` holds recorded Muse Spark answers that tests and `COPILOT_FAKE_MODEL=1` replay. |
+| `packages/server` | The HTTP API, the push poller, the GitHub and Linear comments, the Markdown before and after report, and the headless browser QA uses. |
+| `packages/mcp` | The MCP server the coding agent talks to: six tools, all calling the HTTP API. |
+| `packages/web` | The panel, in React and Vite. `PRODUCT.md` and `DESIGN.md` record its product and design decisions. |
+| `packs/` | What each professional checks, one Markdown file per profession, and the verified NDPA 2023 legal pack in `packs/legal/`. |
+| `demo/lagospay.db` | The recorded live run that `pnpm demo` opens. |
+| `scripts/` | `demo.mjs` opens that record with no keys. `export-demo.mjs` saves a live run as the record, refusing local paths and anything that looks like a key. |
+| `docs/` | Hackathon notes, designs and plans. [docs/README.md](docs/README.md) lists them. |
+| `CLAUDE.md` | The working brief for the coding agents that built the copilot. |
 
 ## Where this sits in Kryterea
 

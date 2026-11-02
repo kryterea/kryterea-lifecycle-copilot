@@ -1,12 +1,14 @@
 # Kryterea Lifecycle Copilot: project instructions
 
-Hackathon entry for the Meta Global AI Developer Hackathon (Startup track). Build window 2026-10-26 to 2026-11-04; submission due 2026-11-04 9:00 PM ET. Read `HANDOFF.md` first in any new session.
+Hackathon entry for the Meta Global AI Developer Hackathon (Startup track). Build window 2026-10-26 to 2026-11-04; submission due 2026-11-04 9:00 PM ET. In the founder's local checkout, read `HANDOFF.md` first in any new session; it holds internal notes and is not in the public repo.
+
+This file is the working brief for the coding agents that built the copilot (Claude Code). A reader reviewing the entry should start at `README.md` and `docs/README.md`.
 
 ## What this is
 
 Coding agents write the code. This copilot carries the duties of the non-coding professionals (business analyst, architect/SRE, QA, security and compliance officer, product owner) through a change-based delivery workflow. It never writes product code and never writes to the repo it checks.
 
-Design: `docs/superpowers/specs/2026-10-26-lifecycle-copilot-design.md`. Plan: `docs/superpowers/plans/2026-10-26-lifecycle-copilot.md`. Work the plan task by task; tick its checkboxes as you go.
+Designs are in `docs/design/` and their plans in `docs/plans/`, starting with `docs/design/2026-10-26-lifecycle-copilot-design.md` and `docs/plans/2026-10-26-lifecycle-copilot.md`. Work a plan task by task and tick its checkboxes as you go.
 
 ## Hard rules
 
